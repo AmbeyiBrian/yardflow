@@ -1,0 +1,113 @@
+{% extends "documents/base_document.html" %}
+{% comment %}
+The goods received note (design §11; D1, D6, A4).
+
+The document that replaces the GRN book. It shows the source type and its
+supporting reference, because D1's whole point is that origin and ownership are
+unambiguous — and because the supplier's own delivery note is what an auditor
+will ask to see alongside it (D6).
+{% endcomment %}
+
+{% block title %}Goods received note {{ gate_in.number }}{% endblock %}
+{% block heading %}Goods received note{% endblock %}
+{% block number %}{{ gate_in.number|default:"DRAFT" }}{% endblock %}
+
+{% block status %}
+  <span class="status {{ gate_in.status|lower }}">{{ gate_in.get_status_display }}</span>
+{% endblock %}
+
+{% block body %}
+  <table class="meta">
+    <tr>
+      <td class="label">Source</td>
+      <td>{{ gate_in.get_source_type_display }}</td>
+      <td class="label">Received at</td>
+      <td>{{ gate_in.to_location.name }}</td>
+    </tr>
+    <tr>
+      <td class="label">Supplier</td>
+      <td>{{ gate_in.supplier_name|default:"—" }}</td>
+      <td class="label">Client</td>
+      <td>{{ gate_in.client|default:"—" }}</td>
+    </tr>
+    {% if gate_in.origin_site %}
+      <tr>
+        {% comment %}D5: a recovery is attributable to the site it came off.{% endcomment %}
+        <td class="label">Recovered from</td>
+        <td colspan="3">{{ gate_in.origin_site }}</td>
+      </tr>
+    {% endif %}
+    <tr>
+      <td class="label">Received</td>
+      <td>{{ gate_in.received_at|date:"Y-m-d H:i" }}</td>
+      <td class="label">Posted by</td>
+      <td>{{ gate_in.posted_by|default:"—" }}</td>
+    </tr>
+    {% if gate_in.client_delivery_note_ref %}
+      <tr>
+        <td class="label">Their reference</td>
+        <td colspan="3">{{ gate_in.client_delivery_note_ref }}</td>
+      </tr>
+    {% endif %}
+    {% if gate_in.void_reason %}
+      <tr>
+        <td class="label">Voided</td>
+        <td colspan="3">{{ gate_in.void_reason }}</td>
+      </tr>
+    {% endif %}
+  </table>
+
+  <table class="lines">
+    <thead>
+      <tr>
+        <th style="width: 8mm;">#</th>
+        <th>Item</th>
+        <th>Ownership</th>
+        <th class="num">Quantity</th>
+        <th>Condition</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+        <tr>
+          <td class="num">{{ line.number }}</td>
+          <td>
+            {{ line.item }}
+            {% if line.serials %}
+              <div class="identifiers">Serials: {{ line.serials|join:", " }}</div>
+            {% endif %}
+            {% if line.drums %}
+              <div class="identifiers">Drums: {{ line.drums|join:", " }}</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if line.is_client_owned %}
+              <span class="owner-client">{{ line.owner }}</span>
+            {% else %}
+              <span class="owner-own">{{ line.owner }}</span>
+            {% endif %}
+          </td>
+          <td class="num">{{ line.quantity }} {{ line.uom }}</td>
+          <td>{{ line.condition }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No lines on this note.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="signatures">
+    <div class="signature">
+      <div class="rule"></div>
+      <div class="caption">Delivered by</div>
+    </div>
+    <div class="signature">
+      <div class="rule"></div>
+      <div class="caption">Received by (storekeeper)</div>
+    </div>
+    <div class="signature">
+      <div class="rule"></div>
+      <div class="caption">Date and time</div>
+    </div>
+  </div>
+{% endblock %}

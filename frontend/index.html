@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Mobile-first (N-1): no user scaling lock, so a storekeeper can still
+         zoom a serial number, and the viewport fits a low-end phone. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <!-- The mark, as vector: one file serves the tab at 16px and the iOS home
+         screen at 180px, and it costs less than a single PNG. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Declared here rather than left to the PWA plugin, which only injects it
+         when its dev service worker is enabled — and that is off by default,
+         because a worker caching a dev bundle makes every code change look like
+         it did nothing. The link is what makes the app installable, so it should
+         not depend on a caching option. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>YardFlow</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

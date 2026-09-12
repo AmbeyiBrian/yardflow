@@ -1,0 +1,45 @@
+# Local development infrastructure only (design §12.0).
+# No AWS account, no cloud credentials. Postgres and Redis run here; the Django
+# dev server and the Vite dev server run on the host.
+#
+# Production equivalents (deferred to Phase 9): RDS Postgres 16, ElastiCache Redis.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yardflow-postgres
+    environment:
+      # Local-only credentials. Real secrets come from AWS Secrets Manager in
+      # production and never from this file (N-4).
+      POSTGRES_DB: yardflow
+      POSTGRES_USER: yardflow
+      POSTGRES_PASSWORD: yardflow
+      # Row-level security (§2.3) depends on the app connecting as a
+      # non-superuser role; that role is created in T1.7.
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yardflow -d yardflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: yardflow-redis
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:

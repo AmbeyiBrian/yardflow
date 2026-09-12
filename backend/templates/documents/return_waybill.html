@@ -1,0 +1,130 @@
+{% extends "documents/base_document.html" %}
+{% comment %}
+The return waybill (design §11, §4.12; K2, K3, A4).
+
+K2: "produce a return waybill or delivery note PDF, **so that the client's
+receiving store signs for it**." That last clause decides the layout — this is a
+document whose job is to come back signed, so the acknowledgement block is the
+most prominent thing on the page after the lines, not a footnote.
+
+K3 then lets that signature be recorded in the system. Where it already has been,
+this prints as an acknowledged copy with the client's own reference on it, so the
+same document serves as the file copy.
+
+Optional per tenant (`client_waybill_enabled`, C8): some operators want their own
+paperwork instead, and printing ours alongside theirs invites two references for
+one delivery.
+{% endcomment %}
+
+{% block title %}Return waybill {{ gate_out.number }}{% endblock %}
+{% block heading %}Return to client — waybill{% endblock %}
+{% block number %}{{ gate_out.number|default:"DRAFT" }}{% endblock %}
+
+{% block status %}
+  <span class="status {{ gate_out.status|lower }}">{{ gate_out.get_status_display }}</span>
+  {% if ack %}
+    <span class="status">Acknowledged</span>
+  {% endif %}
+{% endblock %}
+
+{% block body %}
+  <table class="meta">
+    <tr>
+      <td class="label">Returned to</td>
+      <td><strong>{{ gate_out.client.name }}</strong></td>
+      <td class="label">Released on</td>
+      <td>{{ gate_out.released_at|date:"j F Y, H:i"|default:"—" }}</td>
+    </tr>
+    <tr>
+      <td class="label">From</td>
+      <td>{{ gate_out.from_location.name }}</td>
+      <td class="label">Vehicle</td>
+      <td>{{ gate_out.vehicle_reg|default:"—" }}{% if gate_out.driver_name %} · {{ gate_out.driver_name }}{% endif %}</td>
+    </tr>
+    {% if gate_out.client.contact_name or gate_out.client.contact_phone %}
+      <tr>
+        <td class="label">Their contact</td>
+        <td colspan="3">
+          {{ gate_out.client.contact_name|default:"" }}
+          {% if gate_out.client.contact_phone %} · {{ gate_out.client.contact_phone }}{% endif %}
+        </td>
+      </tr>
+    {% endif %}
+  </table>
+
+  <table class="lines">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Item</th>
+        <th class="num">Quantity</th>
+        <th>Condition</th>
+        <th>Origin</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+        <tr>
+          <td class="num">{{ line.number }}</td>
+          <td>
+            {{ line.item }}
+            {% if line.serials or line.drums %}
+              {% comment %}
+              K1: "lines carry the client's ownership and, for recoveries, the
+              originating site." A receiving store checks serial numbers, not
+              counts, so they lead the line detail.
+              {% endcomment %}
+              <div class="identifiers">
+                {% for serial in line.serials %}{{ serial }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                {% for drum in line.drums %}{{ drum }}{% if not forloop.last %}, {% endif %}{% endfor %}
+              </div>
+            {% endif %}
+          </td>
+          <td class="num">{{ line.released|default:line.quantity }} {{ line.uom }}</td>
+          <td>{{ line.condition }}</td>
+          <td>{{ line.origin|default:"—" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if gate_out.notes %}
+    <p style="margin-top: 4mm;">{{ gate_out.notes }}</p>
+  {% endif %}
+
+  {% if ack %}
+    <div class="approvals">
+      <h2>Acknowledged by the client</h2>
+      <p>
+        Reference <strong>{{ ack.acknowledged_ref }}</strong>,
+        {{ ack.acknowledged_at|date:"j F Y" }}
+        {% if ack.acknowledged_by_name %}— {{ ack.acknowledged_by_name }}{% endif %}.
+      </p>
+      {% comment %}
+      K3: liability ends on the record, so the document says so in words rather
+      than leaving the reader to infer it from a stamp.
+      {% endcomment %}
+      <p>Responsibility for this material passed to {{ gate_out.client.name }} on this date.</p>
+    </div>
+  {% else %}
+    <div class="signatures">
+      <div class="signature">
+        <div class="rule"></div>
+        <div class="caption">Delivered by (name and signature)</div>
+      </div>
+      <div class="signature">
+        <div class="rule"></div>
+        <div class="caption">
+          Received for {{ gate_out.client.name }} — name, signature, date and your
+          own reference
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block footer %}
+  Return waybill produced by {% include "documents/_wordmark.html" %}. Please sign and return a copy, or send us
+  your goods-received reference — until then this material remains recorded as in
+  transit.
+{% endblock %}

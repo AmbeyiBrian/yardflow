@@ -1,0 +1,49 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "api:types": "openapi-typescript ../backend/api-schema.yml -o src/api/schema.d.ts",
+    "e2e": "playwright test",
+    "e2e:phone": "playwright test --project=phone",
+    "e2e:report": "playwright show-report"
+  },
+  "dependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.5",
+    "@tailwindcss/oxide-win32-x64-msvc": "^4.3.3",
+    "@tanstack/react-query": "^5.101.4",
+    "@zxing/browser": "^0.2.1",
+    "clsx": "^2.1.1",
+    "dexie": "^4.4.5",
+    "lightningcss-win32-x64-msvc": "^1.33.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-hook-form": "^7.85.0",
+    "react-router-dom": "^7.18.2",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@oxlint/binding-win32-x64-msvc": "^1.79.0",
+    "@playwright/test": "^1.62.1",
+    "@rollup/rollup-win32-x64-msvc": "^4.62.5",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "openapi-typescript": "^7.13.0",
+    "oxlint": "^1.75.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.0",
+    "vite-plugin-pwa": "^1.3.0",
+    "workbox-window": "^7.4.1"
+  }
+}

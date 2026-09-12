@@ -1,0 +1,36 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# --- Django ---
+*.sqlite3
+/backend/media/
+/backend/staticfiles/
+/backend/static_collected/
+
+# --- Secrets / environment (N-4: no secret ever enters the repo) ---
+.env
+.env.*
+!.env.example
+
+# --- Node / frontend ---
+node_modules/
+/frontend/dist/
+/frontend/.vite/
+*.local
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

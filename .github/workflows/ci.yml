@@ -1,0 +1,156 @@
+# CI for YardFlow (design §12, §14; task T1.23).
+#
+# No image build or registry push here — deployment arrives with Phase 9 (§12.0).
+#
+# Postgres is a service container rather than SQLite, because the guarantees
+# under test cannot be expressed in SQLite: row-level security (§2.3), the
+# append-only triggers on the audit trail and the stock ledger (§3.2, M3), and
+# the `SELECT FOR UPDATE` behaviour that keeps document numbers gap-free (M6).
+# A suite that skipped those would pass while the real barriers went unverified.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  backend:
+    name: Backend — lint, types, tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: yardflow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The application role is created below as non-superuser and
+      # non-BYPASSRLS, so row-level security is genuinely enforced against the
+      # test run rather than silently bypassed (T1.7, §2.3).
+      DATABASE_URL: postgres://yardflow_app:yardflow@localhost:5432/yardflow
+      MIGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/yardflow
+      REDIS_URL: redis://localhost:6379/0
+      DJANGO_SETTINGS_MODULE: config.settings.test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Create the least-privilege application role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c "
+            CREATE ROLE yardflow_app LOGIN PASSWORD 'yardflow'
+              NOSUPERUSER NOCREATEROLE NOBYPASSRLS CREATEDB;"
+          psql -h localhost -U postgres -d yardflow -v ON_ERROR_STOP=1 -c "
+            GRANT USAGE, CREATE ON SCHEMA public TO yardflow_app;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public
+              GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO yardflow_app;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public
+              GRANT USAGE, SELECT ON SEQUENCES TO yardflow_app;"
+
+      - name: Lint
+        working-directory: backend
+        run: ruff check .
+
+      - name: Type check
+        working-directory: backend
+        run: mypy .
+
+      - name: Check for missing migrations
+        working-directory: backend
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Tests
+        working-directory: backend
+        run: |
+          pytest --cov=. --cov-report=term-missing --cov-report=xml
+
+      # A3 is non-negotiable and runs as its own step so a failure is
+      # unmistakable in the log rather than buried in the full suite.
+      - name: Tenant isolation suite (requirement A3)
+        working-directory: backend
+        run: pytest core/tests/test_isolation_suite.py -v
+
+      - name: OpenAPI schema is committed and current (N-10)
+        working-directory: backend
+        run: pytest core/tests/test_schema.py -v
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: backend/coverage.xml
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend — build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check whether the frontend exists yet
+        id: check
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::frontend/ is scaffolded in T1.27; nothing to build yet."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'true'
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and build
+        if: steps.check.outputs.exists == 'true'
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build

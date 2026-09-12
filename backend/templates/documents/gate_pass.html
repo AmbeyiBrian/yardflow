@@ -1,0 +1,153 @@
+{% extends "documents/base_document.html" %}
+{% comment %}
+The gate pass (design §11; G4, G2, A4, F5).
+
+This is the document the driver carries and the guard checks. So it shows, in
+this order of prominence: the number, the status, who is taking custody, the
+vehicle, and the lines with their serials and drum numbers — everything needed to
+verify the physical load against the approved list (G1).
+
+The approval trail is printed too. An operator asking "who authorised this?"
+should be answerable from the paper alone.
+{% endcomment %}
+
+{% block title %}Gate pass {{ gate_out.number }}{% endblock %}
+{% block heading %}Gate pass{% endblock %}
+{% block number %}{{ gate_out.number|default:"DRAFT" }}{% endblock %}
+
+{% block status %}
+  <span class="status {{ gate_out.status|lower }}">{{ gate_out.get_status_display }}</span>
+  {% if gate_out.version > 1 %}
+    <span class="status">Version {{ gate_out.version }}</span>
+  {% endif %}
+{% endblock %}
+
+{% block body %}
+  <table class="meta">
+    <tr>
+      <td class="label">Purpose</td>
+      <td>{{ gate_out.get_purpose_type_display }}</td>
+      <td class="label">Destination</td>
+      <td>{{ destination }}</td>
+    </tr>
+    <tr>
+      <td class="label">From</td>
+      <td>{{ gate_out.from_location.name }}</td>
+      {% comment %}F1: the pass must name who is taking custody.{% endcomment %}
+      <td class="label">Custody holder</td>
+      <td>{{ gate_out.custody_holder }}</td>
+    </tr>
+    <tr>
+      <td class="label">Requested by</td>
+      <td>{{ gate_out.requested_by }}</td>
+      <td class="label">Requested</td>
+      <td>{{ gate_out.submitted_at|date:"Y-m-d H:i"|default:"—" }}</td>
+    </tr>
+    <tr>
+      {% comment %}G2: the load is attributable to a vehicle and a driver.{% endcomment %}
+      <td class="label">Vehicle</td>
+      <td>{{ gate_out.vehicle_reg|default:"—" }}</td>
+      <td class="label">Driver</td>
+      <td>{{ gate_out.driver_name|default:"—" }}</td>
+    </tr>
+    <tr>
+      <td class="label">Released by</td>
+      <td>{{ gate_out.released_by|default:"—" }}</td>
+      <td class="label">Released</td>
+      <td>{{ gate_out.released_at|date:"Y-m-d H:i"|default:"—" }}</td>
+    </tr>
+    {% if gate_out.expires_at %}
+      <tr>
+        {% comment %}Q3: printed, so a guard can see a stale pass at a glance.{% endcomment %}
+        <td class="label">Valid until</td>
+        <td colspan="3">{{ gate_out.expires_at|date:"Y-m-d H:i" }}</td>
+      </tr>
+    {% endif %}
+  </table>
+
+  <table class="lines">
+    <thead>
+      <tr>
+        <th style="width: 8mm;">#</th>
+        <th>Item</th>
+        <th>Ownership</th>
+        <th class="num">Approved</th>
+        <th class="num">Released</th>
+        <th>Condition</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+        <tr>
+          <td class="num">{{ line.number }}</td>
+          <td>
+            {{ line.item }}
+            {% if line.serials %}
+              <div class="identifiers">Serials: {{ line.serials|join:", " }}</div>
+            {% endif %}
+            {% if line.drums %}
+              <div class="identifiers">Drums: {{ line.drums|join:", " }}</div>
+            {% endif %}
+            {% if line.returnable %}
+              <div class="identifiers">
+                Returnable{% if line.return_by %} — due back {{ line.return_by|date:"Y-m-d" }}{% endif %}
+              </div>
+            {% endif %}
+          </td>
+          <td>
+            {% if line.is_client_owned %}
+              <span class="owner-client">{{ line.owner }}</span>
+            {% else %}
+              <span class="owner-own">{{ line.owner }}</span>
+            {% endif %}
+          </td>
+          <td class="num">{{ line.quantity }} {{ line.uom }}</td>
+          <td class="num">{{ line.released }} {{ line.uom }}</td>
+          <td>{{ line.condition }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No lines on this pass.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if approvals %}
+    <div class="approvals">
+      <h2>Authorised by</h2>
+      <ul>
+        {% for approval in approvals %}
+          <li>
+            {{ approval.who }} — {{ approval.decision }}
+            on {{ approval.when|date:"Y-m-d H:i" }} ({{ approval.method }})
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if gate_out.reject_reason %}
+    <p><strong>Rejected:</strong> {{ gate_out.reject_reason }}</p>
+  {% endif %}
+  {% if gate_out.cancel_reason %}
+    <p><strong>Cancelled:</strong> {{ gate_out.cancel_reason }}</p>
+  {% endif %}
+  {% if gate_out.close_reason %}
+    <p><strong>Closed:</strong> {{ gate_out.close_reason }}</p>
+  {% endif %}
+
+  {% comment %}G3: evidence of handover, on the paper the yard already uses.{% endcomment %}
+  <div class="signatures">
+    <div class="signature">
+      <div class="rule"></div>
+      <div class="caption">Released by (storekeeper)</div>
+    </div>
+    <div class="signature">
+      <div class="rule"></div>
+      <div class="caption">Received by ({{ gate_out.custody_holder }})</div>
+    </div>
+    <div class="signature">
+      <div class="rule"></div>
+      <div class="caption">Date and time</div>
+    </div>
+  </div>
+{% endblock %}

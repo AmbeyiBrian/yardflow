@@ -1,0 +1,112 @@
+{% comment %}
+Base layout for printed documents (design §11; A4, G4, K2).
+
+Deliberately plain and self-contained: no external stylesheet, no web font, no
+remote image. A gate pass has to render identically whether it is printed in the
+yard office, opened on a phone at the gate, or forwarded over WhatsApp — and it
+has to work with no network at all.
+
+A4 is honoured by the logo and company details in the header; the QR code
+(G5) sits top-right where a scanner naturally points.
+{% endcomment %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{% block title %}Document{% endblock %} — {{ organization.name }}</title>
+    <style>
+      @page { size: A4; margin: 14mm; }
+
+      body {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 10pt;
+        color: #111;
+        margin: 0;
+      }
+
+      header { display: flex; justify-content: space-between; align-items: flex-start; }
+      .identity { max-width: 60%; }
+      .identity h1 { font-size: 15pt; margin: 0 0 2mm; }
+      .identity .company { font-size: 12pt; font-weight: 600; margin: 0 0 1mm; }
+      .identity .detail { font-size: 8.5pt; color: #444; margin: 0; }
+      .logo { max-height: 18mm; max-width: 45mm; margin-bottom: 2mm; }
+
+      .reference { text-align: right; }
+      .reference .number { font-size: 16pt; font-weight: 700; letter-spacing: 0.5px; }
+      .reference .qr { width: 26mm; height: 26mm; }
+      .reference .status {
+        display: inline-block; margin-top: 1mm; padding: 1mm 2mm;
+        border: 0.4mm solid #111; border-radius: 1mm;
+        font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px;
+      }
+      /* A voided or cancelled document must be unmistakable on paper (M6). */
+      .status.void, .status.cancelled, .status.expired {
+        border-color: #a11; color: #a11; font-weight: 700;
+      }
+
+      .meta { width: 100%; margin: 5mm 0; border-collapse: collapse; }
+      .meta td { padding: 1mm 0; vertical-align: top; font-size: 9.5pt; }
+      .meta .label { color: #555; width: 32mm; }
+
+      table.lines { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+      table.lines th {
+        text-align: left; font-size: 8.5pt; text-transform: uppercase;
+        letter-spacing: 0.4px; color: #444;
+        border-bottom: 0.5mm solid #111; padding: 1.5mm 1mm;
+      }
+      table.lines td {
+        padding: 1.5mm 1mm; border-bottom: 0.2mm solid #ccc; vertical-align: top;
+      }
+      table.lines .num { text-align: right; white-space: nowrap; }
+      .identifiers { font-size: 8pt; color: #333; margin-top: 0.8mm; }
+
+      /* E1: client-owned stock is visually distinct wherever it appears —
+         including on the paper the driver carries. */
+      .owner-client {
+        font-size: 8pt; font-weight: 700; color: #8a4b00;
+        border: 0.3mm solid #8a4b00; border-radius: 1mm; padding: 0.3mm 1.2mm;
+      }
+      .owner-own { font-size: 8pt; color: #555; }
+
+      .approvals { margin-top: 5mm; font-size: 9pt; }
+      .approvals h2 { font-size: 10pt; margin: 0 0 1.5mm; }
+      .approvals li { margin-bottom: 1mm; }
+
+      .signatures { margin-top: 10mm; display: flex; gap: 8mm; }
+      .signature { flex: 1; }
+      .signature .rule { border-bottom: 0.3mm solid #111; height: 12mm; }
+      .signature .caption { font-size: 8pt; color: #555; margin-top: 1mm; }
+
+      footer {
+        margin-top: 8mm; padding-top: 2mm; border-top: 0.2mm solid #ccc;
+        font-size: 7.5pt; color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="identity">
+        {% if logo_url %}<img class="logo" src="{{ logo_url }}" alt="{{ organization.name }}" />{% endif %}
+        <p class="company">{{ organization.legal_name|default:organization.name }}</p>
+        {% if organization.address %}<p class="detail">{{ organization.address }}</p>{% endif %}
+        {% if organization.tax_pin %}<p class="detail">PIN {{ organization.tax_pin }}</p>{% endif %}
+        {% if organization.phone %}<p class="detail">{{ organization.phone }}</p>{% endif %}
+        <h1>{% block heading %}Document{% endblock %}</h1>
+      </div>
+      <div class="reference">
+        {% if qr %}<img class="qr" src="{{ qr }}" alt="Scan to open this document" />{% endif %}
+        <div class="number">{% block number %}{% endblock %}</div>
+        {% block status %}{% endblock %}
+      </div>
+    </header>
+
+    {% block body %}{% endblock %}
+
+    <footer>
+      {% block footer %}
+        Produced by {% include "documents/_wordmark.html" %}. This document is a record of a controlled stock
+        movement; corrections are made by reversal, never by amendment.
+      {% endblock %}
+    </footer>
+  </body>
+</html>

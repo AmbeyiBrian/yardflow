@@ -1,0 +1,112 @@
+@import 'tailwindcss';
+
+/*
+ * Mobile-first (N-1): must be usable on a low-end Android phone over a cellular
+ * connection. Touch targets are at least 44px (§7.3) and primary actions sit
+ * within thumb reach at the bottom of the screen.
+ */
+
+@theme {
+  /* Client-owned stock must be visually distinct from own stock everywhere it
+     appears (E1), so the distinction is a token rather than an ad-hoc colour. */
+  --color-client-owned: oklch(0.55 0.16 45);
+  --color-own-stock: oklch(0.52 0.13 240);
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  -webkit-text-size-adjust: 100%;
+  /* Never a horizontally scrolling page (§7.3); wide content scrolls inside its
+     own container instead. */
+  overflow-x: hidden;
+}
+
+/* Respect the phone's safe area so the bottom action bar clears the home bar. */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/*
+ * The activity indicator (§7.3a).
+ *
+ * The loader is the product mark, not a generic ring: a bright band sweeps up
+ * through the letterform while the outline stays faintly visible behind it. Up
+ * rather than round, because a ring spinning is the one animation every app
+ * already has, and the name is YardFlow.
+ *
+ * `transform-box: fill-box` makes the percentage translate relative to the
+ * band's own box rather than the whole SVG viewport, which is what keeps the
+ * sweep the same speed at 16px and at 40px.
+ */
+@keyframes yf-flow-y {
+  from {
+    transform: translateY(115%);
+  }
+  to {
+    transform: translateY(-115%);
+  }
+}
+
+@keyframes yf-flow-x {
+  from {
+    transform: translateX(-105%);
+  }
+  to {
+    transform: translateX(285%);
+  }
+}
+
+@keyframes yf-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.yf-flow-y,
+.yf-flow-x {
+  transform-box: fill-box;
+}
+
+/* The travel is deliberately a little short of clearing the shape, so the band is
+   overlapping the letterform for nearly the whole cycle. Tuned by looking at it:
+   a longer sweep left a dead beat where the loader appeared to have stopped. */
+.yf-flow-y {
+  animation: yf-flow-y 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.yf-flow-x {
+  animation: yf-flow-x 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* Shown only when motion is unwelcome. */
+.yf-static {
+  display: none;
+}
+
+/*
+ * Somebody who has asked for less motion still needs to know it is working, so
+ * the sweep is replaced by a slow fade of the whole mark rather than removed.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .yf-animated {
+    display: none;
+  }
+  .yf-static {
+    display: block;
+    animation: yf-pulse 1.8s ease-in-out infinite;
+  }
+}

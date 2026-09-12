@@ -1,0 +1,135 @@
+{% extends "documents/base_document.html" %}
+{% comment %}
+The disposal certificate (design §11, §4.11; J3, A4).
+
+J3: "disposal of scrap requires approval and produces a disposal record, **so
+that write-offs are controlled and auditable**." This is the auditable half, and
+what an auditor actually asks for is narrow: what was destroyed, who authorised
+it, how it was got rid of, and who took it away.
+
+So the approval trail is not an appendix here — it is the point of the document,
+and it prints even when the disposal was auto-approved, because "nobody was asked
+and here is why" is itself the answer to the question.
+
+The value is shown only when the tenant tracks money (C8). A certificate stating
+"KES 0.00" would be read as "worth nothing" rather than "never recorded".
+{% endcomment %}
+
+{% block title %}Disposal {{ disposal.number }}{% endblock %}
+{% block heading %}Certificate of disposal{% endblock %}
+{% block number %}{{ disposal.number|default:"DRAFT" }}{% endblock %}
+
+{% block status %}
+  <span class="status {{ disposal.status|lower }}">{{ disposal.get_status_display }}</span>
+{% endblock %}
+
+{% block body %}
+  <table class="meta">
+    <tr>
+      <td class="label">Method</td>
+      <td>{{ disposal.get_method_display }}</td>
+      <td class="label">Disposed on</td>
+      <td>{{ disposal.disposed_at|date:"j F Y, H:i"|default:"—" }}</td>
+    </tr>
+    <tr>
+      <td class="label">Taken from</td>
+      <td>{{ disposal.from_location.name }}</td>
+      <td class="label">Actioned by</td>
+      <td>{{ disposal.disposed_by|default:"—" }}</td>
+    </tr>
+    {% if disposal.handler_name or disposal.handler_reference %}
+      <tr>
+        {% comment %}
+        The handler and their reference are what makes this checkable by
+        somebody outside the company — an e-waste certificate number can be
+        followed up; "destroyed" cannot.
+        {% endcomment %}
+        <td class="label">Handler</td>
+        <td>{{ disposal.handler_name|default:"—" }}</td>
+        <td class="label">Their reference</td>
+        <td>{{ disposal.handler_reference|default:"—" }}</td>
+      </tr>
+    {% endif %}
+    {% if written_off_value is not None %}
+      <tr>
+        <td class="label">Value written off</td>
+        <td colspan="3">{{ currency }} {{ written_off_value|floatformat:2 }}</td>
+      </tr>
+    {% endif %}
+  </table>
+
+  <table class="lines">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Item</th>
+        <th class="num">Quantity</th>
+        <th>Condition</th>
+        <th>Owner</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+        <tr>
+          <td class="num">{{ line.number }}</td>
+          <td>
+            {{ line.item }}
+            {% if line.serials or line.drums %}
+              <div class="identifiers">
+                {% for serial in line.serials %}{{ serial }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                {% for drum in line.drums %}{{ drum }}{% if not forloop.last %}, {% endif %}{% endfor %}
+              </div>
+            {% endif %}
+            {% if line.notes %}<div class="identifiers">{{ line.notes }}</div>{% endif %}
+          </td>
+          <td class="num">{{ line.quantity }} {{ line.uom }}</td>
+          <td>{{ line.condition }}</td>
+          <td>
+            {% if line.is_client_owned %}
+              {% comment %}
+              E1, J3: client-owned material on a write-off is the single most
+              sensitive line on this page, so it is unmissable on the paper too.
+              {% endcomment %}
+              <span class="owner-client">{{ line.owner }}</span>
+            {% else %}
+              <span class="owner-own">{{ line.owner }}</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if disposal.notes %}
+    <p style="margin-top: 4mm;">{{ disposal.notes }}</p>
+  {% endif %}
+
+  <div class="approvals">
+    <h2>Authorisation</h2>
+    {% if approvals %}
+      <ul>
+        {% for approval in approvals %}
+          <li>
+            {{ approval.decision }} — {{ approval.who }}
+            {% if approval.when %}on {{ approval.when|date:"j F Y, H:i" }}{% endif %}
+            {% if approval.method %}({{ approval.method }}){% endif %}
+            {% if approval.reason %}— {{ approval.reason }}{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No approval record. This certificate is not valid without one.</p>
+    {% endif %}
+  </div>
+
+  <div class="signatures">
+    <div class="signature">
+      <div class="rule"></div>
+      <div class="caption">Released by (name and signature)</div>
+    </div>
+    <div class="signature">
+      <div class="rule"></div>
+      <div class="caption">Collected by — {{ disposal.handler_name|default:"handler" }}</div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "documents/base_document.html" %}
+{% comment %}
+A report, printed (design §10, §11; M1, M2).
+
+M2 exists so an owner can "send it to a client on request", and that decides
+three things about this page:
+
+* the **parameters are in the title block**, because a filtered report read as a
+  total one is worse than no report
+* the **row count and the timestamp** are on it, so a page forwarded next quarter
+  is obviously historical rather than apparently current
+* it is **landscape**, because these are wide tables and a portrait page would
+  either clip columns or shrink them past reading
+
+Generic over every report: it walks the column spec, so a new report prints
+without touching this file (T7.1).
+{% endcomment %}
+
+{% block title %}{{ report.title }}{% endblock %}
+{% block heading %}{{ report.title }}{% endblock %}
+{% block number %}{% endblock %}
+
+{% block body %}
+  <style>
+    /* Wide tables need the long edge of the paper. */
+    @page { size: A4 landscape; margin: 12mm; }
+    table.report { width: 100%; border-collapse: collapse; margin-top: 4mm; }
+    table.report th {
+      text-align: left; font-size: 8pt; text-transform: uppercase;
+      letter-spacing: 0.3px; color: #333;
+      border-bottom: 0.4mm solid #111; padding: 1.2mm 1mm;
+    }
+    table.report td {
+      padding: 1.1mm 1mm; border-bottom: 0.15mm solid #d4d4d4;
+      font-size: 8.5pt; vertical-align: top;
+    }
+    table.report th.num, table.report td.num { text-align: right; white-space: nowrap; }
+    table.report tfoot td { font-weight: 700; border-top: 0.4mm solid #111; border-bottom: none; }
+    /* Repeat the header on every page: a fifty-row table over two pages is
+       unreadable if the second page has no column names. */
+    table.report thead { display: table-header-group; }
+    .summary { font-size: 9pt; color: #333; margin: 2mm 0 0; }
+    .filters { font-size: 8.5pt; color: #555; margin: 1mm 0 0; }
+  </style>
+
+  <p class="summary">{{ report.description }}</p>
+  <p class="filters">{{ parameters }}</p>
+  <p class="filters">
+    {{ row_count }} row{{ row_count|pluralize }} ·
+    produced {{ produced_at|date:"j F Y, H:i" }}
+    {% if report.requirement %} · {{ report.requirement }}{% endif %}
+  </p>
+
+  <table class="report">
+    <thead>
+      <tr>
+        {% for column in columns %}
+          <th class="{% if column.numeric %}num{% endif %}">{{ column.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          {% for cell in row %}
+            <td>{{ cell }}</td>
+          {% endfor %}
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="{{ columns|length }}">Nothing to report for these filters.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+    {% if totals %}
+      <tfoot>
+        <tr>
+          {% for cell in totals %}
+            <td>{% if forloop.first and not cell %}Total{% else %}{{ cell }}{% endif %}</td>
+          {% endfor %}
+        </tr>
+      </tfoot>
+    {% endif %}
+  </table>
+{% endblock %}
+
+{% block footer %}
+  {{ report.title }} — produced by {% include "documents/_wordmark.html" %} for {{ organization.name }} on
+  {{ produced_at|date:"j F Y, H:i" }}. Figures are as at that moment.
+{% endblock %}
