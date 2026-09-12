@@ -145,9 +145,7 @@ class TestTheDefaultMatrix:
         """
         assert default_channels_config()[Channel.WHATSAPP] is False
 
-    def test_an_event_specifying_whatsapp_still_reaches_people_in_app(
-        self, tenant, seeded_matrix
-    ):
+    def test_an_event_specifying_whatsapp_still_reaches_people_in_app(self, tenant, seeded_matrix):
         """So disabling WhatsApp does not silence the approval request."""
         channels = channels_for(tenant, Event.GATE_OUT_AWAITING_APPROVAL)
 
@@ -171,9 +169,7 @@ class TestTheDefaultMatrix:
 
         assert channels_for(tenant, Event.GATE_OUT_APPROVED) == []
 
-    def test_a_channel_switched_off_tenant_wide_beats_the_matrix(
-        self, tenant, seeded_matrix
-    ):
+    def test_a_channel_switched_off_tenant_wide_beats_the_matrix(self, tenant, seeded_matrix):
         """L1 is about what staff actually read.
 
         A company with no SMS budget must not have SMS reintroduced by a
@@ -284,9 +280,7 @@ class TestDeliveryRecords:
         with django_capture_on_commit_callbacks(execute=True):
             submit_gate_out(gate_out, submitted_by=storekeeper)
 
-        delivery = NotificationDelivery.objects.get(
-            recipient=approver, channel=Channel.IN_APP
-        )
+        delivery = NotificationDelivery.objects.get(recipient=approver, channel=Channel.IN_APP)
         assert delivery.status == DeliveryStatus.SENT
         assert delivery.is_unread is True
 
@@ -306,9 +300,7 @@ class TestDeliveryRecords:
         with django_capture_on_commit_callbacks(execute=True):
             submit_gate_out(gate_out, submitted_by=storekeeper)
 
-        delivery = NotificationDelivery.objects.get(
-            recipient=storekeeper, channel=Channel.SMS
-        )
+        delivery = NotificationDelivery.objects.get(recipient=storekeeper, channel=Channel.SMS)
         assert delivery.status == DeliveryStatus.SKIPPED
 
     def test_an_email_delivery_is_sent(
@@ -317,9 +309,7 @@ class TestDeliveryRecords:
         settings = tenant.settings
         settings.notification_matrix[Event.GATE_OUT_APPROVED]["channels"] = [Channel.EMAIL]
         settings.save()
-        gate_out = a_gate_out(
-            tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE
-        )
+        gate_out = a_gate_out(tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE)
 
         with django_capture_on_commit_callbacks(execute=True):
             submit_gate_out(gate_out, submitted_by=storekeeper)
@@ -335,14 +325,10 @@ class TestDeliveryRecords:
         """Re-dispatching must not spam. The uniqueness constraint is the guard."""
         from notifications.events import dispatch_event
 
-        gate_out = a_gate_out(
-            tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE
-        )
+        gate_out = a_gate_out(tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE)
         with django_capture_on_commit_callbacks(execute=True):
             submit_gate_out(gate_out, submitted_by=storekeeper)
-        event = NotificationEvent.objects.filter(
-            event_key=Event.GATE_OUT_APPROVED
-        ).first()
+        event = NotificationEvent.objects.filter(event_key=Event.GATE_OUT_APPROVED).first()
         before = NotificationDelivery.objects.count()
 
         dispatch_event(event.pk, organization_id=tenant.pk)
@@ -404,9 +390,7 @@ class TestFailureNeverBlocksTheTransaction:
         settings = tenant.settings
         settings.notification_matrix[Event.GATE_OUT_APPROVED]["channels"] = [Channel.EMAIL]
         settings.save()
-        gate_out = a_gate_out(
-            tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE
-        )
+        gate_out = a_gate_out(tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE)
 
         with (
             mock.patch(
@@ -438,9 +422,7 @@ class TestFailureNeverBlocksTheTransaction:
         settings = tenant.settings
         settings.notification_matrix[Event.GATE_OUT_APPROVED]["channels"] = [Channel.EMAIL]
         settings.save()
-        gate_out = a_gate_out(
-            tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE
-        )
+        gate_out = a_gate_out(tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE)
 
         with mock.patch(
             "notifications.channels.email.send_mail", side_effect=OSError("still down")
@@ -461,17 +443,13 @@ class TestFailureNeverBlocksTheTransaction:
 
         If the approval never happened, nobody should be told it did.
         """
-        gate_out = a_gate_out(
-            tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE
-        )
+        gate_out = a_gate_out(tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE)
 
         with pytest.raises(RuntimeError), transaction.atomic():
             emit(Event.GATE_OUT_APPROVED, gate_out)
             raise RuntimeError("something else failed")
 
-        assert NotificationEvent.objects.filter(
-            event_key=Event.GATE_OUT_APPROVED
-        ).count() == 0
+        assert NotificationEvent.objects.filter(event_key=Event.GATE_OUT_APPROVED).count() == 0
 
 
 class TestMessageRendering:
@@ -479,22 +457,16 @@ class TestMessageRendering:
         self, tenant, yard, seeded_matrix, storekeeper, django_capture_on_commit_callbacks
     ):
         """It has to read sensibly as an SMS, so it says what and where."""
-        gate_out = a_gate_out(
-            tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE
-        )
+        gate_out = a_gate_out(tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE)
         submit_gate_out(gate_out, submitted_by=storekeeper)
 
-        event = NotificationEvent.objects.filter(
-            event_key=Event.GATE_OUT_APPROVED
-        ).first()
+        event = NotificationEvent.objects.filter(event_key=Event.GATE_OUT_APPROVED).first()
 
         assert gate_out.number in render_body(event)
 
     def test_every_event_renders_something(self, tenant, yard, seeded_matrix, storekeeper):
         """A message that renders as an empty string is worse than none."""
-        gate_out = a_gate_out(
-            tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE
-        )
+        gate_out = a_gate_out(tenant, yard, storekeeper, storekeeper, criticality=Criticality.NONE)
 
         for spec in DEFAULT_MATRIX:
             event = NotificationEvent.objects.create(
@@ -563,8 +535,11 @@ class TestWhatsAppAdapter:
         settings.WHATSAPP_PHONE_NUMBER_ID = "12345"
 
         error = urllib.error.HTTPError(
-            url="https://graph.facebook.com", code=400, msg="Bad Request",
-            hdrs=None, fp=None,
+            url="https://graph.facebook.com",
+            code=400,
+            msg="Bad Request",
+            hdrs=None,
+            fp=None,
         )
         error.read = lambda: b'{"error":{"message":"template not found"}}'
 
@@ -581,8 +556,11 @@ class TestWhatsAppAdapter:
         settings.WHATSAPP_PHONE_NUMBER_ID = "12345"
 
         error = urllib.error.HTTPError(
-            url="https://graph.facebook.com", code=503, msg="Unavailable",
-            hdrs=None, fp=None,
+            url="https://graph.facebook.com",
+            code=503,
+            msg="Unavailable",
+            hdrs=None,
+            fp=None,
         )
         error.read = lambda: b"upstream down"
 
@@ -637,9 +615,7 @@ class TestSmsDelivery:
 
         credits.purchase(tenant, 10, note="For the test")
 
-        recipient = UserFactory(
-            organization=tenant, full_name="Texted Tom", phone="+254722000456"
-        )
+        recipient = UserFactory(organization=tenant, full_name="Texted Tom", phone="+254722000456")
         delivery = NotificationDelivery.objects.create(
             organization=tenant,
             event=NotificationEvent.objects.create(
@@ -691,9 +667,7 @@ class TestSmsDelivery:
         # not an empty balance.
         credits.purchase(tenant, 10, note="For the test")
 
-        recipient = UserFactory(
-            organization=tenant, full_name="Texted Tom", phone="+254722000456"
-        )
+        recipient = UserFactory(organization=tenant, full_name="Texted Tom", phone="+254722000456")
         delivery = NotificationDelivery.objects.create(
             organization=tenant,
             event=NotificationEvent.objects.create(
@@ -783,4 +757,3 @@ class TestDispatchAfterARealCommit:
                 "be visible to row-level security (§2.2)."
             )
             assert deliveries.filter(status=DeliveryStatus.SENT).exists()
-

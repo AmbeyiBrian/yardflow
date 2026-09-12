@@ -63,9 +63,7 @@ class LogoutView(APIView):
 
         from django.contrib.auth.signals import user_logged_out
 
-        user_logged_out.send(
-            sender=request.user.__class__, request=request, user=request.user
-        )
+        user_logged_out.send(sender=request.user.__class__, request=request, user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -101,9 +99,7 @@ class PasswordResetRequestView(APIView):
 
     @extend_schema(request=PasswordResetRequestSerializer, responses={200: None})
     def post(self, request):  # type: ignore[no-untyped-def]
-        serializer = PasswordResetRequestSerializer(
-            data=request.data, context={"request": request}
-        )
+        serializer = PasswordResetRequestSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         return Response(serializer.save(), status=status.HTTP_200_OK)
 
@@ -116,9 +112,7 @@ class PasswordResetConfirmView(APIView):
 
     @extend_schema(request=PasswordResetConfirmSerializer, responses={204: None})
     def post(self, request):  # type: ignore[no-untyped-def]
-        serializer = PasswordResetConfirmSerializer(
-            data=request.data, context={"request": request}
-        )
+        serializer = PasswordResetConfirmSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(status=status.HTTP_204_NO_CONTENT)

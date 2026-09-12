@@ -52,7 +52,7 @@ def configured(settings):
 
 class TestConfiguration:
     def test_it_names_the_credential_that_is_missing(self, configured):
-        """"SMS is not configured" sends somebody hunting through three settings.
+        """ "SMS is not configured" sends somebody hunting through three settings.
 
         UjumbeSMS authenticates on the API key *and* the account email, and a 401
         says nothing about which of the two was wrong — so the adapter checks
@@ -87,9 +87,7 @@ class TestTheRequest:
         in a header of its own. Unusual enough that getting it wrong is likely,
         and the failure is a bare 401.
         """
-        with mock.patch(
-            "urllib.request.urlopen", return_value=ujumbe_response(SENT)
-        ) as urlopen:
+        with mock.patch("urllib.request.urlopen", return_value=ujumbe_response(SENT)) as urlopen:
             UjumbeSmsBackend().send("0722000001", RenderedMessage(body="hello yard"))
 
         request = urlopen.call_args[0][0]
@@ -232,17 +230,13 @@ class TestTheResponse:
         Read it rather than reject it: a message that went out must not be
         recorded as failed because the envelope moved.
         """
-        with mock.patch(
-            "urllib.request.urlopen", return_value=ujumbe_response({"code": "200"})
-        ):
+        with mock.patch("urllib.request.urlopen", return_value=ujumbe_response({"code": "200"})):
             result = UjumbeSmsBackend().send("0722000001", RenderedMessage(body="hi"))
 
         assert result.succeeded is True
 
     @pytest.mark.parametrize(("status", "retryable"), [(503, True), (400, False)])
-    def test_server_errors_retry_and_client_errors_do_not(
-        self, configured, status, retryable
-    ):
+    def test_server_errors_retry_and_client_errors_do_not(self, configured, status, retryable):
         """L3: a blip deserves another go; a malformed request never will."""
         failure = urllib.error.HTTPError(
             url="https://ujumbesms.co.ke/api/messaging",

@@ -82,10 +82,7 @@ def reset_url(user: User, token: str, *, request=None) -> str:
 def _invitation_body(user: User, url: str) -> tuple[str, str]:
     where = f" at {user.organization.name}" if user.organization else ""
     subject = "Set your YardFlow password"
-    body = (
-        f"An account has been created for you{where}.\n\n"
-        f"Set your password here:\n{url}\n"
-    )
+    body = f"An account has been created for you{where}.\n\nSet your password here:\n{url}\n"
     return subject, body
 
 
@@ -108,9 +105,7 @@ def send_password_reset(user: User, *, request=None, is_invitation: bool = False
     token = make_reset_token(user)
     url = reset_url(user, token, request=request)
 
-    subject, body = (
-        _invitation_body(user, url) if is_invitation else _reset_body(url)
-    )
+    subject, body = _invitation_body(user, url) if is_invitation else _reset_body(url)
 
     if user.email:
         send_mail(

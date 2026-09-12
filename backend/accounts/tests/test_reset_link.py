@@ -115,6 +115,9 @@ class TestTheInvitationBySms:
         from notifications import credits
 
         settings.SMS_BACKEND = "notifications.channels.logging_sms.LoggingSmsBackend"
+        # Start from a stated balance rather than whatever provisioning grants,
+        # so this measures the cost of one message and not the opening balance.
+        opening = credits.balance(tenant_owner.organization)
         credits.purchase(tenant_owner.organization, 5, note="For the test")
         tenant_owner.phone = "+254722000123"
         tenant_owner.save(update_fields=["phone"])
@@ -122,7 +125,7 @@ class TestTheInvitationBySms:
         with mock.patch("accounts.reset.get_sms_backend"):
             send_password_reset(tenant_owner, is_invitation=True)
 
-        assert credits.balance(tenant_owner.organization) == 4
+        assert credits.balance(tenant_owner.organization) == opening + 4
 
     def test_with_no_credit_somebody_who_has_an_email_gets_that_instead(
         self, tenant_owner, settings, mailoutbox
@@ -130,7 +133,16 @@ class TestTheInvitationBySms:
         """They have another way in, so the message can wait for a top-up."""
         from unittest import mock
 
+        from notifications import credits
+
         settings.SMS_BACKEND = "notifications.channels.logging_sms.LoggingSmsBackend"
+        # Spent down to nothing on purpose: a provisioned tenant now starts with
+        # an opening balance, and this is about what happens when it runs out.
+        credits.adjust(
+            tenant_owner.organization,
+            -credits.balance(tenant_owner.organization),
+            note="Spent, for the test",
+        )
         tenant_owner.phone = "+254722000123"
         tenant_owner.save(update_fields=["phone"])
 
@@ -139,7 +151,6 @@ class TestTheInvitationBySms:
 
         assert not backend.return_value.send.called, "no credit, no message"
         assert len(mailoutbox) == 1, "the email is how they still get in"
-
 
     def test_somebody_with_no_email_is_texted_even_at_zero(self, settings):
         """The exception, and the only one.
@@ -163,6 +174,11 @@ class TestTheInvitationBySms:
             send_invitation=False,
         )
         organization = result["organization"]
+        credits.adjust(
+            organization,
+            -credits.balance(organization),
+            note="Spent, for the test",
+        )
         with tenant_context(organization):
             phone_only = User.objects.create_user(
                 phone="+254722000555", organization=organization, full_name="No Email"

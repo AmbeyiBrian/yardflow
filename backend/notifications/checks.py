@@ -43,11 +43,9 @@ def check_sms_provider_is_configured(app_configs, **kwargs):  # type: ignore[no-
         # Otherwise it surfaces only on the first send.
         return [
             Warning(
-                f"SMS_BACKEND is set to {backend_path!r}, which cannot be "
-                f"imported: {exc}",
+                f"SMS_BACKEND is set to {backend_path!r}, which cannot be imported: {exc}",
                 hint=(
-                    "The provider adapter is "
-                    "notifications.channels.ujumbe_sms.UjumbeSmsBackend."
+                    "The provider adapter is notifications.channels.ujumbe_sms.UjumbeSmsBackend."
                 ),
                 id="notifications.W002",
             )

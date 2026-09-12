@@ -70,8 +70,5 @@ def find_user_by_identifier(identifier: str, *, organization_id=None) -> User | 
         lookup |= Q(phone=phone)
 
     return (
-        User.objects.filter(lookup)
-        .filter(organization_id=organization_id)
-        .order_by("pk")
-        .first()
+        User.objects.filter(lookup).filter(organization_id=organization_id).order_by("pk").first()
     )

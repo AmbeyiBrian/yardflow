@@ -79,7 +79,7 @@ class TestProvisionTenant:
             name="Silvertech", slug="silvertech", owner_phone="0722123456"
         )
 
-        assert result["owner"].phone == "0722123456"
+        assert result["owner"].phone == "+254722123456"
 
     def test_an_owner_with_neither_identifier_is_refused(self, db):
         with pytest.raises(ValueError, match="email address or a phone number"):

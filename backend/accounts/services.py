@@ -188,9 +188,7 @@ def deactivate_user(user: User) -> None:
 
 def revoke_role(user: User, role: Role) -> None:
     """Remove a role from a user, refusing to remove the last owner (B4)."""
-    assert_owner_level_remains(
-        user.organization_id, excluding_role_assignment=(user.pk, role.pk)
-    )
+    assert_owner_level_remains(user.organization_id, excluding_role_assignment=(user.pk, role.pk))
     UserRole.objects.filter(user=user, role=role).delete()
 
 

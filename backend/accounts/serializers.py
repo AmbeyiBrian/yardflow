@@ -57,9 +57,7 @@ class LoginSerializer(serializers.Serializer):
                 credentials={"username": attrs["identifier"]},
                 request=request,
             )
-            raise serializers.ValidationError(
-                self.error_messages["inactive"], code="inactive"
-            )
+            raise serializers.ValidationError(self.error_messages["inactive"], code="inactive")
 
         attrs["user"] = user
         return attrs
@@ -68,9 +66,7 @@ class LoginSerializer(serializers.Serializer):
         user = validated_data["user"]
         refresh = RefreshToken.for_user(user)  # type: ignore[arg-type]
 
-        user_logged_in.send(
-            sender=user.__class__, request=self.context.get("request"), user=user
-        )
+        user_logged_in.send(sender=user.__class__, request=self.context.get("request"), user=user)
 
         return {
             "access": str(refresh.access_token),

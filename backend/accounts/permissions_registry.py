@@ -157,9 +157,7 @@ ALL_CODENAMES: frozenset[str] = frozenset(PERMISSIONS_BY_CODENAME)
 #: These two together are what the system treats as owner-level — the ability to
 #: grant permissions, and the ability to approve. Losing the last holder would
 #: leave a tenant unable to administer itself or release any material.
-OWNER_LEVEL_PERMISSIONS: frozenset[str] = frozenset(
-    {PERM.USERS_MANAGE, PERM.GATE_OUT_APPROVE}
-)
+OWNER_LEVEL_PERMISSIONS: frozenset[str] = frozenset({PERM.USERS_MANAGE, PERM.GATE_OUT_APPROVE})
 
 
 def permission_groups() -> dict[str, list[PermissionSpec]]:

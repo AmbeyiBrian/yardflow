@@ -40,9 +40,7 @@ class CredentialSerializer(serializers.Serializer):
     """What a browser hands back from ``navigator.credentials``."""
 
     credential = serializers.DictField()
-    device_label = serializers.CharField(
-        max_length=100, required=False, allow_blank=True
-    )
+    device_label = serializers.CharField(max_length=100, required=False, allow_blank=True)
 
 
 class EnrolledCredentialSerializer(serializers.Serializer):
@@ -73,9 +71,7 @@ class RegisterBeginView(APIView):
     )
     def post(self, request):  # type: ignore[no-untyped-def]
         return Response(
-            begin_registration(
-                request.user, device_label=request.data.get("device_label", "")
-            )
+            begin_registration(request.user, device_label=request.data.get("device_label", ""))
         )
 
 
@@ -84,9 +80,7 @@ class RegisterCompleteView(APIView):
 
     permission_classes = [IsAuthenticated, OrganizationIsActive]
 
-    @extend_schema(
-        request=CredentialSerializer, responses={201: EnrolledCredentialSerializer}
-    )
+    @extend_schema(request=CredentialSerializer, responses={201: EnrolledCredentialSerializer})
     def post(self, request):  # type: ignore[no-untyped-def]
         serializer = CredentialSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -108,13 +102,10 @@ class RegisterCompleteView(APIView):
             request=request,
             auth_method=AuthMethod.WEBAUTHN,
             note=(
-                f"Enrolled an authenticator ({credential.device_label}) for "
-                f"approval step-up (B5)."
+                f"Enrolled an authenticator ({credential.device_label}) for approval step-up (B5)."
             ),
         )
-        return Response(
-            _credential_payload(credential), status=status.HTTP_201_CREATED
-        )
+        return Response(_credential_payload(credential), status=status.HTTP_201_CREATED)
 
 
 class CredentialsView(APIView):
@@ -144,17 +135,11 @@ class CredentialsView(APIView):
                 # Another tenant's user is a 404, as everywhere (A3).
                 raise Http404()
 
-        credentials = WebAuthnCredential.objects.filter(user=user).order_by(
-            "-created_at"
-        )
-        return Response(
-            {"results": [_credential_payload(row) for row in credentials]}
-        )
+        credentials = WebAuthnCredential.objects.filter(user=user).order_by("-created_at")
+        return Response({"results": [_credential_payload(row) for row in credentials]})
 
     @extend_schema(
-        request=inline_serializer(
-            "WebAuthnRevoke", {"credential": serializers.IntegerField()}
-        ),
+        request=inline_serializer("WebAuthnRevoke", {"credential": serializers.IntegerField()}),
         responses={200: EnrolledCredentialSerializer},
     )
     def post(self, request):  # type: ignore[no-untyped-def]
@@ -170,14 +155,12 @@ class CredentialsView(APIView):
         if credential is None:
             raise Http404()
 
-        if credential.user_id != request.user.pk and not resolve_permissions(
-            request.user
-        ).has(PERM.USERS_MANAGE):
+        if credential.user_id != request.user.pk and not resolve_permissions(request.user).has(
+            PERM.USERS_MANAGE
+        ):
             from rest_framework.exceptions import PermissionDenied
 
-            raise PermissionDenied(
-                "Revoking somebody else's authenticator needs users.manage."
-            )
+            raise PermissionDenied("Revoking somebody else's authenticator needs users.manage.")
 
         revoke_credential(credential, revoked_by=request.user)
 

@@ -60,9 +60,7 @@ def emit(event_key: str, document, *, payload: dict | None = None) -> Notificati
     # runs outside any request, so it has no tenant context of its own and must
     # be told which tenant it is acting for (§2.2). That also means no unscoped
     # query is needed to find the event.
-    transaction.on_commit(
-        lambda: dispatch_event(event.pk, organization_id=organization_id)
-    )
+    transaction.on_commit(lambda: dispatch_event(event.pk, organization_id=organization_id))
 
     return event
 
@@ -118,11 +116,7 @@ def dispatch_event(event_id, *, organization_id=None) -> int:
     # One transaction for the whole dispatch is also right on its own terms: the
     # delivery rows for one event belong together.
     with transaction.atomic(), tenant_context(organization_id):
-        event = (
-            NotificationEvent.objects.filter(pk=event_id)
-            .select_related("organization")
-            .first()
-        )
+        event = NotificationEvent.objects.filter(pk=event_id).select_related("organization").first()
         if event is None:
             return 0
         return _dispatch(event)
@@ -225,9 +219,7 @@ def send_delivery(delivery: NotificationDelivery) -> bool:
             delivery.status = DeliveryStatus.FAILED
             delivery.last_error = f"No SMS credit. {exhausted}"[:500]
             delivery.attempts += 1
-            delivery.save(
-                update_fields=["status", "last_error", "attempts", "updated_at"]
-            )
+            delivery.save(update_fields=["status", "last_error", "attempts", "updated_at"])
             logger.warning(
                 "sms not sent for organization %s: out of credit",
                 delivery.organization_id,

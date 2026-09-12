@@ -73,9 +73,7 @@ class UserAdmin(admin.ModelAdmin):
     def password_state(self, user: User) -> str:
         if user.has_usable_password():
             return format_html('<span style="color:#047857">set</span>')
-        return format_html(
-            '<span style="color:#b45309">not set — invitation outstanding</span>'
-        )
+        return format_html('<span style="color:#b45309">not set — invitation outstanding</span>')
 
     @admin.action(description="Send a password invitation / reset link")
     def send_invitation(self, request, queryset):  # type: ignore[no-untyped-def]

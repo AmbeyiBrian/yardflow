@@ -15,9 +15,9 @@ import { useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useSearchParams } from 'react-router-dom';
 
-import { applyFieldErrors, errorMessage, useAction, useList } from '../../api/hooks';
+import { applyFieldErrors, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
-import { DataList, EmptyState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
+import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import type { Client, Location, Site, WorkOrder } from './types';
 
 type Tab = 'sites' | 'clients' | 'work-orders' | 'locations';
@@ -94,10 +94,7 @@ function SitesTab() {
         reference recorded against a site.
       </p>
 
-      {sites.isError ? <Banner tone="error">{errorMessage(sites.error)}</Banner> : null}
-      {sites.isLoading ? (
-        <Spinner className="text-slate-400" />
-      ) : (
+      <ListState query={sites}>
         <DataList
           rows={sites.data?.results ?? []}
           rowKey={(row) => row.id}
@@ -132,7 +129,7 @@ function SitesTab() {
             { header: 'County', cell: (row) => row.county || '—', wideOnly: true },
           ]}
         />
-      )}
+      </ListState>
 
       <SiteSheet
         open={sheet}

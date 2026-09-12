@@ -43,9 +43,12 @@ class NoCredit(Exception):
 
 def balance(organization) -> int:
     """The cached balance — what every screen reads."""
-    return OrganizationSettings.objects.filter(organization=organization).values_list(
-        "sms_credit_balance", flat=True
-    ).first() or 0
+    return (
+        OrganizationSettings.objects.filter(organization=organization)
+        .values_list("sms_credit_balance", flat=True)
+        .first()
+        or 0
+    )
 
 
 def ledger_balance(organization) -> int:
@@ -90,14 +93,9 @@ def _apply(
             organization=organization
         )
 
-        if (
-            quantity < 0
-            and not allow_overdraft
-            and settings_row.sms_credit_balance + quantity < 0
-        ):
+        if quantity < 0 and not allow_overdraft and settings_row.sms_credit_balance + quantity < 0:
             raise NoCredit(
-                f"{organization.name} has {settings_row.sms_credit_balance} SMS "
-                "credit(s) left."
+                f"{organization.name} has {settings_row.sms_credit_balance} SMS credit(s) left."
             )
 
         entry = SmsCreditEntry.objects.create(

@@ -116,9 +116,7 @@ class TestWhoMayChangeIt:
         """A notification nobody expected reads as spam, so seeing it stays open."""
         http, _owner_token, _organization = signed_in
 
-        response = http.get(
-            reverse("v1:notification-preferences"), **auth(storekeeper_token)
-        )
+        response = http.get(reverse("v1:notification-preferences"), **auth(storekeeper_token))
 
         assert response.status_code == 200
         assert response.json()["events"]
@@ -134,18 +132,14 @@ class TestTheChangeIsRecorded:
         from core.models import AuditLog
 
         with tenant_context(organization):
-            assert AuditLog.objects.filter(
-                target_label="Organization settings"
-            ).exists()
+            assert AuditLog.objects.filter(target_label="Organization settings").exists()
 
 
 class TestWhatCannotBeSaved:
     def test_an_unknown_channel_is_refused(self, signed_in):
         http, token, _organization = signed_in
 
-        response = patch_settings(
-            http, token, {"notification_channels": {"telegram": True}}
-        )
+        response = patch_settings(http, token, {"notification_channels": {"telegram": True}})
 
         assert response.status_code == 400
         assert "telegram" in response.content.decode()
@@ -179,9 +173,7 @@ class TestWhatCannotBeSaved:
     def test_a_switch_must_be_a_boolean(self, signed_in):
         http, token, _organization = signed_in
 
-        response = patch_settings(
-            http, token, {"notification_channels": {"sms": "yes please"}}
-        )
+        response = patch_settings(http, token, {"notification_channels": {"sms": "yes please"}})
 
         assert response.status_code == 400
 
@@ -240,14 +232,10 @@ class TestWhatANonAdministratorMaySee:
     already open, which is how it usually happens.
     """
 
-    def test_a_storekeeper_does_not_see_the_credit_balance(
-        self, signed_in, storekeeper_token
-    ):
+    def test_a_storekeeper_does_not_see_the_credit_balance(self, signed_in, storekeeper_token):
         http, _owner_token, _organization = signed_in
 
-        response = http.get(
-            reverse("v1:notification-preferences"), **auth(storekeeper_token)
-        )
+        response = http.get(reverse("v1:notification-preferences"), **auth(storekeeper_token))
 
         assert response.status_code == 200
         body = response.json()

@@ -277,9 +277,7 @@ class TestSettings:
         from core.models import AuditLog
 
         with tenant_context(organization):
-            assert AuditLog.objects.filter(
-                target_label="Organization settings"
-            ).exists()
+            assert AuditLog.objects.filter(target_label="Organization settings").exists()
 
 
 class TestDelegation:
@@ -446,9 +444,7 @@ class TestResendingAnInvitation:
         user_id = self._add_someone(http, token, organization)
         before = len(mailoutbox)
 
-        response = http.post(
-            reverse("v1:user-resend-invitation", args=[user_id]), **auth(token)
-        )
+        response = http.post(reverse("v1:user-resend-invitation", args=[user_id]), **auth(token))
 
         assert response.status_code == 200, response.content
         assert len(mailoutbox) == before + 1
@@ -475,9 +471,7 @@ class TestResendingAnInvitation:
         user_id = self._add_someone(http, token, organization)
         http.post(reverse("v1:user-deactivate", args=[user_id]), **auth(token))
 
-        response = http.post(
-            reverse("v1:user-resend-invitation", args=[user_id]), **auth(token)
-        )
+        response = http.post(reverse("v1:user-resend-invitation", args=[user_id]), **auth(token))
 
         assert response.status_code == 400
         assert response.json()["error"]["code"] == "USER_INACTIVE"
@@ -510,9 +504,7 @@ class TestAddingSomebodyWhoIsAlreadyThere:
 
     def test_a_phone_already_in_use_names_who_has_it(self, signed_in):
         http, token, organization, _owner = signed_in
-        self._add(
-            http, token, organization, full_name="Brian Technician", phone="+254797259698"
-        )
+        self._add(http, token, organization, full_name="Brian Technician", phone="+254797259698")
 
         response = self._add(
             http, token, organization, full_name="Brian Storekeeper", phone="+254797259698"
@@ -521,9 +513,7 @@ class TestAddingSomebodyWhoIsAlreadyThere:
         assert response.status_code == 400, response.status_code
         assert "Brian Technician" in str(response.json()["error"]["field_errors"]["phone"])
 
-    def test_the_same_number_written_differently_is_still_the_same_number(
-        self, signed_in
-    ):
+    def test_the_same_number_written_differently_is_still_the_same_number(self, signed_in):
         """Stored normalised, so `0797…` and `+254797…` are one number. Comparing
         the raw text would let the duplicate through to the database, which is
         where this started."""

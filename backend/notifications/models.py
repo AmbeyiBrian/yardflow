@@ -157,9 +157,7 @@ class SmsCreditEntry(TenantModel, TimeStampedModel):
     )
 
     #: Who bought or adjusted. Null for consumption, which nobody performs.
-    created_by = models.ForeignKey(
-        "accounts.User", on_delete=models.PROTECT, null=True, blank=True
-    )
+    created_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, null=True, blank=True)
 
     note = models.CharField(max_length=255, blank=True)
 

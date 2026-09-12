@@ -60,9 +60,7 @@ class ChallengeMismatch(WebAuthnError):
 
     code = "WEBAUTHN_CHALLENGE_MISMATCH"
     status_code = 409
-    default_message = (
-        "That fingerprint was for a different approval. Ask again on this one."
-    )
+    default_message = "That fingerprint was for a different approval. Ask again on this one."
 
 
 def relying_party() -> tuple[str, str]:
@@ -212,9 +210,7 @@ def begin_assertion(user, approval_request) -> dict:
         user_verification=UserVerificationRequirement.REQUIRED,
     )
 
-    _store_challenge(
-        user, options.challenge, purpose="approve", approval_request=approval_request
-    )
+    _store_challenge(user, options.challenge, purpose="approve", approval_request=approval_request)
     return {
         "options": options_to_json(options),
         "approval_request": approval_request.pk,
@@ -234,9 +230,7 @@ def complete_assertion(user, approval_request, *, credential: dict):
 
     from accounts.models import WebAuthnCredential
 
-    challenge = _take_challenge(
-        user, purpose="approve", approval_request=approval_request
-    )
+    challenge = _take_challenge(user, purpose="approve", approval_request=approval_request)
 
     raw_id = credential.get("id") or credential.get("rawId") or ""
     stored = WebAuthnCredential.objects.filter(

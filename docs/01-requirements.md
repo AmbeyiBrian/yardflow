@@ -140,6 +140,10 @@ printed gate passes and GRNs carry my branding.
 password, so that field staff without email can still use the system.
 - Both identifiers are unique within a tenant.
 - Sessions use JWT with refresh; refresh tokens are revocable.
+- A phone number is stored in **one canonical shape** (`+254722123456`). `0722 123 456`,
+  `254722123456` and `+254722123456` are the same phone; storing them as different strings meant the
+  per-tenant uniqueness check missed duplicates and somebody invited under one form could not sign in
+  with the other.
 
 **B2.** As a user, I want to reset my password by SMS or email, so that I can recover access.
 
@@ -343,6 +347,9 @@ away.
 - A delegate is named for a period, with the delegated permissions.
 - Delegated approvals are recorded as "X on behalf of Y", never as Y.
 - Optional escalation timeout: unanswered after N hours, escalate to a named fallback.
+- A delegation must lend **something** — a role or named permissions. One that lends neither is
+  refused by the database, not only the form: on screen it reads exactly like cover being in place,
+  so somebody goes on leave believing approvals will continue when they will not.
 
 **F6.** As a requester, I want to amend a rejected or draft request and resubmit it, so that a
 correctable mistake does not need a fresh document.
@@ -520,6 +527,8 @@ does not stall an approval.
 
 **L4.** As an owner, I want SMS to run on credits I buy, so that the cost of messaging is mine to
 control and to see.
+- A newly provisioned tenant starts with an opening balance, so its own first invitation can go by
+  SMS. Without it a technician who has a phone and no email cannot be invited at all.
 
 - **One SMS costs one credit, and a credit costs KES 1.** Priced per message sent to one person,
   which is the unit an owner can reason about.

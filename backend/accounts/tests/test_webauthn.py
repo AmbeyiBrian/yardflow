@@ -90,9 +90,7 @@ class TestEnrolmentAndRevocation:
         first = enrol(organization, owner, label="Phone", credential_id="cred-one")
         second = enrol(organization, owner, label="Tablet", credential_id="cred-two")
 
-        listing = http.get(
-            reverse("v1:auth:webauthn:webauthn-credentials"), **auth(token)
-        )
+        listing = http.get(reverse("v1:auth:webauthn:webauthn-credentials"), **auth(token))
         assert listing.status_code == 200, listing.content
         assert {row["device_label"] for row in listing.json()["results"]} == {
             "Phone",
@@ -118,9 +116,7 @@ class TestEnrolmentAndRevocation:
             assert first.revoked_at is not None
             assert first.revoked_by_id == owner.pk
 
-    def test_revoking_the_last_credential_is_allowed_and_is_not_a_lockout(
-        self, signed_in
-    ):
+    def test_revoking_the_last_credential_is_allowed_and_is_not_a_lockout(self, signed_in):
         """A user with no authenticator falls back to a password (§5.3).
 
         That is a degradation, not a lockout — which is why revocation does not
@@ -147,9 +143,7 @@ class TestEnrolmentAndRevocation:
         http, _token, organization, _owner = signed_in
 
         with tenant_context(organization):
-            other = UserFactory(
-                organization=organization, email="tech@silvertech.co.ke"
-            )
+            other = UserFactory(organization=organization, email="tech@silvertech.co.ke")
             other.set_password("a good long password")
             other.save()
         theirs = enrol(organization, other, label="Their phone", credential_id="cred-x")
@@ -231,9 +225,7 @@ class TestTheAssertionIsBoundToItsApproval:
             # which is also how it happens: a storekeeper asks, an owner signs.
             from accounts.factories import UserFactory
 
-            storekeeper = UserFactory(
-                organization=organization, full_name="Sara Storekeeper"
-            )
+            storekeeper = UserFactory(organization=organization, full_name="Sara Storekeeper")
 
             passes = []
             for index in range(2):
@@ -316,14 +308,10 @@ class TestTheAssertionIsBoundToItsApproval:
             # The other approval has no challenge of its own, and the one raised
             # for the first is not offered to it.
             with pytest.raises(ChallengeMismatch):
-                _take_challenge(
-                    owner, purpose="approve", approval_request=second_pending
-                )
+                _take_challenge(owner, purpose="approve", approval_request=second_pending)
 
             # The rightful one still works, once.
-            assert _take_challenge(
-                owner, purpose="approve", approval_request=first_pending
-            )
+            assert _take_challenge(owner, purpose="approve", approval_request=first_pending)
 
     def test_a_challenge_is_consumed_by_its_first_use(self, signed_in, two_pending_approvals):
         """Otherwise one fingerprint would authorise a document twice."""
@@ -373,9 +361,7 @@ class TestTheAssertionIsBoundToItsApproval:
             # And nothing was approved on the strength of it.
             assert first.status == "PENDING_APPROVAL"
 
-    def test_approving_without_an_assertion_still_works(
-        self, signed_in, two_pending_approvals
-    ):
+    def test_approving_without_an_assertion_still_works(self, signed_in, two_pending_approvals):
         """§5.3: the fingerprint is a step-*up*.
 
         An owner on a laptop with no sensor still has to be able to approve, and

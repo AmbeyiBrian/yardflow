@@ -14,9 +14,7 @@ def register() -> None:
 
     def make_delivery(organization):
         recipient = User.objects.filter(organization=organization).first() or (
-            User.objects.create_user(
-                email="iso-recipient@example.com", organization=organization
-            )
+            User.objects.create_user(email="iso-recipient@example.com", organization=organization)
         )
         event = NotificationEvent.objects.create(
             organization=organization,

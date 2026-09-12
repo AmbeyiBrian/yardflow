@@ -125,9 +125,7 @@ class TestRolePermissions:
         with pytest.raises(IntegrityError), transaction.atomic():
             Role.objects.create(name="Storekeeper")
 
-    def test_the_same_role_name_may_exist_in_another_tenant(
-        self, organization, other_organization
-    ):
+    def test_the_same_role_name_may_exist_in_another_tenant(self, organization, other_organization):
         from core.tenancy import tenant_context
 
         with tenant_context(organization):

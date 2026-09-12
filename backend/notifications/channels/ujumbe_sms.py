@@ -219,9 +219,7 @@ class UjumbeSmsBackend:
             detail = exc.read().decode("utf-8", errors="replace")[:400]
             # 5xx is worth another go; 4xx means the request or the credentials
             # are wrong and every retry costs a request for nothing.
-            return DeliveryResult(
-                succeeded=False, error=detail, retryable=exc.code >= 500
-            )
+            return DeliveryResult(succeeded=False, error=detail, retryable=exc.code >= 500)
         except json.JSONDecodeError as exc:
             # A gateway that answered with something other than JSON — a captive
             # portal, an HTML error page. Worth retrying, and worth saying so
@@ -315,8 +313,7 @@ class UjumbeSmsBackend:
         except urllib.error.HTTPError as exc:
             return {
                 "ok": False,
-                "error": f"HTTP {exc.code}: "
-                f"{exc.read().decode('utf-8', errors='replace')[:200]}",
+                "error": f"HTTP {exc.code}: {exc.read().decode('utf-8', errors='replace')[:200]}",
             }
         except Exception as exc:
             return {"ok": False, "error": str(exc)}

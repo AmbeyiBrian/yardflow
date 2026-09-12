@@ -21,9 +21,7 @@ class LoggingSmsBackend:
     name = "sms"
 
     def send(self, recipient: str, message: RenderedMessage) -> DeliveryResult:
-        logger.info(
-            "SMS (not sent — logging backend) to %s: %s", recipient, message.body
-        )
+        logger.info("SMS (not sent — logging backend) to %s: %s", recipient, message.body)
         # Deliberately prints as well as logs, so it is visible when running the
         # dev server without log configuration.
         print(f"\n--- SMS to {recipient} ---\n{message.body}\n---\n")

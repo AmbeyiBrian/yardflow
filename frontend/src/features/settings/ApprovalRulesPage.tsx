@@ -49,17 +49,32 @@ const CRITICALITY: { value: Criticality; label: string; hint: string }[] = [
   { value: 'LOW', label: 'Low criticality', hint: 'Consumables and sundries.' },
   {
     value: 'NONE',
-    label: 'Everything, whatever its criticality',
-    hint: 'Every gate-out needs this signature. Thorough, and slow.',
+    label: 'Material with no criticality set',
+    hint: 'Vests, stationery — anything whose category carries no criticality.',
   },
 ];
+
+/**
+ * Why "require approval for everything" is four rules and not one.
+ *
+ * A pass is routed on the highest criticality on it, and a rule matches that
+ * exactly — so a rule for "none" catches only passes where nothing has a
+ * criticality at all. One antenna makes the pass high, and the "none" rule
+ * stops applying. Covering everything therefore means one rule per level,
+ * which is easy to get wrong by hand and easy to do in one press here.
+ */
+const EVERY_LEVEL: Criticality[] = ['NONE', 'LOW', 'MEDIUM', 'HIGH'];
 
 /** The rule as a sentence, because that is how somebody checks it is right. */
 function asSentence(rule: ApprovalRule): string {
   const level = rule.criticality.toLowerCase();
+  // Not "anything leaving the yard": a rule matches the *highest* criticality
+  // on a pass, so this one catches only passes where nothing has a criticality
+  // at all. Saying otherwise is how somebody believes approval is on when it
+  // covers the vests and nothing else.
   const what =
     rule.criticality === 'NONE'
-      ? 'Anything leaving the yard'
+      ? 'Material with no criticality set'
       : `${level.charAt(0).toUpperCase()}${level.slice(1)}-criticality material`;
   const scope = rule.category_name ? ` in ${rule.category_name}` : '';
   return `${what}${scope} must be approved by the ${rule.role_name}.`;
@@ -74,6 +89,8 @@ export default function ApprovalRulesPage() {
   const categories = useList<ItemCategory>('item-categories', { page_size: 200 });
 
   const [sheet, setSheet] = useState(false);
+  const [everythingSheet, setEverythingSheet] = useState(false);
+  const [everythingRole, setEverythingRole] = useState('');
   const [banner, setBanner] = useState<string | null>(null);
   const [form, setForm] = useState({
     criticality: 'HIGH' as Criticality,
@@ -120,6 +137,30 @@ export default function ApprovalRulesPage() {
     }
   }
 
+  async function requireApprovalForEverything(roleId: number) {
+    setBanner(null);
+    const already = new Set(
+      (rules.data?.results ?? [])
+        .filter((rule) => rule.required_role === roleId && rule.category === null)
+        .map((rule) => rule.criticality),
+    );
+    try {
+      for (const level of EVERY_LEVEL) {
+        if (already.has(level)) continue;
+        await create.mutateAsync({
+          criticality: level,
+          required_role: roleId,
+          category: null,
+          sequence: 1,
+          is_active: true,
+        });
+      }
+      setEverythingSheet(false);
+    } catch (error) {
+      setBanner(errorMessage(error));
+    }
+  }
+
   if (rules.isLoading) return <Spinner className="text-slate-400" />;
   if (rules.isError) return <Banner tone="error">{errorMessage(rules.error)}</Banner>;
 
@@ -131,7 +172,16 @@ export default function ApprovalRulesPage() {
       <PageHeader
         title="Approvals"
         subtitle="Who has to sign before material leaves the yard."
-        actions={mayEdit ? <Button onClick={() => setSheet(true)}>Add a rule</Button> : undefined}
+        actions={
+          mayEdit ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" onClick={() => setEverythingSheet(true)}>
+                Require approval for everything
+              </Button>
+              <Button onClick={() => setSheet(true)}>Add a rule</Button>
+            </div>
+          ) : undefined
+        }
       />
 
       {banner ? <Banner tone="error">{banner}</Banner> : null}
@@ -202,9 +252,65 @@ export default function ApprovalRulesPage() {
 
       <p className="text-sm text-slate-600">
         A pass is routed on the <strong>highest criticality</strong> on it: one
-        antenna among twenty cable ties makes the whole pass an antenna. Where
-        two rules match, both signatures are collected, in level order.
+        antenna among twenty cable ties makes the whole pass an antenna, and
+        only a rule written for <em>high</em> will catch it. To stop everything,
+        write one rule per criticality — the button above does that in one
+        press. Where two rules match, both signatures are collected, in level
+        order.
       </p>
+
+      <Sheet
+        open={everythingSheet}
+        title="Require approval for everything"
+        onClose={() => setEverythingSheet(false)}
+        footer={
+          <>
+            <Button variant="secondary" block onClick={() => setEverythingSheet(false)}>
+              Cancel
+            </Button>
+            <Button
+              block
+              loading={create.isPending}
+              onClick={() => {
+                if (!everythingRole) {
+                  setBanner('Choose who has to approve it.');
+                  return;
+                }
+                void requireApprovalForEverything(Number(everythingRole));
+              }}
+            >
+              Write the rules
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-slate-600">
+            This writes four rules — one for each criticality — all pointing at
+            the same role, so nothing can leave the yard unsigned. Any that
+            already exist are left alone, and each can be changed or removed
+            afterwards like any other rule.
+          </p>
+          <Field label="Who has to approve it" htmlFor="everything-role">
+            <Select
+              id="everything-role"
+              value={everythingRole}
+              onChange={(event) => setEverythingRole(event.target.value)}
+            >
+              <option value="">Choose…</option>
+              {(roles.data?.results ?? []).map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Banner tone="warning">
+            Every gate-out will then wait for a signature, including a technician
+            collecting a pair of gloves. Thorough, and slow.
+          </Banner>
+        </div>
+      </Sheet>
 
       <Sheet
         open={sheet}

@@ -135,9 +135,7 @@ class TestLoginFailures:
 class TestLoginIsTenantScoped:
     """B1/A3: identifiers are unique per tenant, so login must be scoped."""
 
-    def test_a_user_of_another_tenant_cannot_log_in_through_this_subdomain(
-        self, api, silvertech
-    ):
+    def test_a_user_of_another_tenant_cannot_log_in_through_this_subdomain(self, api, silvertech):
         """The bug this prevents is severe and easy to write.
 
         Two tenants may each have a user with the same email address. An
@@ -152,9 +150,7 @@ class TestLoginIsTenantScoped:
 
         assert response.status_code == 400
 
-    def test_the_right_user_is_chosen_when_two_tenants_share_an_address(
-        self, api, silvertech
-    ):
+    def test_the_right_user_is_chosen_when_two_tenants_share_an_address(self, api, silvertech):
         ours = UserFactory(organization=silvertech, email="shared@example.com")
         ours.set_password("our password")
         ours.save()
@@ -189,9 +185,9 @@ class TestMe:
         """C8: the client cannot decide what to render without these."""
         access = login(api, "store@silvertech.co.ke", "correct horse battery").json()["access"]
 
-        settings_payload = api.get(
-            reverse("v1:me"), HTTP_AUTHORIZATION=f"Bearer {access}"
-        ).json()["organization"]["settings"]
+        settings_payload = api.get(reverse("v1:me"), HTTP_AUTHORIZATION=f"Bearer {access}").json()[
+            "organization"
+        ]["settings"]
 
         assert settings_payload["money_tracking_enabled"] is False
         assert settings_payload["currency"] == "KES"
@@ -232,9 +228,7 @@ class TestRefreshAndLogout:
         assert reused.status_code == 401
 
     def test_logout_requires_authentication(self, api, storekeeper):
-        response = api.post(
-            reverse("v1:auth:logout"), {}, content_type="application/json"
-        )
+        response = api.post(reverse("v1:auth:logout"), {}, content_type="application/json")
         assert response.status_code == 401
 
 

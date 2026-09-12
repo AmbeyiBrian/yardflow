@@ -61,9 +61,7 @@ class Command(BaseCommand):
 
         missing = getattr(type(backend), "missing_configuration", lambda: [])()
         if missing:
-            self.stdout.write(
-                self.style.ERROR(f"\nNot configured — missing: {', '.join(missing)}")
-            )
+            self.stdout.write(self.style.ERROR(f"\nNot configured — missing: {', '.join(missing)}"))
             self.stdout.write("Set them in backend/.env (see .env.example).")
             return
 
@@ -94,9 +92,7 @@ class Command(BaseCommand):
                 if meta.get("user"):
                     self.stdout.write(f"  account: {meta['user']}")
             else:
-                self.stdout.write(
-                    self.style.ERROR(f"  refused: {result.get('error') or result}")
-                )
+                self.stdout.write(self.style.ERROR(f"  refused: {result.get('error') or result}"))
                 # The three things that are actually wrong when this fails, in
                 # the order they are usually wrong.
                 self.stdout.write(

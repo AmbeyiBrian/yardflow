@@ -131,6 +131,23 @@ The application connects as a non-superuser role, so policies are actually enfor
 helper `enable_rls('app.Model')` applies this, and a Django system check fails startup if any
 `TenantModel` subclass lacks a policy.
 
+
+**Known gap: `accounts_user` carries no policy.** Every other tenant-scoped table does — roles,
+role assignments, delegations, WebAuthn credentials — but the table holding the people themselves
+relies on the application layer alone. Isolation holds today (the viewsets and the tenant manager
+both filter), and it was verified by request: a tenant's user list returns only its own.
+
+Enabling it was attempted and reverted, for a reason worth recording rather than rediscovering. The
+policy needs one extra arm (`organization_id IS NULL`) so a platform administrator, who belongs to
+no tenant, can still be loaded on a subdomain that resolves none. With that in place the reads are
+correct — but `WITH CHECK` then refuses every **insert** made while no organization is in context,
+and that pattern is widespread: test factories, and any code that creates a user before a tenant is
+resolved. A rebuilt test database gave 34 failures and 359 errors, all of the form "new row violates
+row-level security policy".
+
+Closing it properly means auditing every path that creates a user and wrapping it in a context, then
+enabling the policy — a piece of work in its own right, not a migration.
+
 ### 2.4 Layer 4 — API
 
 `TenantScopedViewSet` scopes `get_queryset()` and returns **404, not 403**, for another tenant's
@@ -704,6 +721,13 @@ stopped. It keeps the name `Spinner` in `components/ui`, which is how one edit r
 call sites instead of twenty-six of them. `prefers-reduced-motion` replaces the sweep with a slow fade
 rather than removing it — somebody who asked for less motion still needs to know it is working — and
 `role="status"` with an accessible name survives either way.
+
+**A list is in exactly one of three states.** Loading, failed, or genuinely empty — and they must
+not be confusable. The screens used to render the error banner *alongside* the list, so a failed
+request drew "Nothing received yet." underneath the error and the commonest reading of a broken
+screen was that the yard was empty. `ListState` makes the three exclusive and gives the failed state
+the one useful action: try again. The empty state stays where it was, inside `DataList`, now reached
+only when the load actually succeeded.
 
 ### 7.4 Screens
 

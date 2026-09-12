@@ -12,7 +12,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
 import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Spinner } from '../../components/ui';
-import { DataList, EmptyState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
+import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import type { GateIn } from './types';
 
 export default function GateInListPage() {
@@ -36,10 +36,7 @@ export default function GateInListPage() {
         onChange={(event) => setSearch(event.target.value)}
       />
 
-      {gateIns.isError ? <Banner tone="error">{errorMessage(gateIns.error)}</Banner> : null}
-      {gateIns.isLoading ? (
-        <Spinner className="text-slate-400" />
-      ) : (
+      <ListState query={gateIns}>
         <DataList
           rows={gateIns.data?.results ?? []}
           rowKey={(row) => row.id}
@@ -67,7 +64,7 @@ export default function GateInListPage() {
             },
           ]}
         />
-      )}
+      </ListState>
     </div>
   );
 }

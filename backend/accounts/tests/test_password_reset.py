@@ -87,9 +87,7 @@ class TestRequestingAReset:
 
         assert mail.outbox == []
 
-    def test_a_user_of_another_tenant_gets_nothing_through_this_subdomain(
-        self, api, silvertech
-    ):
+    def test_a_user_of_another_tenant_gets_nothing_through_this_subdomain(self, api, silvertech):
         rival = OrganizationFactory(name="Rival", slug="rival")
         UserFactory(organization=rival, email="them@rival.com")
 
@@ -106,7 +104,9 @@ class TestRequestingAReset:
         request_reset(api, "0722123456")
 
         assert mail.outbox == []
-        assert "SMS to 0722123456" in capsys.readouterr().out
+        # The canonical form: what was typed was 0722…, what is stored and
+        # dialled is +254722….
+        assert "SMS to +254722123456" in capsys.readouterr().out
 
 
 class TestConfirmingAReset:
@@ -147,15 +147,11 @@ class TestConfirmingAReset:
         assert user.check_password("first new password")
 
     def test_a_tampered_token_is_rejected(self, api, user):
-        response = confirm_reset(
-            api, encode_uid(user), "not-a-real-token", "x1234567!"
-        )
+        response = confirm_reset(api, encode_uid(user), "not-a-real-token", "x1234567!")
         assert response.status_code == 400
 
     def test_a_tampered_uid_is_rejected(self, api, user):
-        response = confirm_reset(
-            api, "bm90LWEtdWlk", make_reset_token(user), "x1234567!"
-        )
+        response = confirm_reset(api, "bm90LWEtdWlk", make_reset_token(user), "x1234567!")
         assert response.status_code == 400
 
     @override_settings(PASSWORD_RESET_TIMEOUT=3600)

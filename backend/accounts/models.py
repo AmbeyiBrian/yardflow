@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from typing import cast
 
+from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
@@ -22,12 +23,21 @@ from core.tenancy import TenantModel
 
 
 def normalise_phone(phone: str | None) -> str | None:
-    """Reduce a phone number to digits with an optional leading ``+``.
+    """Reduce a phone number to one canonical shape: ``+254722123456``.
 
     Field staff type numbers inconsistently — ``0722 123 456``,
-    ``+254722123456``, ``0722-123-456``. Without normalisation the per-tenant
-    uniqueness constraint would not catch a duplicate, and login would fail for
-    a user who typed their own number a different way.
+    ``+254722123456``, ``0722-123-456``, ``254722123456``. Stripping the
+    punctuation was never enough: ``0722123456`` and ``+254722123456`` are the
+    same phone and were stored as two different strings, so the per-tenant
+    uniqueness constraint missed the duplicate and somebody invited on one form
+    could not sign in with the other. A person who is told "your number is your
+    username" and then cannot log in with their own number has no way to work
+    out why.
+
+    The national form is expanded using ``DEFAULT_COUNTRY_CALLING_CODE``, which
+    is ``254`` here because the yard is in Kenya. A number already in
+    international form is left alone, so this does not mangle a foreign
+    supplier's number.
     """
     if not phone:
         return None
@@ -35,7 +45,22 @@ def normalise_phone(phone: str | None) -> str | None:
     if not cleaned:
         return None
     # A ``+`` is only meaningful at the front.
-    return cleaned[0] + cleaned[1:].replace("+", "")
+    cleaned = cleaned[0] + cleaned[1:].replace("+", "")
+
+    code = str(getattr(settings, "DEFAULT_COUNTRY_CALLING_CODE", "") or "")
+    if not code:
+        return cleaned
+    if cleaned.startswith("+"):
+        return cleaned
+    if cleaned.startswith("00"):
+        # The other international prefix, dialled from a landline habit.
+        return "+" + cleaned[2:]
+    if cleaned.startswith(code):
+        return "+" + cleaned
+    if cleaned.startswith("0"):
+        # The national form: one leading zero stands in for the country code.
+        return "+" + code + cleaned[1:]
+    return cleaned
 
 
 class UserManager(BaseUserManager):
@@ -259,8 +284,10 @@ class Role(TenantModel, TimeStampedModel):
 
         self.permissions.filter(codename__in=current - wanted).delete()
         RolePermission.objects.bulk_create(
-            [RolePermission(organization_id=self.organization_id, role=self, codename=codename)
-             for codename in sorted(wanted - current)]
+            [
+                RolePermission(organization_id=self.organization_id, role=self, codename=codename)
+                for codename in sorted(wanted - current)
+            ]
         )
 
 
@@ -276,9 +303,7 @@ class RolePermission(TenantModel):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
-                fields=["role", "codename"], name="uniq_permission_per_role"
-            )
+            models.UniqueConstraint(fields=["role", "codename"], name="uniq_permission_per_role")
         ]
 
     def __str__(self) -> str:
@@ -292,9 +317,7 @@ class UserRole(TenantModel, TimeStampedModel):
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="user_roles")
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["user", "role"], name="uniq_role_per_user")
-        ]
+        constraints = [models.UniqueConstraint(fields=["user", "role"], name="uniq_role_per_user")]
 
     def __str__(self) -> str:
         return f"{self.user} as {self.role.name}"
@@ -348,6 +371,15 @@ class Delegation(TenantModel, TimeStampedModel):
                 condition=Q(ends_at__gt=models.F("starts_at")),
                 name="delegation_ends_after_it_starts",
             ),
+            # A delegation that lends neither a role nor any permission is an
+            # inert record that reads, on the screen, exactly like cover being
+            # in place. Somebody goes on leave believing approvals will
+            # continue, and they do not. The serializer refuses it; this is the
+            # backstop for every other way a row can be written.
+            models.CheckConstraint(
+                condition=Q(role__isnull=False) | ~Q(codenames=[]),
+                name="delegation_delegates_something",
+            ),
             # Delegating to yourself would be a no-op that looks like a control.
             models.CheckConstraint(
                 condition=~Q(from_user=models.F("to_user")),
@@ -363,10 +395,7 @@ class Delegation(TenantModel, TimeStampedModel):
         return f"{self.from_user} -> {self.to_user} ({window})"
 
     def is_active_at(self, moment) -> bool:
-        return (
-            not self.is_revoked
-            and self.starts_at <= moment <= self.ends_at
-        )
+        return not self.is_revoked and self.starts_at <= moment <= self.ends_at
 
     def delegated_codenames(self) -> set[str]:
         """The permissions this delegation confers."""
@@ -391,9 +420,7 @@ class WebAuthnCredential(TenantModel, TimeStampedModel):
     and T8.9.
     """
 
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="webauthn_credentials"
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="webauthn_credentials")
 
     credential_id = models.CharField(max_length=400, db_index=True)
     public_key = models.TextField()

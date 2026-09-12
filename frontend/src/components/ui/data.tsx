@@ -8,7 +8,8 @@
 
 import type { ReactNode } from 'react';
 
-import { Button } from './index';
+import { errorMessage } from '../../api/hooks';
+import { Banner, Button, Spinner } from './index';
 import { cn } from './cn';
 
 export function PageHeader({
@@ -37,6 +38,67 @@ export function PageHeader({
  * An empty list and a broken screen look identical without this, and the
  * difference matters most to the person who has just arrived at the yard.
  */
+/**
+ * A list is in exactly one of three states, and they must not be confusable.
+ *
+ * The screens used to render the error banner *and* the list, which with no
+ * rows meant a failed request drew "Nothing received yet." underneath the
+ * error — so the most common reading of a broken screen was that the yard was
+ * empty. A storekeeper who believes that goes and looks for material that is
+ * sitting right there.
+ *
+ * The three states, kept exclusive:
+ *
+ *   **loading**  — we do not know yet, so claim nothing.
+ *   **failed**   — say so, and offer the one useful action: try again.
+ *   **empty**    — genuinely nothing, which is information worth stating well.
+ *
+ * `query` is whatever `useList`/`useResource` returned, so a caller passes it
+ * straight through rather than picking the three flags apart by hand and
+ * getting one wrong.
+ */
+export function ListState({
+  query,
+  children,
+}: {
+  query: {
+    isLoading: boolean;
+    isError: boolean;
+    error?: unknown;
+    refetch?: () => unknown;
+  };
+  /** The list itself. `DataList` inside it owns the empty state, which is now
+   *  reached only when the load actually succeeded. */
+  children: ReactNode;
+}) {
+  if (query.isLoading) {
+    return <Spinner className="text-slate-400" />;
+  }
+
+  if (query.isError) {
+    return (
+      // `Banner`, not a hand-rolled box: an error is assertive and announces
+      // itself, which a plain div does not.
+      <Banner tone="error">
+        <span className="flex flex-col items-start gap-3">
+          <span>{errorMessage(query.error)}</span>
+          <span className="text-red-900/80">
+            This is a problem loading the screen, not a sign that there is
+            nothing here.
+          </span>
+          {query.refetch ? (
+            <Button variant="secondary" onClick={() => query.refetch?.()}>
+              Try again
+            </Button>
+          ) : null}
+        </span>
+      </Banner>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 export function EmptyState({
   title,
   hint,

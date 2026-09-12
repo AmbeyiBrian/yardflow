@@ -24,7 +24,7 @@ class TestIdentifierRequirement:
         """The technician case: no email address at all."""
         user = User.objects.create_user(phone="0722123456", organization=organization)
 
-        assert user.phone == "0722123456"
+        assert user.phone == "+254722123456"
         assert user.email is None
 
     def test_neither_identifier_is_rejected(self, organization):
@@ -94,16 +94,34 @@ class TestNormalisation:
     @pytest.mark.parametrize(
         ("entered", "stored"),
         [
-            ("0722 123 456", "0722123456"),
-            ("0722-123-456", "0722123456"),
+            # Every way one person writes their own number, ending in one
+            # string. The national form is expanded rather than merely stripped
+            # of punctuation: 0722123456 and +254722123456 are the same phone,
+            # and storing them differently meant the uniqueness check missed the
+            # duplicate and the person could not sign in with the other form.
+            ("0722 123 456", "+254722123456"),
+            ("0722-123-456", "+254722123456"),
             ("+254 722 123 456", "+254722123456"),
-            ("(0722) 123456", "0722123456"),
+            ("(0722) 123456", "+254722123456"),
+            ("254722123456", "+254722123456"),
+            ("00254722123456", "+254722123456"),
+            # Already international, and not Kenyan: left alone. A foreign
+            # supplier's number must not be mangled into a local one.
+            ("+44 20 7946 0000", "+442079460000"),
             ("", None),
             (None, None),
         ],
     )
     def test_phone_is_normalised(self, entered, stored):
         assert normalise_phone(entered) == stored
+
+    def test_the_two_forms_of_one_number_are_the_same_user(self, organization):
+        """The point of the change, from a real login failure: somebody invited
+        as +254… and typing 0722… is the same person."""
+        User.objects.create_user(phone="+254722123456", organization=organization)
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            User.objects.create_user(phone="0722123456", organization=organization)
 
     def test_email_is_lowercased(self, organization):
         user = User.objects.create_user(email="Store@Silvertech.CO.KE", organization=organization)
@@ -123,7 +141,7 @@ class TestNormalisation:
 
         user.refresh_from_db()
         assert user.email == "mixed@example.com"
-        assert user.phone == "0722999888"
+        assert user.phone == "+254722999888"
 
 
 class TestPlatformAdmin:

@@ -130,18 +130,14 @@ class NotificationViewSet(TenantScopedViewSet):
         filter is what stops one colleague reading another's approval requests.
         """
         return (
-            NotificationDelivery.objects.filter(
-                recipient=self.request.user, channel="in_app"
-            )
+            NotificationDelivery.objects.filter(recipient=self.request.user, channel="in_app")
             .select_related(*self.select_related)
             .order_by("-created_at")
         )
 
     @extend_schema(
         request=None,
-        responses={
-            200: inline_serializer("UnreadCount", {"unread": serializers.IntegerField()})
-        },
+        responses={200: inline_serializer("UnreadCount", {"unread": serializers.IntegerField()})},
     )
     @action(detail=False, methods=["get"])
     def unread(self, request):  # type: ignore[no-untyped-def]
@@ -163,9 +159,7 @@ class NotificationViewSet(TenantScopedViewSet):
     )
     @action(detail=False, methods=["post"], url_path="read-all")
     def mark_all_read(self, request):  # type: ignore[no-untyped-def]
-        marked = self.get_queryset().filter(read_at__isnull=True).update(
-            read_at=timezone.now()
-        )
+        marked = self.get_queryset().filter(read_at__isnull=True).update(read_at=timezone.now())
         return Response({"marked": marked})
 
 

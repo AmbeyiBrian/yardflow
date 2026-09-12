@@ -56,8 +56,7 @@ class NotificationChannel(Protocol):
 
     name: str
 
-    def send(self, recipient: str, message: RenderedMessage) -> DeliveryResult:
-        ...
+    def send(self, recipient: str, message: RenderedMessage) -> DeliveryResult: ...
 
 
 def get_sms_backend() -> NotificationChannel:
@@ -67,7 +66,5 @@ def get_sms_backend() -> NotificationChannel:
     (§12.0); production uses Ujumbe (T8.11). Selected by the ``SMS_BACKEND``
     setting, so no caller knows the difference.
     """
-    path = getattr(
-        settings, "SMS_BACKEND", "notifications.channels.logging_sms.LoggingSmsBackend"
-    )
+    path = getattr(settings, "SMS_BACKEND", "notifications.channels.logging_sms.LoggingSmsBackend")
     return import_string(path)()

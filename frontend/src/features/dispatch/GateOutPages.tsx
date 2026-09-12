@@ -33,7 +33,7 @@ import {
   Spinner,
   Textarea,
 } from '../../components/ui';
-import { DataList, EmptyState, PageHeader, Sheet, StatusBadge, Stat } from '../../components/ui/data';
+import { DataList, EmptyState, ListState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
 import type { GateOut } from './types';
 
 const OPEN_STATUSES = 'DRAFT,PENDING_APPROVAL,APPROVED,PARTIALLY_RELEASED';
@@ -78,10 +78,7 @@ export default function GateOutListPage() {
         </Button>
       </div>
 
-      {passes.isError ? <Banner tone="error">{errorMessage(passes.error)}</Banner> : null}
-      {passes.isLoading ? (
-        <Spinner className="text-slate-400" />
-      ) : (
+      <ListState query={passes}>
         <DataList
           rows={passes.data?.results ?? []}
           rowKey={(row) => row.id}
@@ -122,7 +119,7 @@ export default function GateOutListPage() {
             },
           ]}
         />
-      )}
+      </ListState>
     </div>
   );
 }

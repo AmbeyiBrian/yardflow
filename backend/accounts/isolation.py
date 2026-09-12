@@ -47,6 +47,4 @@ def register() -> None:
 
     register_isolation_fixture("user", make_user, payload={"full_name": "renamed"})
     register_isolation_fixture("role", make_role, payload={"description": "renamed"})
-    register_isolation_fixture(
-        "delegation", make_delegation, payload={"reason": "renamed"}
-    )
+    register_isolation_fixture("delegation", make_delegation, payload={"reason": "renamed"})

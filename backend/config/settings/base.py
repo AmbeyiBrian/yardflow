@@ -151,6 +151,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "accounts.User"
 
+#: Expands a national phone number to international form (``0722…`` becomes
+#: ``+254722…``), so one person's number is one string. Kenya by default, since
+#: that is where the yards are; set it empty to store numbers exactly as typed.
+DEFAULT_COUNTRY_CALLING_CODE = env("DEFAULT_COUNTRY_CALLING_CODE", default="254")
+
 # B1: log in with an email address or a phone number, resolved within the
 # tenant. ModelBackend stays for the Django admin site's own login.
 AUTHENTICATION_BACKENDS = [

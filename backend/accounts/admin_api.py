@@ -195,9 +195,7 @@ class UserSerializer(serializers.ModelSerializer):
         if not value:
             return
 
-        organization_id = getattr(
-            self.context.get("request").user, "organization_id", None
-        )
+        organization_id = getattr(self.context.get("request").user, "organization_id", None)
         if organization_id is None:
             # A platform admin belongs to no tenant and cannot add tenant staff;
             # there is nothing to compare against.
@@ -274,9 +272,7 @@ class UserSerializer(serializers.ModelSerializer):
             role = Role.objects.filter(pk=role_id).first()
             if role is None:
                 raise serializers.ValidationError({"role_ids": [f"No role {role_id}."]})
-            UserRole.objects.create(
-                organization_id=user.organization_id, user=user, role=role
-            )
+            UserRole.objects.create(organization_id=user.organization_id, user=user, role=role)
 
     @transaction.atomic
     def create(self, validated_data):  # type: ignore[no-untyped-def]
@@ -359,17 +355,13 @@ class DelegationSerializer(serializers.ModelSerializer):
             )
 
         if starts_at and ends_at and ends_at <= starts_at:
-            raise serializers.ValidationError(
-                {"ends_at": ["The end has to be after the start."]}
-            )
+            raise serializers.ValidationError({"ends_at": ["The end has to be after the start."]})
 
         # A delegation hands over authority, so both people must be inside this
         # tenant. `User.objects` is not tenant-scoped — it cannot be, because
         # signing in has to find somebody before their organization is known — so
         # the check belongs here rather than being assumed (A3, B4).
-        organization_id = getattr(
-            self.context.get("request").user, "organization_id", None
-        )
+        organization_id = getattr(self.context.get("request").user, "organization_id", None)
         for field, person in (("from_user", from_user), ("to_user", to_user)):
             if person and person.organization_id != organization_id:
                 raise serializers.ValidationError(
@@ -401,11 +393,7 @@ class DelegationSerializer(serializers.ModelSerializer):
             beyond = sorted(lending - directly_held)
             if beyond:
                 field = "role" if role else "codenames"
-                what = (
-                    f"the {role.name} role"
-                    if role
-                    else f"{len(beyond)} of those permissions"
-                )
+                what = f"the {role.name} role" if role else f"{len(beyond)} of those permissions"
                 raise serializers.ValidationError(
                     {
                         field: [
@@ -653,9 +641,7 @@ class OrganizationSettingsSerializer(serializers.ModelSerializer):
             )
         for channel, enabled in value.items():
             if not isinstance(enabled, bool):
-                raise serializers.ValidationError(
-                    f"'{channel}' must be true or false."
-                )
+                raise serializers.ValidationError(f"'{channel}' must be true or false.")
         return value
 
     def validate_notification_matrix(self, value):  # type: ignore[no-untyped-def]
@@ -671,27 +657,19 @@ class OrganizationSettingsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Expected an object keyed by event.")
 
         known_events = {spec.key for spec in DEFAULT_MATRIX}
-        known_channels = {
-            getattr(Channel, name) for name in dir(Channel) if name.isupper()
-        }
-        known_recipients = {
-            getattr(Recipient, name) for name in dir(Recipient) if name.isupper()
-        }
+        known_channels = {getattr(Channel, name) for name in dir(Channel) if name.isupper()}
+        known_recipients = {getattr(Recipient, name) for name in dir(Recipient) if name.isupper()}
 
         unknown = set(value) - known_events
         if unknown:
-            raise serializers.ValidationError(
-                f"Unknown event(s): {', '.join(sorted(unknown))}."
-            )
+            raise serializers.ValidationError(f"Unknown event(s): {', '.join(sorted(unknown))}.")
 
         for event, entry in value.items():
             if not isinstance(entry, dict):
                 raise serializers.ValidationError(f"'{event}' must be an object.")
 
             if "enabled" in entry and not isinstance(entry["enabled"], bool):
-                raise serializers.ValidationError(
-                    f"'{event}.enabled' must be true or false."
-                )
+                raise serializers.ValidationError(f"'{event}.enabled' must be true or false.")
 
             for field, allowed in (
                 ("channels", known_channels),
@@ -700,14 +678,11 @@ class OrganizationSettingsSerializer(serializers.ModelSerializer):
                 if field not in entry:
                     continue
                 if not isinstance(entry[field], list):
-                    raise serializers.ValidationError(
-                        f"'{event}.{field}' must be a list."
-                    )
+                    raise serializers.ValidationError(f"'{event}.{field}' must be a list.")
                 strays = set(entry[field]) - allowed
                 if strays:
                     raise serializers.ValidationError(
-                        f"'{event}.{field}' contains unknown value(s): "
-                        f"{', '.join(sorted(strays))}."
+                        f"'{event}.{field}' contains unknown value(s): {', '.join(sorted(strays))}."
                     )
 
         return value

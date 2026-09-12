@@ -159,9 +159,7 @@ class TestADelegationMustDelegateSomething:
     happens, this is visible the day an approval is needed and nobody has it.
     """
 
-    def test_one_with_neither_a_role_nor_permissions_is_refused(
-        self, signed_in, colleague
-    ):
+    def test_one_with_neither_a_role_nor_permissions_is_refused(self, signed_in, colleague):
         http, token, _organization, owner = signed_in
 
         response = create(http, token, from_user=owner.pk, to_user=colleague.pk)
@@ -260,9 +258,7 @@ class TestNobodyLendsWhatTheyDoNotHold:
         assert response.status_code == 400, response.status_code
         assert "cannot delegate" in str(response.json()["error"]["field_errors"])
 
-    def test_an_owner_may_lend_a_lesser_role(
-        self, signed_in, colleague, organization_roles
-    ):
+    def test_an_owner_may_lend_a_lesser_role(self, signed_in, colleague, organization_roles):
         """The case on screen, and the reason it is correct: an owner holds
         everything a storekeeper does, so this lends a subset of their own
         authority rather than creating any."""

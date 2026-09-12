@@ -31,7 +31,7 @@ import {
   Select,
   Spinner,
 } from '../../components/ui';
-import { DataList, EmptyState, PageHeader, Sheet, StatusBadge, Stat } from '../../components/ui/data';
+import { DataList, EmptyState, ListState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
 import type { Client, ItemType, Location } from '../settings/types';
 import type { Movement, Reel, SerialUnit, StockBalance, StockCount } from '../receiving/types';
 
@@ -151,10 +151,7 @@ export default function StockPage() {
         </Field>
       </Card>
 
-      {stock.isError ? <Banner tone="error">{errorMessage(stock.error)}</Banner> : null}
-      {stock.isLoading ? (
-        <Spinner className="text-slate-400" />
-      ) : (
+      <ListState query={stock}>
         <DataList
           rows={stock.data?.results ?? []}
           rowKey={(row) => row.id}
@@ -180,7 +177,7 @@ export default function StockPage() {
             },
           ]}
         />
-      )}
+      </ListState>
 
       <LowStockCard />
     </div>

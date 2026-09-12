@@ -76,9 +76,7 @@ class TestDelegationWindow:
     def test_a_revoked_delegation_grants_nothing(self, tenant):
         """Someone may come back from leave early."""
         deputy = UserFactory(organization=tenant)
-        delegation = DelegationFactory(
-            to_user=deputy, role=None, codenames=[PERM.GATE_OUT_APPROVE]
-        )
+        delegation = DelegationFactory(to_user=deputy, role=None, codenames=[PERM.GATE_OUT_APPROVE])
 
         assert resolve_permissions(deputy).has(PERM.GATE_OUT_APPROVE)
 
@@ -162,3 +160,73 @@ class TestDelegationIsolation:
         with tenant_context(organization):
             ours = UserFactory(organization=organization)
             assert not resolve_permissions(ours).has(PERM.GATE_OUT_APPROVE)
+
+
+class TestADelegationMustDelegateSomething:
+    """From a row found in a live tenant.
+
+    It named a principal, a delegate and a fortnight, and lent neither a role
+    nor a single permission. On the screen it read exactly like cover being in
+    place — somebody could go on leave believing approvals would continue, and
+    they would not. The serializer refuses it; this pins the database's own
+    refusal, which covers every other way a row can be written.
+    """
+
+    def test_the_database_refuses_an_empty_one(self, tenant):
+        from django.db import IntegrityError, transaction
+
+        from accounts.factories import UserFactory
+        from accounts.models import Delegation
+
+        principal = UserFactory(organization=tenant, full_name="Away Owner")
+        delegate = UserFactory(organization=tenant, full_name="Covering Person")
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Delegation.objects.create(
+                organization=tenant,
+                from_user=principal,
+                to_user=delegate,
+                role=None,
+                codenames=[],
+                starts_at=timezone.now(),
+                ends_at=timezone.now() + timedelta(days=1),
+            )
+
+    def test_a_role_is_enough(self, tenant):
+        from accounts.factories import RoleFactory, UserFactory
+        from accounts.models import Delegation
+
+        principal = UserFactory(organization=tenant, full_name="Away Owner")
+        delegate = UserFactory(organization=tenant, full_name="Covering Person")
+
+        delegation = Delegation.objects.create(
+            organization=tenant,
+            from_user=principal,
+            to_user=delegate,
+            role=RoleFactory(name="Stand-in approver"),
+            starts_at=timezone.now(),
+            ends_at=timezone.now() + timedelta(days=1),
+        )
+
+        assert delegation.pk
+
+    def test_so_are_named_permissions(self, tenant):
+        """Lending only the authority actually needed, rather than a whole
+        role, is the careful way to do it and must stay possible."""
+        from accounts.factories import UserFactory
+        from accounts.models import Delegation
+        from accounts.permissions_registry import PERM
+
+        principal = UserFactory(organization=tenant, full_name="Away Owner")
+        delegate = UserFactory(organization=tenant, full_name="Covering Person")
+
+        delegation = Delegation.objects.create(
+            organization=tenant,
+            from_user=principal,
+            to_user=delegate,
+            codenames=[PERM.GATE_OUT_APPROVE],
+            starts_at=timezone.now(),
+            ends_at=timezone.now() + timedelta(days=1),
+        )
+
+        assert delegation.pk
