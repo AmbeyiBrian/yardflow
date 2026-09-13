@@ -263,6 +263,13 @@ gate-in, so that the paper trail is preserved.
 receiving is fast.
 - Camera-based scanning on a phone. Manual entry always available.
 - **Edge case:** many recoveries arrive with no barcode at all; the flow must not assume one exists.
+- Scanning reads QR and Data Matrix as well as the 1D formats, since some suppliers label units with
+  a QR code.
+- For a delivery of identified units the camera **stays open** and the count climbs as each is
+  taken. Closing it after every read meant a sealed box of twenty was twenty separate openings, and
+  most of a gate-in was spent on the phone rather than on the delivery. A repeat of the same label
+  under the lens is read once; the same unit scanned twice from the box is called out, because a
+  count that is silently short is worse than one that is questioned.
 
 **D8.** As a storekeeper, I want to save a gate-in as a draft and post it when complete, so that a
 large delivery can be entered over time.

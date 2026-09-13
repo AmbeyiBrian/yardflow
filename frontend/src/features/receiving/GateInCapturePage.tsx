@@ -655,6 +655,8 @@ function LineSheet({
    * reads as a bug, because from where they are standing it is one.
    */
   const [pendingSerial, setPendingSerial] = useState('');
+  /** The last serial scanned twice, so a slip down a box is visible. */
+  const [duplicate, setDuplicate] = useState<string | null>(null);
   const [pendingDrum, setPendingDrum] = useState('');
   const [pendingLength, setPendingLength] = useState('');
 
@@ -672,6 +674,7 @@ function LineSheet({
     setSerials([]);
     setDrums([]);
     setPendingSerial('');
+    setDuplicate(null);
     setPendingDrum('');
     setPendingLength('');
     setNoSerialReason('');
@@ -796,15 +799,38 @@ function LineSheet({
           <>
             <BarcodeScanner
               label="Serial number"
-              hint="One per unit. A duplicate is refused, naming where the existing one sits."
+              hint="One per unit. Keep the camera on the box and scan straight down the row — the count above the picture climbs as each one is taken."
+              // A delivery is many units, so the camera stays open (D3, D7).
+              continuous
+              scannedCount={serials.length}
               onDraft={setPendingSerial}
               onScan={(value) => {
-                setSerials((current) =>
-                  current.includes(value) ? current : [...current, value],
-                );
+                setSerials((current) => {
+                  if (current.includes(value)) {
+                    // Scanning the same unit twice is an ordinary slip when
+                    // working down a box. Saying so is the difference between
+                    // a count that is wrong and one that is short by a unit
+                    // still sitting in the carton.
+                    setDuplicate(value);
+                    return current;
+                  }
+                  setDuplicate(null);
+                  return [...current, value];
+                });
                 setPendingSerial('');
               }}
             />
+            {duplicate ? (
+              <Banner tone="warning">
+                {duplicate} is already on this line — it has been counted once.
+              </Banner>
+            ) : null}
+            {serials.length > 0 ? (
+              <p className="text-sm font-medium text-slate-700">
+                {serials.length} {serials.length === 1 ? 'unit' : 'units'} on this
+                line
+              </p>
+            ) : null}
             {serials.length > 0 ? (
               <ul className="flex flex-wrap gap-2">
                 {serials.map((serial) => (

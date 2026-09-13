@@ -48,6 +48,8 @@ export function BarcodeScanner({
   label = 'Scan or type a code',
   hint,
   autoStart = false,
+  continuous = false,
+  scannedCount,
 }: {
   onScan: (value: string) => void;
   /**
@@ -64,6 +66,19 @@ export function BarcodeScanner({
   hint?: string;
   /** Open the camera immediately. Off by default: most entry is typed. */
   autoStart?: boolean;
+  /**
+   * Keep scanning after a hit, for a delivery of many identified units.
+   *
+   * The camera used to close on every successful read, so receiving a sealed
+   * box of twenty radios meant opening it twenty times — tap, wait for focus,
+   * scan, tap again. That is most of the time a gate-in takes, and all of it is
+   * spent on the phone rather than on the delivery. Left off for a lookup,
+   * where one code answers the question and a camera left running is a battery
+   * drain in somebody's pocket.
+   */
+  continuous?: boolean;
+  /** How many have been accepted so far, shown on the viewfinder. */
+  scannedCount?: number;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -74,6 +89,8 @@ export function BarcodeScanner({
   const [hasTorch, setHasTorch] = useState(false);
   const [manual, setManual] = useState('');
   const [note, setNote] = useState<string | null>(null);
+  //: The last code accepted, so the same label under the lens is read once.
+  const lastValueRef = useRef<{ value: string; at: number }>({ value: '', at: 0 });
 
   const stop = useCallback(() => {
     stopRef.current?.();
@@ -118,7 +135,7 @@ export function BarcodeScanner({
       setMode('scanning');
 
       if (window.BarcodeDetector) {
-        stopRef.current = runNativeDetector(video, handleResult);
+        stopRef.current = runNativeDetector(video, handleResult, continuous);
       } else {
         stopRef.current = await runZxing(video, handleResult);
       }
@@ -137,19 +154,35 @@ export function BarcodeScanner({
     }
     // handleResult is stable for the life of the component.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [continuous]);
 
   const handleResult = useCallback(
     (value: string) => {
       const cleaned = value.trim();
       if (!cleaned) return;
+
+      if (continuous) {
+        // The same label sits in front of the lens for a second or two and
+        // would otherwise be read thirty times. Suppressing a repeat by value
+        // rather than by time also means a genuine second unit with the same
+        // code — which is a duplicate the server will refuse anyway — does not
+        // silently vanish here.
+        const last = lastValueRef.current;
+        if (last.value === cleaned && Date.now() - last.at < 2500) return;
+        lastValueRef.current = { value: cleaned, at: Date.now() };
+        navigator.vibrate?.(40);
+        setNote(`Scanned ${cleaned}.`);
+        onScan(cleaned);
+        return;
+      }
+
       // A short buzz, where the device has one: in a noisy yard it is the only
       // feedback that lands.
       navigator.vibrate?.(40);
       stop();
       onScan(cleaned);
     },
-    [onScan, stop],
+    [continuous, onScan, stop],
   );
 
   useEffect(() => {
@@ -184,13 +217,22 @@ export function BarcodeScanner({
             <div className="h-24 w-4/5 rounded-lg border-2 border-white/80" />
           </div>
         ) : null}
+        {/* A running count on the viewfinder, because the whole point of
+            keeping the camera open is that nobody looks away from the box. */}
+        {mode === 'scanning' && continuous && scannedCount !== undefined ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-2">
+            <span className="rounded-full bg-slate-900/80 px-3 py-1 text-sm font-medium text-white">
+              {scannedCount} scanned
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2">
         {mode === 'scanning' || mode === 'starting' ? (
           <>
             <Button variant="secondary" onClick={stop}>
-              Stop camera
+              {continuous ? 'Done scanning' : 'Stop camera'}
             </Button>
             {hasTorch ? (
               <Button variant="secondary" onClick={toggleTorch}>
@@ -212,7 +254,14 @@ export function BarcodeScanner({
         className="flex items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          handleResult(manual);
+          const typed = manual.trim();
+          if (!typed) return;
+          // Deliberately not `handleResult`: that suppresses a repeat of the
+          // same value, which is right for a label sitting under the lens and
+          // wrong for somebody typing. Typing the same code twice is a
+          // statement, and the screen above should answer it.
+          navigator.vibrate?.(40);
+          onScan(typed);
           setManual('');
           onDraft?.('');
         }}
@@ -243,7 +292,11 @@ export function BarcodeScanner({
 }
 
 /** Poll the native detector. ~8/second is plenty and leaves the CPU alone. */
-function runNativeDetector(video: HTMLVideoElement, onResult: (value: string) => void) {
+function runNativeDetector(
+  video: HTMLVideoElement,
+  onResult: (value: string) => void,
+  keepScanning = false,
+) {
   const detector = new window.BarcodeDetector!({ formats: FORMATS });
   let cancelled = false;
 
@@ -253,7 +306,10 @@ function runNativeDetector(video: HTMLVideoElement, onResult: (value: string) =>
       const found = await detector.detect(video);
       if (found.length > 0) {
         onResult(found[0].rawValue);
-        return;
+        // Stopping here is what makes a single-shot scan single-shot. When the
+        // caller wants a run of units, the loop carries on and the repeat
+        // suppression upstream decides what counts.
+        if (!keepScanning) return;
       }
     } catch {
       // A single failed frame is normal — motion blur, or the camera settling.

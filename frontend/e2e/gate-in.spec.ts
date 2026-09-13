@@ -218,6 +218,51 @@ test.describe('Receiving a delivery', () => {
       .toBe(1);
   });
 
+
+  test('a box of units goes in one after another', async ({ page }) => {
+    /**
+     * Receiving a sealed box used to mean opening the camera once per unit:
+     * tap, wait for focus, scan, tap again, twenty times. Most of a gate-in was
+     * spent on the phone rather than on the delivery.
+     *
+     * The camera path needs a real camera, so what is exercised here is the
+     * other half of the same loop — the line accumulating units without the
+     * sheet closing between them, and a count that is visible while doing it.
+     */
+    await open(page, '/gate-in/new');
+    await page.getByLabel('Source').selectOption('PURCHASE');
+    await page.getByLabel('Received into').selectOption({ index: 1 });
+
+    await page.getByRole('button', { name: 'Add a line' }).click();
+    const sheet = page.getByRole('dialog');
+
+    const item = sheet.getByLabel('Item');
+    const options = await item.locator('option').allTextContents();
+    const serialized = options.find((label) => /rru|antenna/i.test(label));
+    test.skip(!serialized, 'no serialized item in the seeded catalogue');
+    await item.selectOption({ label: serialized! });
+
+    const serials = unique('BOX');
+    for (const suffix of ['-1', '-2', '-3']) {
+      await sheet.getByLabel('Serial number').fill(serials + suffix);
+      await sheet.getByRole('button', { name: /^add$/i }).first().click();
+    }
+
+    await expect(sheet.getByText('3 units on this line')).toBeVisible();
+
+    // The slip this is meant to catch: the same unit scanned twice while
+    // working down a box.
+    await sheet.getByLabel('Serial number').fill(serials + '-2');
+    await sheet.getByRole('button', { name: /^add$/i }).first().click();
+
+    await expect(sheet.getByText(/already on this line/i)).toBeVisible();
+    await expect(sheet.getByText('3 units on this line')).toBeVisible();
+
+    await sheet.getByRole('button', { name: 'Add line' }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText('3 serials')).toBeVisible();
+  });
+
   test('the screen does not scroll sideways on a phone', async ({ page }) => {
     /** §7.3: no horizontal page scroll at any width. */
     await open(page, '/gate-in/new');
