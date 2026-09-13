@@ -304,4 +304,8 @@ class GateInViewSet(TenantScopedViewSet):
         content, content_type, filename = render_grn(self.get_object(), as_pdf=wants_pdf)
         response = HttpResponse(content, content_type=content_type)
         response["Content-Disposition"] = f'inline; filename="{filename}"'
+        if wants_pdf and not content_type.startswith("application/pdf"):
+            # A PDF was asked for and a web page came back. Say so in the
+            # response rather than leaving it to be inferred from the extension.
+            response["X-Document-Fallback"] = "html"
         return response

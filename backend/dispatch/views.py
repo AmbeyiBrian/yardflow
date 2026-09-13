@@ -502,6 +502,11 @@ class GateOutViewSet(TenantScopedViewSet):
 
         response = HttpResponse(content, content_type=content_type)
         response["Content-Disposition"] = f'inline; filename="{filename}"'
+        # Says so when a PDF was asked for and a web page came back, so the
+        # degradation is visible to a client rather than inferred from the
+        # extension.
+        if wants_pdf and not content_type.startswith("application/pdf"):
+            response["X-Document-Fallback"] = "html"
         return response
 
     @extend_schema(

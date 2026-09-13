@@ -982,6 +982,21 @@ certificate. Each carries the tenant logo (`A4`), the document number, and a QR 
 document id for gate scanning (`G5`). QR item labels are generated on demand when
 `qr_labels_enabled` is on (`C8`).
 
+**The fallback is deliberate and was invisible for too long.** Where WeasyPrint cannot be imported
+the document is served as HTML, so a missing system library never stops a driver leaving with
+something in their hand. But nothing said which of the two you were getting, and the dependency was
+pinned to `WeasyPrint==69.1` — a version that does not exist — so it was never installed, the import
+always failed, and every document in development was a web page. The tests accepted "a PDF *or*
+HTML", so the suite stayed green.
+
+Three things close that: the pin is a real version, CI installs the Pango libraries so the PDF path
+is actually exercised (and a test asserts the bytes start with `%PDF`, skipped only where the host
+genuinely cannot render), and `dispatch.W001` warns at startup which format the server will produce.
+The response carries `X-Document-Fallback: html` when a PDF was asked for and a page came back.
+
+On Windows, WeasyPrint needs the GTK3 runtime installed separately; without it local development
+serves HTML while the deployed Linux image serves PDFs.
+
 ---
 
 ## 12. Runtime and deployment

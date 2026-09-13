@@ -18,6 +18,7 @@ from core.provisioning import provision_tenant
 from core.tenancy import tenant_context
 from dispatch.documents import (
     gate_pass_context,
+    pdf_available,
     qr_png_data_uri,
     qr_token,
     render_gate_pass,
@@ -182,6 +183,29 @@ class TestGatePassDocument:
 
         assert content_type in ("application/pdf", "text/html; charset=utf-8")
         assert filename.endswith((".pdf", ".html"))
+
+    def test_where_the_renderer_is_present_a_real_pdf_comes_out(
+        self, tenant, yard, storekeeper
+    ):
+        """The test that was missing, and the reason nobody noticed.
+
+        Accepting "a PDF *or* HTML" everywhere meant the suite stayed green with
+        no PDF engine installed at all — which is what had happened: the
+        dependency was pinned to a version that does not exist, so it was never
+        installed and every gate pass in development was a web page. Skipped
+        where the host genuinely cannot render, asserted where it can, so CI
+        exercises the thing a driver actually carries.
+        """
+        if not pdf_available():
+            pytest.skip("no PDF renderer on this host")
+
+        gate_out = a_released_pass(tenant, yard, storekeeper)
+
+        content, content_type, filename = render_gate_pass(gate_out, as_pdf=True)
+
+        assert content.startswith(b"%PDF"), "an actual PDF, not a page pretending"
+        assert content_type == "application/pdf"
+        assert filename.endswith(".pdf")
 
 
 class TestQrLookup:

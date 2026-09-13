@@ -31,8 +31,14 @@ dependencies = [
     # WebAuthn step-up on approval (B5, D9, §5.3). Used from Phase 8.
     "webauthn==3.0.0",
     # PDF rendering for gate passes, GRNs and waybills (G4, K2, §11).
-    # Needs GTK libraries present on the host; only imported by Phase 4 code.
-    "WeasyPrint==69.1",
+    #
+    # Needs Pango and its GObject libraries present on the host — they come with
+    # the Linux image and must be installed by hand on Windows. Where they are
+    # missing the document is served as HTML instead (§11), which is why a
+    # wrong pin here was invisible for so long: this was pinned to 69.1, a
+    # version that does not exist, so the install silently never happened and
+    # every "PDF" in development was a web page.
+    "WeasyPrint==70.0",
 ]
 
 [project.optional-dependencies]

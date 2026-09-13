@@ -70,6 +70,14 @@ jobs:
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
+      # WeasyPrint renders the gate pass, GRN and waybills. Without these the
+      # import fails and every document quietly degrades to HTML, so CI would
+      # be green while the thing a driver carries was never produced (§11, G4).
+      - name: System libraries for PDF rendering
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libffi-dev
+
       - name: Install dependencies
         working-directory: backend
         run: |
