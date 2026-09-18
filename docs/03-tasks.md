@@ -911,7 +911,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   Name, code, contacts, `is_active`. Unique per tenant, `PROTECT` once referenced.
   *Done when:* a referenced subcontractor can be deactivated but not deleted.
 
-- [ ] **T10.5 `[B]` Job delivery mode**
+- [x] **T10.5 `[B]` Job delivery mode**
   Refs: §4.14 · O3
   `delivery_mode`, `subcontractor`, `agreed_price`, paired by check constraint. Both immutable once
   the job is `CLOSED`.

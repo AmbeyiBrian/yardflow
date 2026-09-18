@@ -3867,6 +3867,12 @@ export interface components {
             ends_at: string;
             reason?: string;
         };
+        /**
+         * @description * `IN_HOUSE` - Delivered by our own crews
+         *     * `SUBCONTRACTED` - Delivered by a subcontractor
+         * @enum {string}
+         */
+        DeliveryModeEnum: "IN_HOUSE" | "SUBCONTRACTED";
         Disposal: {
             readonly id: number;
             readonly number: string;
@@ -4425,6 +4431,14 @@ export interface components {
             readonly site_name: string;
             readonly site_ref: string;
             project?: number | null;
+            delivery_mode?: components["schemas"]["DeliveryModeEnum"];
+            subcontractor?: number | null;
+            readonly subcontractor_name: string;
+            /**
+             * Format: decimal
+             * @description What was agreed with the contractor for this job, excluding VAT.
+             */
+            agreed_price?: string | null;
             assignee: number;
             readonly assignee_name: string;
             description?: string;
@@ -4520,6 +4534,13 @@ export interface components {
             client: number;
             site: number;
             project?: number | null;
+            delivery_mode?: components["schemas"]["DeliveryModeEnum"];
+            subcontractor?: number | null;
+            /**
+             * Format: decimal
+             * @description What was agreed with the contractor for this job, excluding VAT.
+             */
+            agreed_price?: string | null;
             assignee: number;
             description?: string;
         };
@@ -5455,6 +5476,13 @@ export interface components {
             client?: number;
             site?: number;
             project?: number | null;
+            delivery_mode?: components["schemas"]["DeliveryModeEnum"];
+            subcontractor?: number | null;
+            /**
+             * Format: decimal
+             * @description What was agreed with the contractor for this job, excluding VAT.
+             */
+            agreed_price?: string | null;
             assignee?: number;
             description?: string;
         };

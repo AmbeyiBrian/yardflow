@@ -23,6 +23,18 @@ from core.models import TimeStampedModel
 from core.tenancy import TenantModel
 
 
+class DeliveryMode(models.TextChoices):
+    """Who actually does the work (O3).
+
+    Recorded per job rather than per project because a PO awarded in bulk is
+    usually allocated afterwards, by region or by capacity — so one PO routinely
+    has both kinds of job under it.
+    """
+
+    IN_HOUSE = "IN_HOUSE", "Delivered by our own crews"
+    SUBCONTRACTED = "SUBCONTRACTED", "Delivered by a subcontractor"
+
+
 class JobStatus(models.TextChoices):
     OPEN = "OPEN", "Open"
     IN_PROGRESS = "IN_PROGRESS", "In progress"
@@ -58,6 +70,28 @@ class Job(TenantModel, TimeStampedModel):
     )
     description = models.CharField(max_length=500, blank=True)
 
+    # O3: how this job is delivered, and what it costs the project. A PO may be
+    # mixed — some sites in-house, some passed to one contractor, some to
+    # another — so this lives on the job, never on the project.
+    delivery_mode = models.CharField(
+        max_length=20, choices=DeliveryMode.choices, default=DeliveryMode.IN_HOUSE
+    )
+    subcontractor = models.ForeignKey(
+        "network.Subcontractor",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="jobs",
+    )
+    agreed_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="What was agreed with the contractor for this job, excluding VAT.",
+    )
+
     status = models.CharField(
         max_length=20, choices=JobStatus.choices, default=JobStatus.OPEN, db_index=True
     )
@@ -88,6 +122,23 @@ class Job(TenantModel, TimeStampedModel):
                 condition=~Q(status=JobStatus.CLOSED) | Q(closed_at__isnull=False),
                 name="a_closed_job_records_when",
             ),
+            # O3: the two halves of a subcontracted job travel together. A
+            # contractor with no agreed price contributes nothing to the
+            # project's cost and would quietly flatter it; a price with no
+            # contractor cannot be rolled up by party.
+            models.CheckConstraint(
+                condition=Q(
+                    delivery_mode=DeliveryMode.IN_HOUSE,
+                    subcontractor__isnull=True,
+                    agreed_price__isnull=True,
+                )
+                | Q(
+                    delivery_mode=DeliveryMode.SUBCONTRACTED,
+                    subcontractor__isnull=False,
+                    agreed_price__isnull=False,
+                ),
+                name="delivery_mode_and_its_cost_agree",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -96,6 +147,66 @@ class Job(TenantModel, TimeStampedModel):
     @property
     def is_closed(self) -> bool:
         return self.status == JobStatus.CLOSED
+
+    #: What delivery looked like when this row was read, so the guard below can
+    #: tell a change from a re-save without a second query.
+    _loaded_delivery: tuple | None = None
+
+    #: The fields the guard compares. Named here because a deferred load must
+    #: not be triggered while capturing them — see ``from_db``.
+    _DELIVERY_FIELDS = ("status", "delivery_mode", "subcontractor_id", "agreed_price")
+
+    @classmethod
+    def from_db(cls, db, field_names, values):  # type: ignore[no-untyped-def]
+        instance = super().from_db(db, field_names, values)
+        # Only when the row really carries these columns. A query that defers
+        # them — Django's own delete collector fetches pk alone — would
+        # otherwise have this attribute access fire a refresh, which calls
+        # ``from_db`` again, forever.
+        if set(cls._DELIVERY_FIELDS) <= set(field_names):
+            instance._loaded_delivery = tuple(
+                getattr(instance, name) for name in cls._DELIVERY_FIELDS
+            )
+        return instance
+
+    def _check_delivery_is_still_changeable(self) -> None:
+        """A closed job's delivery cost is settled (O3).
+
+        Changing the mode or the price after closing would rewrite a cost the
+        project has already counted — the same objection that makes the ledger
+        append-only. Correcting a genuinely wrong price means reopening the job,
+        which is recorded.
+
+        Called from both ``clean`` and ``save``: ``Job`` does not run
+        ``full_clean`` on save, and DRF does not call it either, so a guard that
+        lived only in ``clean`` would not fire on the path that matters.
+        """
+        if self._loaded_delivery is None:
+            return
+        was_status, was_mode, was_subcontractor, was_price = self._loaded_delivery
+        if was_status != JobStatus.CLOSED:
+            return
+        if (
+            self.delivery_mode,
+            self.subcontractor_id,
+            self.agreed_price,
+        ) != (was_mode, was_subcontractor, was_price):
+            raise ValidationError(
+                "This job is closed, and its delivery cost has already been "
+                "counted against the project. Reopen it first (O3)."
+            )
+
+    def clean(self) -> None:
+        super().clean()
+        self._check_delivery_is_still_changeable()
+
+    def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        self._check_delivery_is_still_changeable()
+        result = super().save(*args, **kwargs)
+        self._loaded_delivery = tuple(
+            getattr(self, name) for name in self._DELIVERY_FIELDS
+        )
+        return result
 
 
 class CloseoutStatus(models.TextChoices):

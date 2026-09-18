@@ -42,6 +42,9 @@ class JobSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source="client.name", read_only=True)
     assignee_name = serializers.CharField(source="assignee.full_name", read_only=True)
     is_closed = serializers.BooleanField(read_only=True)
+    subcontractor_name = serializers.CharField(
+        source="subcontractor.name", read_only=True
+    )
 
     class Meta:
         model = Job
@@ -54,6 +57,10 @@ class JobSerializer(serializers.ModelSerializer):
             "site_name",
             "site_ref",
             "project",
+            "delivery_mode",
+            "subcontractor",
+            "subcontractor_name",
+            "agreed_price",
             "assignee",
             "assignee_name",
             "description",
@@ -73,6 +80,17 @@ class JobSerializer(serializers.ModelSerializer):
             "closed_with_variance",
             "close_reason",
         )
+
+    def validate(self, attrs: dict) -> dict:
+        current = {}
+        if self.instance is not None:
+            current = {
+                "delivery_mode": self.instance.delivery_mode,
+                "subcontractor": self.instance.subcontractor,
+                "agreed_price": self.instance.agreed_price,
+            }
+        _validate_delivery({**current, **attrs})
+        return attrs
 
 
 class CloseJobSerializer(serializers.Serializer):
@@ -191,6 +209,33 @@ class VarianceSerializer(serializers.ModelSerializer):
 class ResolveVarianceSerializer(serializers.Serializer):
     resolution = serializers.CharField(max_length=500)
     write_off = serializers.BooleanField(default=False)
+
+
+def _validate_delivery(merged: dict) -> None:
+    """Say what ``delivery_mode_and_its_cost_agree`` would say (O3).
+
+    The database refuses the pair either way. Reaching it gives an
+    IntegrityError and a 500; this turns the same refusal into field errors.
+    """
+    from jobs.models import DeliveryMode
+
+    subcontracted = merged.get("delivery_mode") == DeliveryMode.SUBCONTRACTED
+    if subcontracted:
+        missing = {
+            name: "Required for a subcontracted job."
+            for name in ("subcontractor", "agreed_price")
+            if merged.get(name) is None
+        }
+        if missing:
+            raise serializers.ValidationError(missing)
+    else:
+        extra = {
+            name: "Only a subcontracted job carries this."
+            for name in ("subcontractor", "agreed_price")
+            if merged.get(name) is not None
+        }
+        if extra:
+            raise serializers.ValidationError(extra)
 
 
 class JobViewSet(TenantScopedViewSet):

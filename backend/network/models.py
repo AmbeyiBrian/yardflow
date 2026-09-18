@@ -462,7 +462,10 @@ class ProjectVariation(TenantModel, TimeStampedModel):
     @classmethod
     def from_db(cls, db, field_names, values):  # type: ignore[no-untyped-def]
         instance = super().from_db(db, field_names, values)
-        instance._loaded_status = instance.status
+        # Guarded: a query that defers ``status`` would make this attribute
+        # access fire a refresh, which re-enters ``from_db`` without end.
+        if "status" in field_names:
+            instance._loaded_status = instance.status
         return instance
 
     def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]

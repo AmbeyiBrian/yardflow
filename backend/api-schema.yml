@@ -9065,6 +9065,14 @@ components:
       - from_user
       - starts_at
       - to_user
+    DeliveryModeEnum:
+      enum:
+      - IN_HOUSE
+      - SUBCONTRACTED
+      type: string
+      description: |-
+        * `IN_HOUSE` - Delivered by our own crews
+        * `SUBCONTRACTED` - Delivered by a subcontractor
     Disposal:
       type: object
       properties:
@@ -10547,6 +10555,21 @@ components:
         project:
           type: integer
           nullable: true
+        delivery_mode:
+          $ref: '#/components/schemas/DeliveryModeEnum'
+        subcontractor:
+          type: integer
+          nullable: true
+        subcontractor_name:
+          type: string
+          readOnly: true
+        agreed_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What was agreed with the contractor for this job, excluding
+            VAT.
         assignee:
           type: integer
         assignee_name:
@@ -10597,6 +10620,7 @@ components:
       - site_name
       - site_ref
       - status
+      - subcontractor_name
     JobCloseout:
       type: object
       description: |-
@@ -10801,6 +10825,18 @@ components:
         project:
           type: integer
           nullable: true
+        delivery_mode:
+          $ref: '#/components/schemas/DeliveryModeEnum'
+        subcontractor:
+          type: integer
+          nullable: true
+        agreed_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What was agreed with the contractor for this job, excluding
+            VAT.
         assignee:
           type: integer
         description:
@@ -12517,6 +12553,18 @@ components:
         project:
           type: integer
           nullable: true
+        delivery_mode:
+          $ref: '#/components/schemas/DeliveryModeEnum'
+        subcontractor:
+          type: integer
+          nullable: true
+        agreed_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What was agreed with the contractor for this job, excluding
+            VAT.
         assignee:
           type: integer
         description:
