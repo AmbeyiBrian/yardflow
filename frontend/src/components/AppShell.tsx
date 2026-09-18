@@ -52,6 +52,14 @@ const NAV_ITEMS: NavItem[] = [
   },
   { to: '/stock', label: 'Stock', icon: <GlyphBoxes /> },
   {
+    // O12: a manager's standing question is "how is my PO doing", and it is
+    // asked often enough to be top-level rather than buried under settings.
+    to: '/projects',
+    label: 'Projects',
+    anyOf: [PERM.PROJECT_VIEW_COST, PERM.CATALOGUE_MANAGE],
+    icon: <GlyphClipboard />,
+  },
+  {
     to: '/jobs',
     label: 'Jobs',
     anyOf: [PERM.JOB_CLOSEOUT, PERM.REPORT_VIEW_ALL],

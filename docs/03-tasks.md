@@ -1019,7 +1019,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   project refuses gate-outs and variations, owner reopen recorded.
   *Done when:* a reversal posted after close does not move the closed project's reported figures.
 
-- [ ] **T10.21 `[F]` Project screens**
+- [x] **T10.21 `[F]` Project screens**
   Refs: §7.4 · O1, O2, O12, O13
   List, detail with cost against budget, variations, close.
   *Done when:* a PM sees cost and budget, an owner also sees value and margin, and a storekeeper

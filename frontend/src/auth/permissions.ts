@@ -26,6 +26,13 @@ export const PERM = {
 
   DISPOSAL_APPROVE: 'disposal.approve',
 
+  // Epic O. The manager holds view_cost; the owner also holds view_margin and
+  // view_rates, which is the split O14 asks for.
+  PROJECT_VARIATION_APPROVE: 'project.variation_approve',
+  PROJECT_VIEW_COST: 'project.view_cost',
+  PROJECT_VIEW_MARGIN: 'project.view_margin',
+  PROJECT_VIEW_RATES: 'project.view_rates',
+
   CATALOGUE_MANAGE: 'catalogue.manage',
   SETTINGS_MANAGE: 'settings.manage',
   USERS_MANAGE: 'users.manage',

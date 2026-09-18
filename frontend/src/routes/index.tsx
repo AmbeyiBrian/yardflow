@@ -73,6 +73,13 @@ const CountDetailPage = lazyRoute(() =>
 
 // Dispatch and approvals (T4.21–T4.24). The gate-out bundle is the second one
 // the service worker precaches for offline use (T8.1).
+// Projects and commercials (T10.21-T10.23). Its own bundle: a technician's
+// phone has no use for the margin screens (N-1).
+const ProjectsPage = lazyRoute(() => import('../features/projects/ProjectsPage'));
+const ProjectDetailPage = lazyRoute(() =>
+  import('../features/projects/ProjectsPage').then((m) => ({ default: m.ProjectDetailPage })),
+);
+
 const GateOutRequestPage = lazyRoute(() => import('../features/dispatch/GateOutRequestPage'));
 const GateOutListPage = lazyRoute(() => import('../features/dispatch/GateOutPages'));
 const GateOutDetailPage = lazyRoute(() =>
@@ -242,6 +249,22 @@ export function AppRoutes() {
               element={
                 <RequirePermission anyOf={[PERM.GATE_IN_POST]}>
                   <GateInCapturePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects"
+              element={
+                <RequirePermission anyOf={[PERM.PROJECT_VIEW_COST, PERM.CATALOGUE_MANAGE]}>
+                  <ProjectsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects/:id"
+              element={
+                <RequirePermission anyOf={[PERM.PROJECT_VIEW_COST, PERM.CATALOGUE_MANAGE]}>
+                  <ProjectDetailPage />
                 </RequirePermission>
               }
             />
