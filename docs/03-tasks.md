@@ -918,7 +918,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* `SUBCONTRACTED` without a price is refused, and changing the price on a closed job is
   refused — it would rewrite a cost already counted.
 
-- [ ] **T10.6 `[B]` Movement valuation columns**
+- [x] **T10.6 `[B]` Movement valuation columns**
   Refs: §3.2, §4.14 · O11, D27
   `unit_cost` and `unit_cost_source` on `StockMovement`, captured when the movement posts. **This is
   the retrofit named in §15:** movements that already exist cannot be valued without guessing, so

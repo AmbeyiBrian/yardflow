@@ -62,6 +62,24 @@ class OwnerType(models.TextChoices):
     CLIENT = "CLIENT", "Client-owned (consignment)"
 
 
+class UnitCostSource(models.TextChoices):
+    """Where a movement's valuation came from (O11).
+
+    Recorded alongside the figure so that "this project is partly unvalued" is
+    answerable. Without it an absent cost and a genuine zero look the same, and
+    §10 would report a confident understatement instead of saying it does not
+    know.
+    """
+
+    #: The item type's own unit cost — our material, our price.
+    CATALOGUE = "CATALOGUE", "The item type's unit cost"
+    #: What the operator declared when they issued it. For client-owned
+    #: material this is the figure they will debit on a shortfall, which is the
+    #: number that matters, not what the item would cost us (O11).
+    CLIENT_DECLARED = "CLIENT_DECLARED", "Declared by the client on issue"
+    NONE = "NONE", "Unvalued"
+
+
 class Condition(models.TextChoices):
     """D2: condition per line.
 
@@ -167,10 +185,39 @@ class StockMovement(TenantModel):
 
     note = models.CharField(max_length=500, blank=True)
 
+    # O11, D27: what this quantity was worth when it moved, captured here and
+    # never recomputed. Repricing an item type must not rewrite a closed
+    # project's margin — a figure that changes months after a PO closed is
+    # worth nothing in a conversation with a client.
+    unit_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Value per unit as at this movement, excluding VAT (D24).",
+    )
+    unit_cost_source = models.CharField(
+        max_length=20,
+        choices=UnitCostSource.choices,
+        default=UnitCostSource.NONE,
+        help_text="Where the valuation came from, so an unvalued movement is "
+        "visibly unvalued rather than silently zero.",
+    )
+
     class Meta:
         constraints = [
             models.CheckConstraint(
                 condition=Q(quantity__gt=0), name="movement_quantity_is_positive"
+            ),
+            # O11: NONE and a figure are contradictory, and so are a source and
+            # no figure. Either would make "partly unvalued" unanswerable.
+            models.CheckConstraint(
+                condition=(
+                    Q(unit_cost__isnull=True, unit_cost_source=UnitCostSource.NONE)
+                    | Q(unit_cost__isnull=False)
+                    & ~Q(unit_cost_source=UnitCostSource.NONE)
+                ),
+                name="a_valued_movement_says_where_the_value_came_from",
             ),
             # A movement from a node to itself changes nothing and would break the
             # invariant test by inflating both sides of a balance.

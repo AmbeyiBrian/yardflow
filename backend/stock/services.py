@@ -35,6 +35,7 @@ from stock.models import (
     SerialUnitStatus,
     StockBalance,
     StockMovement,
+    UnitCostSource,
 )
 
 #: Quantities and lengths are stored to three decimal places (§3.2), so figures
@@ -113,6 +114,41 @@ class MovementRequest:
     document_number: str = ""
     reversal_of: StockMovement | None = None
     note: str = ""
+    #: O11: an explicit valuation, where the caller knows one the catalogue does
+    #: not — a client-owned receipt carrying the operator's declared value
+    #: (T10.7). Left unset, ``post_movement`` resolves it.
+    unit_cost: Decimal | None = None
+    unit_cost_source: str | None = None
+
+
+def _resolve_valuation(
+    request: MovementRequest, item_type: ItemType
+) -> tuple[Decimal | None, str]:
+    """What this quantity is worth, decided once and captured (O11, D27).
+
+    Three rules, in order:
+
+    1. **A reversal inherits the original's valuation.** If it did not, a
+       correction would not cancel the cost it corrects, and a project's margin
+       would drift every time somebody fixed a mistake.
+    2. **An explicit valuation wins**, because the caller knows something the
+       catalogue does not — a client's declared value on a receipt (T10.7).
+    3. Otherwise **our own material takes the catalogue price**, and anything
+       else is left unvalued rather than guessed. An item type with no unit
+       cost is unvalued too: a zero there would be a silent understatement.
+    """
+    if request.reversal_of is not None:
+        original = request.reversal_of
+        return original.unit_cost, original.unit_cost_source
+
+    if request.unit_cost is not None:
+        source = request.unit_cost_source or UnitCostSource.CATALOGUE
+        return Decimal(str(request.unit_cost)), source
+
+    if request.owner_type == OwnerType.OWN and item_type.unit_cost is not None:
+        return item_type.unit_cost, UnitCostSource.CATALOGUE
+
+    return None, UnitCostSource.NONE
 
 
 def post_movement(request: MovementRequest) -> StockMovement:
@@ -201,6 +237,9 @@ def post_movement(request: MovementRequest) -> StockMovement:
             },
         )
 
+    # 2c. Value it, once, now (O11, D27).
+    unit_cost, unit_cost_source = _resolve_valuation(request, item_type)
+
     # 3. Write the movement.
     movement = StockMovement.objects.create(
         organization_id=organization_id,
@@ -225,6 +264,8 @@ def post_movement(request: MovementRequest) -> StockMovement:
         document_number=request.document_number,
         reversal_of=request.reversal_of,
         note=request.note,
+        unit_cost=unit_cost,
+        unit_cost_source=unit_cost_source,
     )
 
     # 4. Update both cached balances.
