@@ -20,16 +20,17 @@ backend/          Django 5 + DRF project (project package: config)
   core/           tenancy base classes, audit, numbering, attachments, settings
   accounts/       User, Role, Permission, WebAuthn, Delegation
   catalogue/      ItemCategory, CategoryCustomField, ItemType
-  network/        Client, Site, SiteReference, WorkOrder
+  network/        Client, Site, SiteReference, Project, ProjectVariation, Subcontractor
   locations/      Location, StockNode
   stock/          StockMovement, StockBalance, SerialUnit, Reel, StockCount
   receiving/      GateIn and lines
   dispatch/       GateOut, lines, release, variances
   approvals/      ApprovalRule, ApprovalRequest, ApprovalAction, engine
-  jobs/           Job, JobCloseout, reconciliation
+  jobs/           Job, JobCloseout, JobLabour, reconciliation
   custody/        CustodyExpectation, transfers, overdue sweeps
   disposition/    quarantine decisions, Disposal
   notifications/  events, deliveries, channel adapters
+  commercials/    ExpenseCategory, ProjectExpense, ProjectSnapshot, costing engine
   reporting/      report queries, exports
   sync/           idempotency, offline submission handling
   platform_admin/ cross-tenant console

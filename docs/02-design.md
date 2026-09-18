@@ -58,20 +58,27 @@ config/            settings, urls, celery
 core/              tenancy base classes, audit, numbering, attachments, settings
 accounts/          User, Role, Permission, WebAuthn, Delegation
 catalogue/         ItemCategory, CategoryCustomField, ItemType
-network/           Client, Site, SiteReference, WorkOrder
+network/           Client, Site, SiteReference, Project, ProjectVariation, Subcontractor
 locations/         Location, StockNode
 stock/             StockMovement, StockBalance, SerialUnit, Reel, StockCount
 receiving/         GateIn and lines
 dispatch/          GateOut, lines, release, variances
 approvals/         ApprovalRule, ApprovalRequest, ApprovalAction, engine
-jobs/              Job, JobCloseout, reconciliation
+jobs/              Job, JobCloseout, JobLabour, reconciliation
 custody/           CustodyExpectation, transfers, overdue sweeps
 disposition/       quarantine decisions, Disposal
 notifications/     events, deliveries, channel adapters
+commercials/       ExpenseCategory, ProjectExpense, ProjectSnapshot, the costing engine
 reporting/         report queries, exports
 sync/              idempotency, offline submission handling
 platform_admin/    cross-tenant console
 ```
+
+`Project` lives in `network/` rather than in an app of its own because it **is** the work-order
+layer, renamed (`D20`), and moving it would be a second grouping by another name. `JobLabour` sits
+in `jobs/` because it is written from a closeout and has no meaning apart from one. `commercials/`
+holds what is genuinely new — expenses, snapshots, and the costing engine that reads across the
+ledger, the closeouts and the expectations without owning any of them.
 
 ---
 
@@ -197,6 +204,8 @@ StockMovement
   condition          NEW | USED_SERVICEABLE | FAULTY | DAMAGED | SCRAP
   document_type, document_id, document_line_id
   reversal_of        nullable self-FK
+  unit_cost          Decimal(14,2) nullable   -- captured at post time, never recomputed (D27)
+  unit_cost_source   CATALOGUE | CLIENT_DECLARED | NONE
   note
 ```
 
@@ -270,7 +279,7 @@ Only non-obvious fields are listed. Every tenant model inherits `TenantModel`; e
 `qr_labels_enabled`, `asset_tag_enabled`, `asset_tag_prefix_format`
 (e.g. `SLV-{category}-{seq:06d}`), `client_waybill_enabled`, `attachments_enabled`,
 `attachments_required_gate_in`, `attachments_required_gate_out`,
-`signature_required_on_release`, `gate_pass_expiry_hours` (default 24, **Q3**),
+`signature_required_on_release`, `gate_pass_expiry_hours` (default 24, `D32`),
 `allow_self_approval` (default **false**, `F3`), `allow_document_amendment` (default **false**,
 `M4`), `retention_months`, `approval_escalation_hours`, `timezone` (Africa/Nairobi),
 `currency` (KES), `notification_channels` JSONB, `notification_matrix` JSONB (`L1`, `L2`).
@@ -331,8 +340,10 @@ because recoveries originate there (`C6`, `D5`).
 physical site matchable against an operator code, a towerco code and an internal reference at the
 same time. Search across references is a single indexed lookup.
 
-**WorkOrder** — `client`, `reference`, `status`, `opened_at`, `closed_at`, M2M to sites. Optional
-throughout (`C7`, `D14`); closing warns on unreconciled material.
+**Project** (was **WorkOrder**) — `client`, `reference`, `po_number`, `manager`, `contract_value`,
+`cost_budget`, `status`, M2M to sites. Still optional where it always was (`C7`, `D14`); a project
+without a `po_number` is the old work order unchanged. Full shape and the commercial layer around it
+in §4.14 (`D20`).
 
 ### 4.5 Locations
 
@@ -362,7 +373,7 @@ on the QUARANTINE node rather than free stock (`D2`, `J1`).
 ### 4.7 Dispatch
 
 **GateOut** — `number`, `purpose_type` (INSTALLATION / MAINTENANCE / RETURN_TO_CLIENT / TRANSFER /
-DISPOSAL / TOOL_ISSUE), destination as exactly one of `site`/`work_order`/`client`/`location`,
+DISPOSAL / TOOL_ISSUE), destination as exactly one of `site`/`project`/`client`/`location`,
 `custody_holder` (User, `F1`), `requested_by`, `status`, `expires_at`, `vehicle_reg`, `driver_name`
 (`G2`), `released_by`, `released_at`, `version`, `supersedes` (self-FK, `F6`), `client_uuid`.
 
@@ -412,7 +423,8 @@ non-repudiation evidence an ISO auditor asks for (`F4`, `M3`).
 
 ### 4.9 Jobs and reconciliation
 
-**Job** — `client`, `site`, `work_order`, `assignee`, `status`, `closed_by` (`H1`).
+**Job** — `client`, `site`, `project`, `assignee`, `status`, `closed_by` (`H1`), plus
+`delivery_mode`, `subcontractor` and `agreed_price` for work given to a contractor (§4.14, `O3`).
 
 **JobCloseout** — `job`, `submitted_by`, `status` (SUBMITTED/CONFIRMED), `notes` (`H2`).
 
@@ -423,6 +435,16 @@ Submitting a closeout immediately posts movements for INSTALLED (to the SITE nod
 the CONSUMED node), and creates **expectations** for RETURNING and RECOVERED lines. The
 storekeeper's gate-in then matches against those expectations, and any difference creates a
 `Variance` (`H3`).
+
+Where the job belongs to a project, the confirmed closeout then goes to the PM for **cost
+acceptance** (`O8`). The postings above do **not** wait for it: stock moves when the storekeeper
+confirms, exactly as before, and the PM's step accepts what lands on their budget. A ledger that
+waited for a financial signature would stop being a record of what happened, and the yard's figures
+would lag the yard by however long the PM took. A PM who disagrees rejects the closeout, which asks
+for a corrected one; anything already posted in error is undone by a `REVERSAL` (`M4`), not by having
+been withheld.
+
+A confirmed closeout also writes `JobLabour` rows from the days captured on it (§4.14, `O15`).
 
 **Variance** — `type` (RETURN/RELEASE/COUNT), related FKs, `expected`, `actual`, `reason`,
 `status`, `approval_request`. Drives the exceptions register in `M1`.
@@ -439,7 +461,7 @@ Custody balance is simply `StockBalance` at the holder's PERSON node (`I1`) — 
 returnable lines (`I2`).
 
 A nightly Celery beat task flags overdue expectations and fires escalating notifications:
-holder → storekeeper → owner (`I3`). This resolves **Q6** — no supervisor role exists, so this is
+holder → storekeeper → owner (`I3`, `D35`). No supervisor role exists, so this is
 the chain.
 
 **CustodyTransfer** — `from_holder`, `to_holder`, lines, `acknowledged_at`. Movements post only on
@@ -492,6 +514,114 @@ short-lived pre-signed GET (`D6`, `G3`, `N-7`).
 **DocumentSequence** — `(organization, doc_type) -> next_number`. Allocated under
 `select_for_update()` **at posting, never at draft creation**, so abandoned drafts leave no gaps.
 Voided documents keep their number and are marked void; numbers are never reused (`M6`).
+
+---
+
+### 4.14 Projects and the commercial layer
+
+Epic O. Everything here answers *did the PO make money*, and none of it is allowed to contradict
+§3 — so **no figure in this section is stored as a number a person can edit** (`D23`). Cost is a
+query over the ledger, the labour entries and the approved expenses.
+
+**Project** — this is `WorkOrder`, renamed and extended (`D20`). One grouping, not two: a project
+with no `po_number` is exactly the optional work order that existed before, and nothing that worked
+without one stops working.
+
+```
+Project  (was WorkOrder)
+  id, organization, client
+  reference           the tenant's own reference, as WorkOrder had
+  po_number           nullable; unique per organization when set
+  title, description
+  manager             FK User, nullable        -- the PM (O1, O6)
+  contract_value      Decimal(14,2) nullable   -- VAT-exclusive (D24)
+  cost_budget         Decimal(14,2) nullable   -- what the PM works to, not what the client pays
+  starts_on, target_completion_on
+  status              OPEN | CLOSED | CANCELLED
+  sites               M2M Site
+  closed_at, closed_by, closed_with_unreconciled, close_reason
+```
+
+`po_number` is separate from `reference` rather than overloading it, because the constraint keys on
+it: `a_po_project_is_fully_specified` — `po_number IS NULL OR (manager_id IS NOT NULL AND
+contract_value IS NOT NULL AND cost_budget IS NOT NULL)`. A PO without a manager is a PO nobody can
+release material against, and it should be refused at creation rather than discovered at the gate.
+
+**Migration.** `RenameModel` WorkOrder → Project, `RenameField` on `Job.work_order` and
+`GateOut.work_order`, then drop and recreate `gate_out_has_exactly_one_destination` because it names
+the column. Existing rows become projects with no `po_number`, no value and no PM (`D20`), and
+continue to route through the criticality rules because they are not project material.
+
+**ProjectVariation** — `project`, `reference`, `description`, `value_delta`, `budget_delta`,
+`effective_on`, `raised_by`, `approved_by`, `approved_at`. Deltas may be negative. Current contract
+value is `contract_value + sum(approved value_delta)`; the original column is never written again
+(`D21`). Append-only, for the reason §3.2 is: in a dispute the question is what was first agreed.
+
+**Subcontractor** — `organization`, `name`, `code`, contacts, `is_active`. Unique name per tenant,
+`PROTECT` on delete once referenced (`O4`). This is a register of contractors who do work, distinct
+from the free-text `supplier_name` on gate-in, which stays as it is.
+
+**Job** gains `project` (the renamed FK), `delivery_mode` (`IN_HOUSE` | `SUBCONTRACTED`),
+`subcontractor` and `agreed_price`. A check constraint pairs them: `SUBCONTRACTED` requires both,
+`IN_HOUSE` permits neither. Delivery mode and price are immutable once `status = CLOSED` — changing
+either would rewrite a cost already counted (`O3`).
+
+**JobLabour** — `job`, `person`, `work_date`, `days` Decimal(3,1), `day_rate`, `rate_source`
+(`USER` | `ROLE` | `NONE`), unique on `(job, person, work_date)`. Written when the closeout is
+confirmed, from the days captured on it (`O15`).
+
+Rate resolution is `User.day_rate` falling back to `Role.day_rate`, **captured onto the row** at
+write time (`D27`). Where neither exists the row is written with a null rate and `rate_source =
+NONE`: the job then appears in §10 as *uncosted labour*, which is honest, where a zero would silently
+flatter the project.
+
+The one-day check is a query, not a constraint: on submission, sum `days` for that person and date
+across every job. Over 1.0 sets `overlaps_day = True` on the row and warns (`O15`) — it does not
+refuse, because a late closeout would otherwise be blocked by an earlier one. Storing the flag means
+the owner's report finds overlaps with an index rather than recomputing the sum over all history.
+
+**ExpenseCategory** — tenant-configurable, seeded with transport, fuel, equipment hire, wayleaves
+and permits, accommodation, other.
+
+**ProjectExpense** — `project`, `job` nullable, `category`, `amount`, `incurred_on`, `description`,
+`recorded_by`, `attachment`, `status` (`SUBMITTED` | `APPROVED` | `REJECTED`), `approved_by`,
+`approved_at`, `reason`, `reverses` self-FK. Anyone may record; the PM approves; it reaches cost only
+on approval (`D29`, `O16`). Once approved the row is append-only and a mistake is corrected by a
+reversing entry, the same discipline as the ledger. An expense with no attachment is accepted but
+flagged to the PM as unevidenced.
+
+**ProjectSnapshot** — `project`, `taken_at`, `figures` JSONB. Written when the project closes, so a
+closed project reports what it reported that day even if a later reversal moves the ledger beneath
+it (`O13`).
+
+#### Where each figure comes from
+
+| Figure | Source |
+|---|---|
+| Material cost | `unit_cost × quantity` over `INSTALL` and `CONSUME` movements whose document resolves to a job on the project |
+| Material loss | `CustodyExpectation` rows still open on **closed** jobs, at the captured unit cost |
+| Subcontractor | `Job.agreed_price` over closed subcontracted jobs |
+| Labour | `JobLabour.days × day_rate` |
+| Expenses | approved `ProjectExpense.amount`, net of reversals |
+| **Exposure** | balance at `PERSON` nodes for material issued against the project — reported, **never** counted as cost (`O11`) |
+
+Material loss being a *query over open expectations* rather than a posted write-off has a property
+worth naming: if the kit turns up two months later and is booked back in, the expectation closes and
+the loss disappears on its own. A typed write-off would have to be found and reversed by hand, and
+in practice would not be.
+
+#### Valuation on the movement
+
+§3.2 gains `unit_cost` Decimal(14,2) nullable and `unit_cost_source` (`CATALOGUE` |
+`CLIENT_DECLARED` | `NONE`), captured when the movement posts and never recomputed (`D27`).
+
+Own material takes `ItemType.unit_cost`. Client-owned material takes the value declared on the
+gate-in that brought it in, because the figure that matters for a shortfall is what the operator
+will debit, not what the item would cost us (`O11`). `NONE` where neither exists — §10 then reports
+the project as partly unvalued instead of stating a confident understatement.
+
+Client-owned material therefore carries a valuation on every movement but contributes **nothing** to
+cost while it behaves. It reaches the P&L only through the material-loss query above.
 
 ---
 
@@ -549,7 +679,48 @@ Rules for a multi-category document resolve to the **highest** applicable level 
    `gate_pass_expiry_hours`.
 
 A beat task escalates requests past `due_at` to the configured fallback (`F5`) and expires approved
-gate passes that were never released (**Q3**).
+gate passes that were never released (`D32`).
+
+### 5.4 Routing project material (`O6`, `D22`)
+
+`ApprovalRequest.required_role` gains a sibling `required_user`, nullable, under a check that **at
+most one** of the two is set — neither remains legal, because §5.2's auto-approval row needs it.
+
+```python
+def required_levels(document) -> list[RequiredLevel]:
+    project = project_of(document)          # gate_out.job.project, else None
+    if project is not None:
+        return [RequiredLevel(sequence=1, user=project.manager)]
+    facts = collect_facts(document)         # unchanged from here down
+    ...
+```
+
+The criticality path is untouched, and project material never reaches it. This is a **branch, not a
+rule row**, deliberately: a rule that routes to "the manager of whichever project this happens to be
+for" cannot be expressed in a table keyed on category and criticality without inventing a placeholder
+role that nobody actually holds — and that placeholder would then be grantable to anyone.
+
+What changes for project material, and only for it:
+
+- **Self-approval is permitted** (`O6`). The `ApprovalAction` is written with `self_approved = True`
+  rather than leaving §10 to compare `requested_by` against `actor` across two tables later.
+- **No escalation.** `due_at` is left null on a PM level, so the beat task skips it rather than
+  needing a special case (`D22`).
+- **No delegation.** `resolve_delegate()` is not consulted. A delegation that lends the Approver role
+  does not lend a named person's signature, and treating it as though it did would forge exactly the
+  thing §4.8 exists to evidence.
+- **An inactive PM blocks.** Routing raises a domain error naming the project and saying an owner
+  must reassign the manager (`D28`). It must **not** fall through to criticality routing: that would
+  quietly restore a weaker control at the one moment nobody is watching for it.
+
+`project_of(document)` is the single place attribution is decided, for gate-outs today and disposals
+under `O10`. A gate-out carries `job` as an attribution, not a destination — §4.7's
+exactly-one-destination constraint is unaffected, and where the destination is a site the job must be
+a job at that site (`O5`).
+
+Disposal (`O10`) is the one place the PM level **adds** to the existing rules rather than replacing
+them: `required_levels` returns the disposal's own matched levels with the PM prepended. Disposal is
+permanent, so nothing already in place is given up for it.
 
 ---
 
@@ -593,13 +764,17 @@ envelope** (§6.1), so a caller always has a sentence rather than a status code.
 | Me | `GET /me` (user, roles, resolved permissions, org settings) |
 | Users & roles | `/users`, `/roles`, `/permissions`, `/delegations` |
 | Catalogue | `/item-categories`, `/item-categories/{id}/custom-fields`, `/item-types` |
-| Network | `/clients`, `/sites`, `/sites/{id}/references`, `/work-orders` |
+| Network | `/clients`, `/sites`, `/sites/{id}/references`, `/projects` (was `/work-orders`) |
 | Locations | `/locations`, `/stock-nodes` |
 | Stock | `GET /stock/balances`, `/stock/as-of?date=`, `/serial-units`, `GET /serial-units/{serial}/history`, `/reels`, `/stock-counts`, `POST /stock-counts/{id}/post` |
 | Receiving | `/gate-ins`, `POST /gate-ins/{id}/post`, `POST /gate-ins/{id}/void` |
 | Dispatch | `/gate-outs`, `POST /gate-outs/{id}/submit`, `/{id}/amend`, `/{id}/cancel`, `/{id}/release`, `/{id}/close`, `GET /gate-outs/{id}/pdf` |
 | Approvals | `/approval-rules`, `GET /approvals/pending`, `POST /approvals/{id}/approve`, `/{id}/reject` |
-| Jobs | `/jobs`, `POST /jobs/{id}/closeout`, `POST /jobs/{id}/close`, `GET /jobs/{id}/reconciliation` |
+| Jobs | `/jobs`, `POST /jobs/{id}/closeout`, `POST /jobs/{id}/close`, `GET /jobs/{id}/reconciliation`, `POST /jobs/{id}/closeout/{cid}/confirm-cost` (`O8`) |
+| Projects | `/projects`, `/projects/{id}/variations`, `POST /projects/{id}/close`, `POST /projects/{id}/reopen`, `GET /projects/{id}/performance` (`O12`) |
+| Subcontractors | `/subcontractors` (`O4`) |
+| Expenses | `/project-expenses`, `POST /project-expenses/{id}/approve`, `/{id}/reject`, `/{id}/reverse`, `/expense-categories` (`O16`) |
+| Day rates | `/day-rates` on users and roles — gated by `project.view_rates` (`O14`, `O15`) |
 | Custody | `GET /custody/holders`, `GET /custody/overdue`, `/custody-transfers`, `POST /custody-transfers/{id}/acknowledge` |
 | Disposition | `GET /quarantine`, `/dispositions`, `POST /dispositions/{id}/submit`, `/{id}/approve`, `/{id}/reject`, `/{id}/post`, `/disposals` and the same four actions, `GET /disposals/{id}/certificate` |
 | Client returns | `/client-return-acks`, `GET /client-position`, `GET /gate-outs/{id}/waybill` |
@@ -735,9 +910,19 @@ only when the load actually succeeded.
 |---|---|
 | Storekeeper | Gate-in capture, gate-out request, **gate release**, stock lookup, counts, quarantine |
 | Approver / Owner | Pending approvals, approval detail with full line list, dashboards, reports |
-| Technician | My requests, my custody, job list, job closeout, custody transfer |
-| Admin | Users, roles, catalogue, categories, sites, clients, locations, settings, notification matrix |
+| Technician | My requests, my custody, job list, job closeout (**days worked**, `O15`), custody transfer, **record an expense** (`O16`) |
+| Admin | Users, roles, catalogue, categories, sites, clients, locations, settings, notification matrix, **subcontractors**, **day rates** |
+| Project manager | My projects, project detail with cost against budget, **pending: material, closeouts, expenses**, variations, close project |
 | Platform admin | Organizations list, create tenant, suspend |
+
+**A PM approves against a number, not a feeling.** The approval screen for project material shows
+the project, its budget, cost to date and what this release would add (`O6`). Nothing on it blocks:
+a project over budget is stated plainly and the approve button still works (`O12`), because the
+decision to spend past a budget should be made consciously rather than routed around at six in the
+morning.
+
+**When a project's PM is inactive, the gate-out screen says so in those words** and names
+reassignment as the remedy (`D28`). The failure mode to avoid is a request that merely looks slow.
 
 **A gate-out line names a lot, not just an item.** Balances are keyed by
 `(node, item, owner_client, condition)`, so "five vests at Main yard" may be five of a client's and
@@ -805,7 +990,7 @@ This is the single most important constraint in the offline design: without it, 
 bypass around the entire approval control the system exists to provide.
 
 Enforced in three places, deliberately: the device only ever holds passes the server said were
-approved (`GET /sync/bundle` sends nothing else, and drops expired ones per `Q3`); the release
+approved (`GET /sync/bundle` sends nothing else, and drops expired ones per `D32`); the release
 screen can only act on that list; and the sync handler re-checks the status on arrival and refuses
 with `OFFLINE_APPROVAL_NOT_ALLOWED`. The first two are courtesy — telling a storekeeper at the gate
 rather than tomorrow — and the third is the control.
@@ -896,7 +1081,7 @@ one message but the tenant one credit. Pricing per *message* is what an owner ca
 the notification bodies are short by design. If long messages become common this becomes a per-
 segment count, which is a change to one function.
 
-### 9.2 WhatsApp — recommendation on Q1
+### 9.2 WhatsApp — the position taken in `D30`
 
 The WhatsApp Business API requires an approved sender and pre-registered message templates, which
 takes weeks and carries per-message cost. **Ship v1 with SMS, email and in-app; leave the WhatsApp
@@ -965,13 +1150,30 @@ consistent with what the screen showed (`M2`).
 | Serial history | `StockMovement` for one `serial_unit`, chronological (`E2`) |
 | Outstanding gate-outs | `GateOut` in APPROVED / PARTIALLY_RELEASED |
 | Overdue returns & custody | `CustodyExpectation` OPEN past due, plus PERSON-node balances |
-| Consumption per site / work order | Movements to SITE and CONSUMED nodes, grouped |
+| Consumption per site / project | Movements to SITE and CONSUMED nodes, grouped |
 | Client-owned position | `StockBalance` grouped by `owner_client` |
 | Variance & exceptions | `Variance` + `ReleaseVariance` + `SyncException`, status OPEN |
 | Recoveries by origin site | `GateIn` where `source_type = RECOVERY`, grouped by `origin_site` |
 | Disposals & write-offs | `Disposal` with lines |
+| **Project performance** (`O12`) | Per project: current contract value, budget, cost split four ways, exposure, loss, variance, margin, jobs closed over jobs opened |
+| **Projects ranked** (`O12`) | The same, across projects, orderable by margin, overrun or exposure |
+| **Self-approved releases** (`O6`) | `ApprovalAction` where `self_approved`, joined to project and value |
+| **Uncosted and overlapping labour** (`O15`) | Closed jobs with no `JobLabour`, rows with `rate_source = NONE`, rows with `overlaps_day` |
 
 Exports over a threshold run in Celery, write to S3, and notify with a pre-signed link.
+
+**Financial columns are withheld at the serializer, not the template** (`O14`). Three permissions
+gate them — `project.view_cost`, `project.view_margin`, `project.view_rates` — and a caller without
+one gets a response with the field **absent**, not null and not zero. Hiding a number in the
+interface while the API still returns it is not a restriction; it is a restriction-shaped thing that
+a browser dev-tools tab defeats.
+
+Labour reaches a PM as a single total. A PM who could see both a person's days and that person's
+labour cost could divide one by the other and read their rate, so the per-person split is withheld
+from the query rather than dropped from the display (`O14`).
+
+A project's margin is reported **before** overheads, and the report says so on its face. The four
+cost lines in §4.14 are the whole of it (`O11`).
 
 ---
 
@@ -1023,7 +1225,7 @@ anything else.
 
 **The clock-driven half.** Several requirements are only met by something running on a schedule: an
 overdue tool nobody is reminded about is a lost tool (`I3`), an approval nobody chases blocks a job
-(`F5`), an approved gate pass that never expires is a stale authorisation (`Q3`), and a return the
+(`F5`), an approved gate pass that never expires is a stale authorisation (`D32`), and a return the
 client never acknowledged is exposure nobody is watching (`K3`). `CELERY_BEAT_SCHEDULE` in
 `config/settings/base.py` runs three entries — the sweeps at 05:30 before the yard opens, a
 notification retry every fifteen minutes, and the ledger verification at 02:00. Each fans out one
@@ -1081,6 +1283,9 @@ A documented restore drill is part of the definition of done for the infrastruct
 | **Offline idempotency** | Same `client_uuid` replayed N times yields exactly one document. |
 | **Reel arithmetic** | Partial issues, over-issue rejection, auto-close at zero. |
 | **Reconciliation** | Issued vs installed vs returned vs unaccounted sums correctly across a full job lifecycle. |
+| **Project costing** (`O11`) | A full PO lifecycle — receive, issue, install, consume, return, lose — produces a cost equal to the four lines summed by hand. Repricing an `ItemType` afterwards leaves the closed project's figures **unchanged** (`D27`). An expectation resolved late reduces the loss without anyone editing anything. |
+| **Project routing** (`O6`) | Project material routes to the PM and never to a criticality rule; a PM may self-approve and the action records it; an inactive PM raises rather than falling through to the criticality path. |
+| **Financial permissions** (`O14`) | Response bodies for a storekeeper, a PM and an owner asserted **field by field** — a withheld figure must be absent, not null. The PM's labour total must not be accompanied by anything that divides into a rate. |
 | **E2E (Playwright)** | Two flows on a mobile viewport: gate-in of a mixed delivery, and request → approve → release → closeout → return. |
 | **Factories** | `factory_boy` with an `organization` fixture; the default test client is always tenant-scoped. |
 
@@ -1096,16 +1301,24 @@ Each phase ends with something demonstrable.
 | Phase | Contents | Requirements |
 |---|---|---|
 | **1. Foundation** | Project scaffold, tenancy (all four layers), User/Role/Permission, audit log, numbering, settings, platform admin console, CI/CD, AWS baseline | A, B1–B4, B6, C8, M3, M6 |
-| **2. Master data** | Categories, custom fields, item types + seed catalogue, locations, stock nodes, clients, sites + references, work orders | C1–C7 |
+| **2. Master data** | Categories, custom fields, item types + seed catalogue, locations, stock nodes, clients, sites + references, projects (unpriced) | C1–C7 |
 | **3. Receiving & stock** | Ledger, balances, serial units, reels, gate-in all source types, quarantine on receipt, stock views, serial history, transfers, counts | D, E, J1 |
 | **4. Dispatch & approvals** | Gate-out request, approval engine, rules admin, notifications (in-app + email), release with vehicle/driver, partial release, variances, gate pass PDF | F, G, L (partial) |
 | **5. Jobs & custody** | Jobs, closeout, expectations, return matching, variances, custody views, overdue sweeps, transfers, reconciliation | H, I |
 | **6. Disposition & client returns** | Quarantine decisions, disposal with approval, client returns, waybills, acknowledgement | J2, J3, K |
 | **7. Reporting** | All day-one reports, Excel and PDF export, async exports, dashboards | M1, M2 |
 | **8. Offline & biometrics** | Service worker, Dexie queue, sync idempotency, exception queue, WebAuthn enrolment and approval step-up, SMS channel | N, B5, F4 |
+| **9. Projects & commercials** | WorkOrder→Project migration, PO fields and variations, subcontractor register, job delivery mode, PM routing, movement valuation, labour, expenses, project performance reporting, financial permissions | O |
 
 Phases 1–4 deliver the system's core value: controlled, approved, auditable gate movements. If the
 schedule compresses, phases 5–8 are where scope can be traded, not earlier.
+
+**Phase 9 is last by dependency, not by importance.** Project cost is a query over the ledger, the
+closeouts and the custody expectations — so it cannot be built before those exist and be worth
+anything. The two pieces that must land **earlier than phase 9** are the `unit_cost` columns on
+`StockMovement` (§3.2), which belong in phase 3 because backfilling a valuation onto historical
+movements is guesswork, and the `required_user` column on `ApprovalRequest` (§5.4), which belongs in
+phase 4 alongside the engine it changes.
 
 ---
 
@@ -1127,21 +1340,32 @@ schedule compresses, phases 5–8 are where scope can be traded, not earlier.
 | L — Notifications | 9 |
 | M — Reporting & audit | 3.2, 4.2, 4.13, 10 |
 | N — Offline | 8 |
+| O — Projects & PO performance | 3.2, 4.4, 4.9, 4.14, 5.4, 6, 10 |
 | Non-functional | 1.1, 12, 13, 14 |
 
 ---
 
-## 17. Open items carried forward
+## 17. Positions on the settled questions
 
-| Ref | Item | Design position |
+Every question the requirements carried is now decided (`D30`–`D36`). The design positions that
+answer them, for anyone reading this section expecting them to still be open:
+
+| Ref | Decided | Design position |
 |---|---|---|
-| **Q1** | WhatsApp availability | v1 ships SMS + email + in-app; WhatsApp adapter written, disabled by setting (§9.2). **Recommended.** |
-| **Q2** | Will technicians actually close out jobs? | Design assumes yes (`H2`). If not, the storekeeper does it on their behalf — same endpoint, different actor, no model change. Still worth validating with a technician. |
-| **Q3** | Gate pass expiry | Configurable, default 24 h (§4.1). |
-| **Q4** | Two approvers at the same level | Not supported in v1. `ApprovalRequest` already carries `level`, so parallel same-level approval would need a `quorum` field — small, additive change. |
-| **Q5** | Metres consumed on site | Supported — closeout lines carry `length` (§4.9). |
-| **Q6** | Overdue escalation chain | holder → storekeeper → owner (§4.10). |
-| **Q7** | Storekeeper as gate guard | `gate_out.release` is a distinct permission, so a dedicated guard is possible at another tenant without code change (§4.2). |
+| `D30` | SMS + email at launch | WhatsApp adapter written and disabled by setting (§9.2); enabling it is configuration, not code |
+| `D31` | Technician closes out, storekeeper may act for them | One endpoint, `submitted_by` and `on_behalf_of` distinguish them (§4.9) |
+| `D32` | Gate passes expire | Configurable, 24 h default (§4.1), swept by the beat task (§5.3) |
+| `D33` | One approver per level | `ApprovalRequest.level` already carries it; a `quorum` field would be the additive change if this ever reverses |
+| `D34` | Metres consumed on site | Closeout lines carry `length` (§4.9) |
+| `D35` | holder → storekeeper → owner | §4.10, no supervisor role introduced |
+| `D36` | Storekeeper is the gate guard | `gate_out.release` stays a distinct permission (§4.2), so another tenant separates them without code |
+
+### Risks this design carries rather than solves
+
+| Ref | Risk | What the design does about it |
+|---|---|---|
+| `R1` | Labour cost rests on self-reported days, and `D31` lets a storekeeper report them secondhand | Cannot be fixed in code. §10 names closed jobs with no labour and rows with `rate_source = NONE` instead of letting them cost zero, and flags closeouts where days were claimed under `on_behalf_of`. The figure is still hearsay; the report at least says which figures are |
+| `R2` | PM self-approval, no second signature on project material | §5.4 records `self_approved` on the action and §10 lists them for the owner. This is visibility, not control — the control was traded away deliberately in `D22`, and if it proves wrong the fix is a ceiling rule, which `ApprovalRule.conditions` can already express |
 
 ---
 
