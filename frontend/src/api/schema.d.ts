@@ -4488,6 +4488,7 @@ export interface components {
             readonly confirmed_by: number | null;
             notes?: string;
             lines: components["schemas"]["JobCloseoutLine"][];
+            labour?: components["schemas"]["JobLabour"][];
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -4531,6 +4532,7 @@ export interface components {
             on_behalf_of?: number | null;
             notes?: string;
             lines: components["schemas"]["JobCloseoutLineRequest"][];
+            labour?: components["schemas"]["JobLabourRequest"][];
         };
         /**
          * @description * `SUBMITTED` - Submitted by the technician
@@ -4538,6 +4540,46 @@ export interface components {
          * @enum {string}
          */
         JobCloseoutStatusEnum: "SUBMITTED" | "CONFIRMED";
+        /**
+         * @description Days worked, per person, on the closeout that already exists (O15).
+         *
+         *     ``day_rate`` and ``rate_source`` are read-only: they are captured by the
+         *     service when the closeout is submitted (D27), and a client that could set
+         *     them could rewrite what a project cost.
+         */
+        JobLabour: {
+            readonly id: number;
+            person: number;
+            readonly person_name: string;
+            /** Format: date */
+            work_date: string;
+            /**
+             * Format: decimal
+             * @description Days worked, to one decimal place, so half days work.
+             */
+            days: string;
+            /** Format: decimal */
+            readonly day_rate: string | null;
+            readonly rate_source: components["schemas"]["RateSourceEnum"];
+            readonly overlaps_day: boolean;
+        };
+        /**
+         * @description Days worked, per person, on the closeout that already exists (O15).
+         *
+         *     ``day_rate`` and ``rate_source`` are read-only: they are captured by the
+         *     service when the closeout is submitted (D27), and a client that could set
+         *     them could rewrite what a project cost.
+         */
+        JobLabourRequest: {
+            person: number;
+            /** Format: date */
+            work_date: string;
+            /**
+             * Format: decimal
+             * @description Days worked, to one decimal place, so half days work.
+             */
+            days: string;
+        };
         JobReconciliation: {
             scope: string;
             label: string;
@@ -5486,6 +5528,7 @@ export interface components {
             on_behalf_of?: number | null;
             notes?: string;
             lines?: components["schemas"]["JobCloseoutLineRequest"][];
+            labour?: components["schemas"]["JobLabourRequest"][];
         };
         PatchedJobRequest: {
             reference?: string;
@@ -5846,6 +5889,13 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /**
+         * @description * `USER` - The person's own rate
+         *     * `ROLE` - The rate on a role they hold
+         *     * `NONE` - No rate applies — uncosted
+         * @enum {string}
+         */
+        RateSourceEnum: "USER" | "ROLE" | "NONE";
         ReasonRequest: {
             reason?: string;
         };

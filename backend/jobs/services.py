@@ -108,6 +108,12 @@ def submit_closeout(closeout: JobCloseout, *, submitted_by=None, request=None) -
     closeout.submitted_at = timezone.now()
     closeout.save(update_fields=["status", "submitted_at", "updated_at"])
 
+    # O15: the days reported on this closeout become the job's labour cost.
+    # Written at submission rather than at confirmation: confirmation is the
+    # storekeeper checking material back in (H3), and the days are the
+    # technician's report about their own week, not a fact about the returns.
+    cost_labour(closeout)
+
     if job.status != JobStatus.AWAITING_CLOSEOUT:
         job.status = JobStatus.AWAITING_CLOSEOUT
         job.save(update_fields=["status", "updated_at"])
@@ -127,6 +133,50 @@ def submit_closeout(closeout: JobCloseout, *, submitted_by=None, request=None) -
     )
 
     return closeout
+
+
+def cost_labour(closeout: JobCloseout) -> None:
+    """Capture a rate onto every labour entry on this closeout (O15, D27).
+
+    The rate is resolved and **stored** now. Changing somebody's rate next year
+    must not rewrite what a closed project cost, which is the same rule the
+    ledger's ``unit_cost`` follows.
+
+    Also sets ``overlaps_day`` where this person's total for the date passes one
+    day across every job. It warns rather than refuses: a technician
+    apportioning fractions in a yard at dusk will guess, and a refusal would
+    block a late closeout because of an earlier one (O15).
+    """
+    from accounts.services import day_rate_for
+    from jobs.models import RateSource
+
+    entries = list(closeout.labour.select_related("person").all())
+    if not entries:
+        return
+
+    for entry in entries:
+        rate, source = day_rate_for(entry.person)
+        entry.day_rate = rate
+        entry.rate_source = source or RateSource.NONE
+        entry.overlaps_day = _exceeds_one_day(entry)
+        entry.save(
+            update_fields=["day_rate", "rate_source", "overlaps_day", "updated_at"]
+        )
+
+
+def _exceeds_one_day(entry) -> bool:
+    """Whether this person is now recorded for more than a day on that date."""
+    from django.db.models import Sum
+
+    from jobs.models import JobLabour
+
+    total = (
+        JobLabour.objects.filter(person=entry.person, work_date=entry.work_date)
+        .aggregate(total=Sum("days"))
+        .get("total")
+        or Decimal("0")
+    )
+    return total > Decimal("1")
 
 
 def _post_closeout_movement(closeout, line, source, destination, movement_type, actor):

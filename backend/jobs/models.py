@@ -416,3 +416,85 @@ class Variance(TenantModel, TimeStampedModel):
     def is_open(self) -> bool:
         """What the exceptions register lists (M1)."""
         return self.status in (VarianceStatus.OPEN, VarianceStatus.INVESTIGATING)
+
+
+class RateSource(models.TextChoices):
+    """Where a labour entry's rate came from (O15).
+
+    ``NONE`` is the one that matters. A person with no rate of their own and no
+    rate on any role they hold cannot be costed, and the entry says so rather
+    than carrying a zero — a job whose labour costs nothing reads as a job
+    delivered for free, and would flatter its project exactly where §10 is
+    trying to tell the truth.
+    """
+
+    USER = "USER", "The person's own rate"
+    ROLE = "ROLE", "The rate on a role they hold"
+    NONE = "NONE", "No rate applies — uncosted"
+
+
+class JobLabour(TenantModel, TimeStampedModel):
+    """A person's time on a job, as reported at closeout (O15, D26).
+
+    Written from the closeout that already exists, because that is a form the
+    technician already has to complete before the job can close. A separate
+    timesheet would be a new habit, and Q2's doubt about closeout discipline
+    applies with more force to a screen nobody has to open.
+
+    The rate is **captured here** rather than looked up later (D27): changing
+    somebody's rate next year must not rewrite what a closed project cost.
+    """
+
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="labour")
+    closeout = models.ForeignKey(
+        "JobCloseout", on_delete=models.CASCADE, related_name="labour", null=True, blank=True
+    )
+    person = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="labour_entries"
+    )
+
+    work_date = models.DateField()
+    days = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        validators=[MinValueValidator(Decimal("0.1"))],
+        help_text="Days worked, to one decimal place, so half days work.",
+    )
+
+    day_rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    rate_source = models.CharField(
+        max_length=10, choices=RateSource.choices, default=RateSource.NONE
+    )
+
+    # O15: set when this person's total for the date passes one day across every
+    # job. Stored rather than recomputed so the owner's report finds them with an
+    # index instead of summing all of history.
+    overlaps_day = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ("work_date", "id")
+        indexes = [
+            models.Index(fields=["organization", "person", "work_date"]),
+            models.Index(fields=["organization", "overlaps_day"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "job", "person", "work_date"],
+                name="one_labour_entry_per_person_per_day_per_job",
+            ),
+            models.CheckConstraint(
+                condition=Q(day_rate__isnull=True, rate_source=RateSource.NONE)
+                | Q(day_rate__isnull=False) & ~Q(rate_source=RateSource.NONE),
+                name="a_costed_labour_entry_says_where_its_rate_came_from",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.person} — {self.days}d on {self.job} ({self.work_date})"
+
+    @property
+    def cost(self) -> Decimal | None:
+        """What this entry costs the project, or None if it cannot be costed."""
+        if self.day_rate is None:
+            return None
+        return (self.days * self.day_rate).quantize(Decimal("0.01"))

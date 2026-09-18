@@ -10703,6 +10703,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JobCloseoutLine'
+        labour:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobLabour'
         created_at:
           type: string
           format: date-time
@@ -10820,6 +10824,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JobCloseoutLineRequest'
+        labour:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobLabourRequest'
       required:
       - job
       - lines
@@ -10831,6 +10839,76 @@ components:
       description: |-
         * `SUBMITTED` - Submitted by the technician
         * `CONFIRMED` - Confirmed at the yard
+    JobLabour:
+      type: object
+      description: |-
+        Days worked, per person, on the closeout that already exists (O15).
+
+        ``day_rate`` and ``rate_source`` are read-only: they are captured by the
+        service when the closeout is submitted (D27), and a client that could set
+        them could rewrite what a project cost.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        person:
+          type: integer
+        person_name:
+          type: string
+          readOnly: true
+        work_date:
+          type: string
+          format: date
+        days:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          description: Days worked, to one decimal place, so half days work.
+        day_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        rate_source:
+          allOf:
+          - $ref: '#/components/schemas/RateSourceEnum'
+          readOnly: true
+        overlaps_day:
+          type: boolean
+          readOnly: true
+      required:
+      - day_rate
+      - days
+      - id
+      - overlaps_day
+      - person
+      - person_name
+      - rate_source
+      - work_date
+    JobLabourRequest:
+      type: object
+      description: |-
+        Days worked, per person, on the closeout that already exists (O15).
+
+        ``day_rate`` and ``rate_source`` are read-only: they are captured by the
+        service when the closeout is submitted (D27), and a client that could set
+        them could rewrite what a project cost.
+      properties:
+        person:
+          type: integer
+        work_date:
+          type: string
+          format: date
+        days:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          description: Days worked, to one decimal place, so half days work.
+      required:
+      - days
+      - person
+      - work_date
     JobReconciliation:
       type: object
       properties:
@@ -12577,6 +12655,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JobCloseoutLineRequest'
+        labour:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobLabourRequest'
     PatchedJobRequest:
       type: object
       properties:
@@ -13343,6 +13425,16 @@ components:
       required:
       - count
       - items
+    RateSourceEnum:
+      enum:
+      - USER
+      - ROLE
+      - NONE
+      type: string
+      description: |-
+        * `USER` - The person's own rate
+        * `ROLE` - The rate on a role they hold
+        * `NONE` - No rate applies — uncosted
     ReasonRequest:
       type: object
       properties:

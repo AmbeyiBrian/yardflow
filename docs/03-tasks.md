@@ -967,7 +967,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   `day_rate` on User and Role, behind the `project.view_rates` permission — owner and admin only.
   *Done when:* a PM's API response contains no rate field at all, absent rather than null.
 
-- [ ] **T10.13 `[B]` Labour from the closeout**
+- [x] **T10.13 `[B]` Labour from the closeout**
   Refs: §4.9, §4.14 · O15
   Days per person captured on the closeout; `JobLabour` written on confirmation with the rate
   captured onto the row; `rate_source = NONE` where no rate exists; `overlaps_day` set when that

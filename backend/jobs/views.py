@@ -93,6 +93,33 @@ class JobSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class JobLabourSerializer(serializers.ModelSerializer):
+    """Days worked, per person, on the closeout that already exists (O15).
+
+    ``day_rate`` and ``rate_source`` are read-only: they are captured by the
+    service when the closeout is submitted (D27), and a client that could set
+    them could rewrite what a project cost.
+    """
+
+    person_name = serializers.CharField(source="person.full_name", read_only=True)
+
+    class Meta:
+        from jobs.models import JobLabour
+
+        model = JobLabour
+        fields = (
+            "id",
+            "person",
+            "person_name",
+            "work_date",
+            "days",
+            "day_rate",
+            "rate_source",
+            "overlaps_day",
+        )
+        read_only_fields = ("day_rate", "rate_source", "overlaps_day")
+
+
 class CloseJobSerializer(serializers.Serializer):
     """H5: the override needs a reason, and the reason is the point."""
 
@@ -133,6 +160,10 @@ class JobCloseoutSerializer(serializers.ModelSerializer):
     """
 
     lines = JobCloseoutLineSerializer(many=True)
+    # O15: optional. A job may genuinely have no labour to report — a delivery
+    # dropped at a site, a subcontracted job — and requiring it would produce
+    # invented days, which is worse than none.
+    labour = JobLabourSerializer(many=True, required=False)
     job_reference = serializers.CharField(source="job.reference", read_only=True)
     submitted_by_name = serializers.CharField(
         source="submitted_by.full_name", read_only=True
@@ -153,6 +184,7 @@ class JobCloseoutSerializer(serializers.ModelSerializer):
             "confirmed_by",
             "notes",
             "lines",
+            "labour",
             "created_at",
         )
         read_only_fields = (
@@ -164,10 +196,20 @@ class JobCloseoutSerializer(serializers.ModelSerializer):
         )
 
     def create(self, validated_data):  # type: ignore[no-untyped-def]
+        from jobs.models import JobLabour
+
         lines = validated_data.pop("lines")
+        labour = validated_data.pop("labour", [])
         closeout = JobCloseout.objects.create(**validated_data)
         for line in lines:
             JobCloseoutLine.objects.create(closeout=closeout, **line)
+        for entry in labour:
+            JobLabour.objects.create(
+                organization_id=closeout.organization_id,
+                job=closeout.job,
+                closeout=closeout,
+                **entry,
+            )
         return closeout
 
 
