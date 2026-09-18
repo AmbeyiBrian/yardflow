@@ -975,7 +975,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a person recorded on three jobs in one day is flagged and **not** refused, and a job
   with no applicable rate reads as uncosted rather than costing zero.
 
-- [ ] **T10.14 `[B]` PM cost acceptance of closeouts**
+- [x] **T10.14 `[B]` PM cost acceptance of closeouts**
   Refs: §4.9 · O8
   A confirmed closeout on a project job goes to the PM for cost acceptance. Rejection asks for a
   corrected closeout.

@@ -3928,6 +3928,20 @@ paths:
       operationId: job_closeouts_list
       description: '``/api/v1/job-closeouts`` (H2, §4.9).'
       parameters:
+      - in: query
+        name: cost_acceptance
+        schema:
+          type: string
+          enum:
+          - ACCEPTED
+          - NOT_REQUIRED
+          - PENDING
+          - QUERIED
+        description: |-
+          * `NOT_REQUIRED` - No project manager to accept it
+          * `PENDING` - Waiting on the project manager
+          * `ACCEPTED` - Accepted by the project manager
+          * `QUERIED` - Queried — a corrected closeout is wanted
       - name: cursor
         required: false
         in: query
@@ -4052,6 +4066,44 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/PatchedJobCloseoutRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobCloseout'
+          description: ''
+  /api/v1/job-closeouts/{id}/accept-cost:
+    post:
+      operationId: job_closeouts_accept_cost_create
+      description: |-
+        O8: the manager accepts, or queries, what this cost their project.
+
+        Nothing posts or unposts here. A query asks for a corrected closeout;
+        anything posted in error is undone by a reversal (M4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job closeout.
+        required: true
+      tags:
+      - job-closeouts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptCostRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AcceptCostRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AcceptCostRequest'
+        required: true
       security:
       - jwtAuth: []
       responses:
@@ -8103,6 +8155,17 @@ paths:
           description: ''
 components:
   schemas:
+    AcceptCostRequest:
+      type: object
+      description: 'O8: accept what it cost, or query it with a reason.'
+      properties:
+        accepted:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - accepted
     ActionEnum:
       enum:
       - INSTALLED
@@ -8682,6 +8745,18 @@ components:
         * `FAULTY` - Faulty
         * `DAMAGED` - Damaged
         * `SCRAP` - Scrap
+    CostAcceptanceEnum:
+      enum:
+      - NOT_REQUIRED
+      - PENDING
+      - ACCEPTED
+      - QUERIED
+      type: string
+      description: |-
+        * `NOT_REQUIRED` - No project manager to accept it
+        * `PENDING` - Waiting on the project manager
+        * `ACCEPTED` - Accepted by the project manager
+        * `QUERIED` - Queried — a corrected closeout is wanted
     CredentialRequest:
       type: object
       description: What a browser hands back from ``navigator.credentials``.
@@ -10707,6 +10782,22 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JobLabour'
+        cost_acceptance:
+          allOf:
+          - $ref: '#/components/schemas/CostAcceptanceEnum'
+          readOnly: true
+        cost_decided_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        cost_decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cost_query_reason:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -10714,6 +10805,10 @@ components:
       required:
       - confirmed_at
       - confirmed_by
+      - cost_acceptance
+      - cost_decided_at
+      - cost_decided_by
+      - cost_query_reason
       - created_at
       - id
       - job

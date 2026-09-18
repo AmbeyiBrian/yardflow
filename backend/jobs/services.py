@@ -114,6 +114,11 @@ def submit_closeout(closeout: JobCloseout, *, submitted_by=None, request=None) -
     # technician's report about their own week, not a fact about the returns.
     cost_labour(closeout)
 
+    # O8: on a project job this now goes to the manager for cost acceptance.
+    # Note the order — every movement above has already posted. The PM's step
+    # accepts what it costs; it is not a gate on the record (D23).
+    _open_cost_acceptance(closeout)
+
     if job.status != JobStatus.AWAITING_CLOSEOUT:
         job.status = JobStatus.AWAITING_CLOSEOUT
         job.save(update_fields=["status", "updated_at"])
@@ -132,6 +137,80 @@ def submit_closeout(closeout: JobCloseout, *, submitted_by=None, request=None) -
         ),
     )
 
+    return closeout
+
+
+def _open_cost_acceptance(closeout: JobCloseout) -> None:
+    """Ask the project manager to accept what this closeout costs (O8).
+
+    Only where there is a manager to ask. A closeout on a job with no project,
+    or on an unpriced one, stays ``NOT_REQUIRED`` — inventing an approval step
+    for work nobody is budgeting would be friction with nothing behind it.
+    """
+    from jobs.models import CostAcceptance
+
+    project = closeout.job.project
+    if project is None or project.manager_id is None:
+        return
+
+    closeout.cost_acceptance = CostAcceptance.PENDING
+    closeout.save(update_fields=["cost_acceptance", "updated_at"])
+
+
+def accept_closeout_cost(
+    closeout: JobCloseout, *, actor, accepted: bool, reason: str = "", request=None
+) -> JobCloseout:
+    """Record the manager's decision on what this closeout cost (O8).
+
+    **Nothing is posted or unposted here.** The movements went when the
+    storekeeper confirmed, and a query is a request for a corrected closeout,
+    not a retraction of the record. Anything genuinely posted in error is undone
+    by a REVERSAL (M4) — which leaves both the error and the correction visible,
+    where withholding the posting would have left neither.
+    """
+    from jobs.models import CostAcceptance
+
+    project = closeout.job.project
+    if closeout.cost_acceptance != CostAcceptance.PENDING:
+        raise CloseoutNotReady(
+            "This closeout is not waiting on a cost decision."
+        )
+    if project is None or project.manager_id != actor.pk:
+        raise CloseoutNotReady(
+            "Only the manager of the project this job belongs to can accept "
+            "what it cost (O8)."
+        )
+    if not accepted and not reason:
+        raise CloseoutNotReady("Querying a closeout needs a reason.")
+
+    closeout.cost_acceptance = (
+        CostAcceptance.ACCEPTED if accepted else CostAcceptance.QUERIED
+    )
+    closeout.cost_decided_by = actor
+    closeout.cost_decided_at = timezone.now()
+    closeout.cost_query_reason = "" if accepted else reason
+    closeout.save(
+        update_fields=[
+            "cost_acceptance",
+            "cost_decided_by",
+            "cost_decided_at",
+            "cost_query_reason",
+            "updated_at",
+        ]
+    )
+
+    record(
+        AuditAction.STATUS_CHANGED,
+        actor=actor,
+        organization=closeout.organization_id,
+        target=closeout,
+        target_label=str(closeout),
+        request=request,
+        note=(
+            f"Cost {'accepted' if accepted else 'queried'} for {closeout.job} "
+            f"on {project}."
+        ),
+    )
     return closeout
 
 

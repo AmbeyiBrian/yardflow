@@ -215,6 +215,23 @@ class CloseoutStatus(models.TextChoices):
     CONFIRMED = "CONFIRMED", "Confirmed at the yard"
 
 
+class CostAcceptance(models.TextChoices):
+    """Whether the project manager has accepted what this closeout costs (O8).
+
+    Separate from ``CloseoutStatus`` on purpose. The closeout's own status is
+    about **material** — what was reported, what was checked back in. This is
+    about **money**, and the two must be able to disagree: the ledger posts on
+    the storekeeper's confirmation whatever the PM thinks, because a ledger that
+    waits for a financial signature stops being a record of what happened.
+    """
+
+    #: The default, and what a closeout on a non-project job stays at forever.
+    NOT_REQUIRED = "NOT_REQUIRED", "No project manager to accept it"
+    PENDING = "PENDING", "Waiting on the project manager"
+    ACCEPTED = "ACCEPTED", "Accepted by the project manager"
+    QUERIED = "QUERIED", "Queried — a corrected closeout is wanted"
+
+
 class JobCloseout(TenantModel, TimeStampedModel):
     """What a technician reports at the end of a job (H2).
 
@@ -246,8 +263,23 @@ class JobCloseout(TenantModel, TimeStampedModel):
 
     notes = models.TextField(blank=True)
 
+    # O8: the PM's acceptance of what this costs their project. Nothing about
+    # the ledger depends on it — see CostAcceptance.
+    cost_acceptance = models.CharField(
+        max_length=20,
+        choices=CostAcceptance.choices,
+        default=CostAcceptance.NOT_REQUIRED,
+        db_index=True,
+    )
+    cost_decided_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    cost_decided_at = models.DateTimeField(null=True, blank=True)
+    cost_query_reason = models.CharField(max_length=500, blank=True)
+
     class Meta:
         ordering = ("-created_at",)
+        indexes = [models.Index(fields=["organization", "cost_acceptance"])]
 
     def __str__(self) -> str:
         return f"Closeout of {self.job} by {self.submitted_by}"

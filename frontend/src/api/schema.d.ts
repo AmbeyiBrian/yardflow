@@ -1608,6 +1608,28 @@ export interface paths {
         patch: operations["job_closeouts_partial_update"];
         trace?: never;
     };
+    "/api/v1/job-closeouts/{id}/accept-cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description O8: the manager accepts, or queries, what this cost their project.
+         *
+         *     Nothing posts or unposts here. A query asks for a corrected closeout;
+         *     anything posted in error is undone by a reversal (M4).
+         */
+        post: operations["job_closeouts_accept_cost_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/job-closeouts/{id}/submit": {
         parameters: {
             query?: never;
@@ -3483,6 +3505,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description O8: accept what it cost, or query it with a reason. */
+        AcceptCostRequest: {
+            accepted: boolean;
+            reason?: string;
+        };
         /**
          * @description * `INSTALLED` - Installed at the site
          *     * `CONSUMED` - Consumed on site
@@ -3716,6 +3743,14 @@ export interface components {
          * @enum {string}
          */
         ConditionEnum: "NEW" | "USED_SERVICEABLE" | "FAULTY" | "DAMAGED" | "SCRAP";
+        /**
+         * @description * `NOT_REQUIRED` - No project manager to accept it
+         *     * `PENDING` - Waiting on the project manager
+         *     * `ACCEPTED` - Accepted by the project manager
+         *     * `QUERIED` - Queried — a corrected closeout is wanted
+         * @enum {string}
+         */
+        CostAcceptanceEnum: "NOT_REQUIRED" | "PENDING" | "ACCEPTED" | "QUERIED";
         /** @description What a browser hands back from ``navigator.credentials``. */
         CredentialRequest: {
             credential: {
@@ -4489,6 +4524,11 @@ export interface components {
             notes?: string;
             lines: components["schemas"]["JobCloseoutLine"][];
             labour?: components["schemas"]["JobLabour"][];
+            readonly cost_acceptance: components["schemas"]["CostAcceptanceEnum"];
+            readonly cost_decided_by: number | null;
+            /** Format: date-time */
+            readonly cost_decided_at: string | null;
+            readonly cost_query_reason: string;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -9724,6 +9764,13 @@ export interface operations {
     job_closeouts_list: {
         parameters: {
             query?: {
+                /**
+                 * @description * `NOT_REQUIRED` - No project manager to accept it
+                 *     * `PENDING` - Waiting on the project manager
+                 *     * `ACCEPTED` - Accepted by the project manager
+                 *     * `QUERIED` - Queried — a corrected closeout is wanted
+                 */
+                cost_acceptance?: "ACCEPTED" | "NOT_REQUIRED" | "PENDING" | "QUERIED";
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 job?: number;
@@ -9818,6 +9865,34 @@ export interface operations {
                 "application/json": components["schemas"]["PatchedJobCloseoutRequest"];
                 "application/x-www-form-urlencoded": components["schemas"]["PatchedJobCloseoutRequest"];
                 "multipart/form-data": components["schemas"]["PatchedJobCloseoutRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobCloseout"];
+                };
+            };
+        };
+    };
+    job_closeouts_accept_cost_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this job closeout. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptCostRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AcceptCostRequest"];
+                "multipart/form-data": components["schemas"]["AcceptCostRequest"];
             };
         };
         responses: {

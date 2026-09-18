@@ -33,7 +33,12 @@ from jobs.models import (
     VarianceStatus,
 )
 from jobs.reconciliation import reconcile_job, reconcile_project, reconcile_site
-from jobs.services import close_job, resolve_variance, submit_closeout
+from jobs.services import (
+    accept_closeout_cost,
+    close_job,
+    resolve_variance,
+    submit_closeout,
+)
 
 
 class JobSerializer(serializers.ModelSerializer):
@@ -185,6 +190,10 @@ class JobCloseoutSerializer(serializers.ModelSerializer):
             "notes",
             "lines",
             "labour",
+            "cost_acceptance",
+            "cost_decided_by",
+            "cost_decided_at",
+            "cost_query_reason",
             "created_at",
         )
         read_only_fields = (
@@ -193,6 +202,10 @@ class JobCloseoutSerializer(serializers.ModelSerializer):
             "confirmed_at",
             "confirmed_by",
             "submitted_by",
+            "cost_acceptance",
+            "cost_decided_by",
+            "cost_decided_at",
+            "cost_query_reason",
         )
 
     def create(self, validated_data):  # type: ignore[no-untyped-def]
@@ -385,6 +398,15 @@ class JobViewSet(TenantScopedViewSet):
         return Response(self.get_serializer(job).data)
 
 
+class AcceptCostSerializer(serializers.Serializer):
+    """O8: accept what it cost, or query it with a reason."""
+
+    accepted = serializers.BooleanField()
+    reason = serializers.CharField(
+        max_length=500, required=False, allow_blank=True
+    )
+
+
 class JobCloseoutViewSet(TenantScopedViewSet):
     """``/api/v1/job-closeouts`` (H2, §4.9)."""
 
@@ -392,7 +414,7 @@ class JobCloseoutViewSet(TenantScopedViewSet):
     model = JobCloseout
     select_related = ("job", "job__site", "submitted_by", "on_behalf_of")
     prefetch_related = ("lines", "lines__item_type")
-    filterset_fields = ["job", "status", "submitted_by"]
+    filterset_fields = ["job", "status", "submitted_by", "cost_acceptance"]
     ordering_fields = ["created_at"]
 
     required_permissions = {
@@ -420,6 +442,28 @@ class JobCloseoutViewSet(TenantScopedViewSet):
         """§4.9: installed and consumed post now; returns become expectations."""
         closeout = submit_closeout(
             self.get_object(), submitted_by=request.user, request=request
+        )
+        return Response(self.get_serializer(closeout).data)
+
+    @extend_schema(
+        request=AcceptCostSerializer, responses={200: JobCloseoutSerializer}
+    )
+    @action(detail=True, methods=["post"], url_path="accept-cost")
+    def accept_cost(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """O8: the manager accepts, or queries, what this cost their project.
+
+        Nothing posts or unposts here. A query asks for a corrected closeout;
+        anything posted in error is undone by a reversal (M4).
+        """
+        serializer = AcceptCostSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        closeout = accept_closeout_cost(
+            self.get_object(),
+            actor=request.user,
+            accepted=serializer.validated_data["accepted"],
+            reason=serializer.validated_data.get("reason", ""),
+            request=request,
         )
         return Response(self.get_serializer(closeout).data)
 
