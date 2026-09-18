@@ -331,6 +331,31 @@ class Project(TenantModel, TimeStampedModel):
         """Whether this project carries a purchase order, and so a budget (O1)."""
         return bool(self.po_number)
 
+    def _approved_deltas(self) -> dict:
+        from django.db.models import Sum
+
+        return self.variations.filter(status="APPROVED").aggregate(
+            value=Sum("value_delta"), budget=Sum("budget_delta")
+        )
+
+    @property
+    def current_contract_value(self) -> Decimal | None:
+        """The original award plus every approved variation (O2, D21).
+
+        Computed rather than stored, so ``contract_value`` keeps saying what was
+        first agreed — which is what a dispute is usually about.
+        """
+        if self.contract_value is None:
+            return None
+        return self.contract_value + (self._approved_deltas()["value"] or Decimal("0"))
+
+    @property
+    def current_cost_budget(self) -> Decimal | None:
+        """The original budget plus every approved variation (O2)."""
+        if self.cost_budget is None:
+            return None
+        return self.cost_budget + (self._approved_deltas()["budget"] or Decimal("0"))
+
     def unreconciled_summary(self) -> dict:
         """What remains unaccounted for on this project (C7).
 
@@ -345,3 +370,120 @@ class Project(TenantModel, TimeStampedModel):
             return project_unreconciled(self)
         except ImportError:
             return {"available": False, "reason": "Reconciliation arrives with T5.7."}
+
+
+class VariationStatus(models.TextChoices):
+    PENDING = "PENDING", "Awaiting the owner's decision"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+
+
+class ProjectVariation(TenantModel, TimeStampedModel):
+    """An amendment to a project's value or budget (O2, D21).
+
+    D21: **the original award is never edited.** In a dispute with an operator
+    the question is usually what was first agreed, and a column overwritten
+    three times cannot answer it. So a variation is a row, the current value is
+    the original plus the approved deltas, and ``Project.contract_value`` is
+    written once and never again.
+
+    Approved by the **owner**, not the project manager (O2). The PM spends the
+    budget; they do not set it.
+    """
+
+    project = models.ForeignKey(
+        Project, on_delete=models.PROTECT, related_name="variations"
+    )
+    reference = models.CharField(
+        max_length=100, help_text="The client's variation or amendment reference."
+    )
+    description = models.CharField(max_length=500, blank=True)
+
+    # Deltas rather than replacement values, and signed: a descope is a real
+    # thing that happens, and recording it as a smaller replacement value would
+    # lose the fact that scope was taken away.
+    value_delta = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Change to the contract value, excluding VAT. May be negative.",
+    )
+    budget_delta = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Change to the cost budget, excluding VAT. May be negative.",
+    )
+
+    effective_on = models.DateField()
+
+    raised_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="variations_raised"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=VariationStatus.choices,
+        default=VariationStatus.PENDING,
+        db_index=True,
+    )
+    decided_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_reason = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ("effective_on", "id")
+        indexes = [models.Index(fields=["organization", "project", "status"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "project", "reference"],
+                name="uniq_variation_ref_per_project",
+            ),
+            models.CheckConstraint(
+                condition=Q(status=VariationStatus.PENDING, decided_at__isnull=True)
+                | Q(
+                    status__in=(VariationStatus.APPROVED, VariationStatus.REJECTED),
+                    decided_at__isnull=False,
+                ),
+                name="a_decided_variation_records_when",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.reference} on {self.project}"
+
+    #: The status this row carried when it was read, so the append-only guard
+    #: below needs no second query — and, more to the point, no ``all_objects``,
+    #: which would bypass tenant scoping to answer a question about a row we are
+    #: already holding (§2.1).
+    _loaded_status: str | None = None
+
+    @classmethod
+    def from_db(cls, db, field_names, values):  # type: ignore[no-untyped-def]
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_status = instance.status
+        return instance
+
+    def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        """Append-only once decided, for the reason the ledger is (§3.2, D21).
+
+        A variation that could be edited after approval would let the agreed
+        value move without leaving a trace, which is the one thing this model
+        exists to prevent. Correcting a mistake means raising another variation.
+        """
+        decided = (VariationStatus.APPROVED, VariationStatus.REJECTED)
+        if self._loaded_status in decided:
+            raise ValidationError(
+                "A decided variation cannot be changed. Raise another "
+                "variation instead (O2, D21)."
+            )
+        result = super().save(*args, **kwargs)
+        self._loaded_status = self.status
+        return result
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationError(
+            "Variations are never deleted — the record of what was agreed, and "
+            "when it changed, is the point of them (D21)."
+        )

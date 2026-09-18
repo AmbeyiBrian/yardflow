@@ -4,7 +4,7 @@ from core.isolation import register_isolation_fixture
 
 
 def register() -> None:
-    from network.models import Client, Project, Site, SiteReference
+    from network.models import Client, Project, ProjectVariation, Site, SiteReference
 
     def make_client(organization):
         return Client.objects.create(organization=organization, name="Isolation Operator")
@@ -32,6 +32,22 @@ def register() -> None:
             reference="ISO-WO-1",
         )
 
+    def make_project_variation(organization):
+        from datetime import date
+        from decimal import Decimal
+
+        from accounts.models import User
+
+        return ProjectVariation.objects.create(
+            organization=organization,
+            project=make_project(organization),
+            reference="ISO-VAR-1",
+            value_delta=Decimal("1.00"),
+            budget_delta=Decimal("1.00"),
+            effective_on=date(2026, 1, 1),
+            raised_by=User.objects.filter(organization=organization).first(),
+        )
+
     register_isolation_fixture("client", make_client, payload={"name": "Renamed"})
     register_isolation_fixture(
         "site", make_site, payload={"name": "Renamed", "internal_ref": "ISO-1"}
@@ -41,4 +57,9 @@ def register() -> None:
     )
     register_isolation_fixture(
         "project", make_project, payload={"reference": "ISO-WO-1"}
+    )
+    register_isolation_fixture(
+        "project-variation",
+        make_project_variation,
+        payload={"reference": "ISO-VAR-1"},
     )

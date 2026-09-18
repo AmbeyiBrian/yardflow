@@ -2043,6 +2043,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/project-variations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/project-variations`` (O2).
+         *
+         *     Decided variations are append-only, so there is no update action worth
+         *     offering once the owner has ruled: the model refuses it, and a route that
+         *     looked writable would only produce a confusing 400.
+         */
+        get: operations["project_variations_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/project-variations`` (O2).
+         *
+         *     Decided variations are append-only, so there is no update action worth
+         *     offering once the owner has ruled: the model refuses it, and a route that
+         *     looked writable would only produce a confusing 400.
+         */
+        post: operations["project_variations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-variations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/project-variations`` (O2).
+         *
+         *     Decided variations are append-only, so there is no update action worth
+         *     offering once the owner has ruled: the model refuses it, and a route that
+         *     looked writable would only produce a confusing 400.
+         */
+        get: operations["project_variations_retrieve"];
+        /**
+         * @description ``/api/v1/project-variations`` (O2).
+         *
+         *     Decided variations are append-only, so there is no update action worth
+         *     offering once the owner has ruled: the model refuses it, and a route that
+         *     looked writable would only produce a confusing 400.
+         */
+        put: operations["project_variations_update"];
+        post?: never;
+        /**
+         * @description ``/api/v1/project-variations`` (O2).
+         *
+         *     Decided variations are append-only, so there is no update action worth
+         *     offering once the owner has ruled: the model refuses it, and a route that
+         *     looked writable would only produce a confusing 400.
+         */
+        delete: operations["project_variations_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description ``/api/v1/project-variations`` (O2).
+         *
+         *     Decided variations are append-only, so there is no update action worth
+         *     offering once the owner has ruled: the model refuses it, and a route that
+         *     looked writable would only produce a confusing 400.
+         */
+        patch: operations["project_variations_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/project-variations/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description O2: the owner's decision. It moves the project's current value. */
+        post: operations["project_variations_approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-variations/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Rejection needs a reason, as every other rejection here does (F4). */
+        post: operations["project_variations_reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -4919,6 +5027,19 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Project"][];
         };
+        PaginatedProjectVariationList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["ProjectVariation"][];
+        };
         PaginatedReelList: {
             /**
              * Format: uri
@@ -5319,6 +5440,25 @@ export interface components {
             sites?: number[];
             close_reason?: string;
         };
+        PatchedProjectVariationRequest: {
+            project?: number;
+            /** @description The client's variation or amendment reference. */
+            reference?: string;
+            description?: string;
+            /**
+             * Format: decimal
+             * @description Change to the contract value, excluding VAT. May be negative.
+             */
+            value_delta?: string;
+            /**
+             * Format: decimal
+             * @description Change to the cost budget, excluding VAT. May be negative.
+             */
+            budget_delta?: string;
+            /** Format: date */
+            effective_on?: string;
+            decision_reason?: string;
+        };
         /** @description B4: roles are data. A tenant may invent any role it likes. */
         PatchedRoleRequest: {
             name?: string;
@@ -5392,11 +5532,15 @@ export interface components {
              * @description What the client pays, excluding VAT.
              */
             contract_value?: string | null;
+            /** Format: decimal */
+            readonly current_contract_value: string;
             /**
              * Format: decimal
              * @description What the manager may spend to deliver it, excluding VAT.
              */
             cost_budget?: string | null;
+            /** Format: decimal */
+            readonly current_cost_budget: string;
             /** Format: date */
             starts_on?: string | null;
             /** Format: date */
@@ -5445,6 +5589,59 @@ export interface components {
          * @enum {string}
          */
         ProjectStatusEnum: "OPEN" | "CLOSED" | "CANCELLED";
+        ProjectVariation: {
+            readonly id: number;
+            project: number;
+            readonly project_reference: string;
+            /** @description The client's variation or amendment reference. */
+            reference: string;
+            description?: string;
+            /**
+             * Format: decimal
+             * @description Change to the contract value, excluding VAT. May be negative.
+             */
+            value_delta?: string;
+            /**
+             * Format: decimal
+             * @description Change to the cost budget, excluding VAT. May be negative.
+             */
+            budget_delta?: string;
+            /** Format: date */
+            effective_on: string;
+            readonly raised_by: number;
+            readonly raised_by_name: string;
+            readonly status: components["schemas"]["ProjectVariationStatusEnum"];
+            readonly decided_by: number | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            decision_reason?: string;
+        };
+        ProjectVariationRequest: {
+            project: number;
+            /** @description The client's variation or amendment reference. */
+            reference: string;
+            description?: string;
+            /**
+             * Format: decimal
+             * @description Change to the contract value, excluding VAT. May be negative.
+             */
+            value_delta?: string;
+            /**
+             * Format: decimal
+             * @description Change to the cost budget, excluding VAT. May be negative.
+             */
+            budget_delta?: string;
+            /** Format: date */
+            effective_on: string;
+            decision_reason?: string;
+        };
+        /**
+         * @description * `PENDING` - Awaiting the owner's decision
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        ProjectVariationStatusEnum: "PENDING" | "APPROVED" | "REJECTED";
         /** @description A1: name, subdomain and initial owner account. */
         ProvisionTenantRequest: {
             name: string;
@@ -10037,6 +10234,221 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionCatalogue"][];
+                };
+            };
+        };
+    };
+    project_variations_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `PENDING` - Awaiting the owner's decision
+                 *     * `APPROVED` - Approved
+                 *     * `REJECTED` - Rejected
+                 */
+                status?: "APPROVED" | "PENDING" | "REJECTED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProjectVariationList"];
+                };
+            };
+        };
+    };
+    project_variations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectVariationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectVariationRequest"];
+                "multipart/form-data": components["schemas"]["ProjectVariationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectVariation"];
+                };
+            };
+        };
+    };
+    project_variations_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project variation. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectVariation"];
+                };
+            };
+        };
+    };
+    project_variations_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project variation. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectVariationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectVariationRequest"];
+                "multipart/form-data": components["schemas"]["ProjectVariationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectVariation"];
+                };
+            };
+        };
+    };
+    project_variations_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project variation. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    project_variations_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project variation. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectVariationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectVariationRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectVariationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectVariation"];
+                };
+            };
+        };
+    };
+    project_variations_approve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project variation. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectVariationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectVariationRequest"];
+                "multipart/form-data": components["schemas"]["ProjectVariationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectVariation"];
+                };
+            };
+        };
+    };
+    project_variations_reject_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project variation. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectVariationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectVariationRequest"];
+                "multipart/form-data": components["schemas"]["ProjectVariationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectVariation"];
                 };
             };
         };

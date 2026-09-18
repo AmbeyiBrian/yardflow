@@ -899,7 +899,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a project carrying a `po_number` with no manager is refused **by the database**, and
   a project without one saves exactly as a work order did.
 
-- [ ] **T10.3 `[B]` Variations**
+- [x] **T10.3 `[B]` Variations**
   Refs: §4.14 · O2
   `ProjectVariation` with value and budget deltas, append-only, approved by the owner.
   `current_contract_value` reads original plus approved deltas.

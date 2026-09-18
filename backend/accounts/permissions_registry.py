@@ -56,6 +56,9 @@ class PERM:
     # Disposition
     DISPOSAL_APPROVE = "disposal.approve"
 
+    # Projects (O2)
+    PROJECT_VARIATION_APPROVE = "project.variation_approve"
+
     # Configuration
     CATALOGUE_MANAGE = "catalogue.manage"
     SETTINGS_MANAGE = "settings.manage"
@@ -120,6 +123,13 @@ ALL_PERMISSIONS: tuple[PermissionSpec, ...] = (
         "Approve a disposal",
         "Disposition",
         "Client-owned disposals always require approval, whatever the rules say.",
+    ),
+    PermissionSpec(
+        PERM.PROJECT_VARIATION_APPROVE,
+        "Approve a variation to a project's value or budget",
+        "Projects",
+        "The owner's, not the manager's — the PM spends the budget, they do not "
+        "set it (O2).",
     ),
     PermissionSpec(
         PERM.CATALOGUE_MANAGE,

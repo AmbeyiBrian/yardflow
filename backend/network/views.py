@@ -10,7 +10,15 @@ from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
 from core.api import TenantScopedViewSet
-from network.models import Client, Project, ProjectStatus, Site, SiteReference
+from network.models import (
+    Client,
+    Project,
+    ProjectStatus,
+    ProjectVariation,
+    Site,
+    SiteReference,
+    VariationStatus,
+)
 
 
 class ClientSerializer(serializers.ModelSerializer):
@@ -68,6 +76,14 @@ class SiteSerializer(serializers.ModelSerializer):
 class ProjectSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source="client.name", read_only=True)
     manager_name = serializers.CharField(source="manager.get_full_name", read_only=True)
+    # O2: what the award is worth now. `contract_value` keeps saying what was
+    # first agreed, which is what a dispute is usually about (D21).
+    current_contract_value = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True
+    )
+    current_cost_budget = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True
+    )
     site_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -83,7 +99,9 @@ class ProjectSerializer(serializers.ModelSerializer):
             "manager",
             "manager_name",
             "contract_value",
+            "current_contract_value",
             "cost_budget",
+            "current_cost_budget",
             "starts_on",
             "target_completion_on",
             "sites",
@@ -122,6 +140,43 @@ class ProjectSerializer(serializers.ModelSerializer):
         if missing:
             raise serializers.ValidationError(missing)
         return attrs
+
+
+class ProjectVariationSerializer(serializers.ModelSerializer):
+    project_reference = serializers.CharField(source="project.__str__", read_only=True)
+    raised_by_name = serializers.CharField(source="raised_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = ProjectVariation
+        fields = (
+            "id",
+            "project",
+            "project_reference",
+            "reference",
+            "description",
+            "value_delta",
+            "budget_delta",
+            "effective_on",
+            "raised_by",
+            "raised_by_name",
+            "status",
+            "decided_by",
+            "decided_at",
+            "decision_reason",
+        )
+        read_only_fields = ("raised_by", "status", "decided_by", "decided_at")
+
+    def validate_project(self, project: Project) -> Project:
+        """O2: a variation amends a live award, not a finished one (O13)."""
+        if project.status != ProjectStatus.OPEN:
+            raise serializers.ValidationError(
+                "This project is closed. Its figures are final (O13)."
+            )
+        if not project.is_po:
+            raise serializers.ValidationError(
+                "Only a project carrying a purchase order has a value to vary (O1)."
+            )
+        return project
 
 
 class ClientViewSet(TenantScopedViewSet):
@@ -205,6 +260,63 @@ class SiteViewSet(TenantScopedViewSet):
         site.status = SiteStatus.DECOMMISSIONED
         site.save(update_fields=["status"])
         return Response(self.get_serializer(site).data)
+
+
+class ProjectVariationViewSet(TenantScopedViewSet):
+    """``/api/v1/project-variations`` (O2).
+
+    Decided variations are append-only, so there is no update action worth
+    offering once the owner has ruled: the model refuses it, and a route that
+    looked writable would only produce a confusing 400.
+    """
+
+    serializer_class = ProjectVariationSerializer
+    model = ProjectVariation
+    select_related = ("project", "raised_by")
+    required_permissions = {
+        "create": PERM.CATALOGUE_MANAGE,
+        "update": PERM.CATALOGUE_MANAGE,
+        "partial_update": PERM.CATALOGUE_MANAGE,
+        "destroy": PERM.CATALOGUE_MANAGE,
+        "approve": PERM.PROJECT_VARIATION_APPROVE,
+        "reject": PERM.PROJECT_VARIATION_APPROVE,
+    }
+    filterset_fields = ["project", "status"]
+    search_fields = ["reference", "description"]
+    ordering_fields = ["effective_on", "created_at"]
+
+    def perform_create(self, serializer):  # type: ignore[no-untyped-def]
+        serializer.save(raised_by=self.request.user)
+
+    def _decide(self, request, decision: str, reason_required: bool):  # type: ignore[no-untyped-def]
+        from django.utils import timezone
+
+        variation = self.get_object()
+        if variation.status != VariationStatus.PENDING:
+            return Response(
+                {"detail": "This variation has already been decided (O2)."}, status=409
+            )
+
+        reason = request.data.get("reason", "")
+        if reason_required and not reason:
+            return Response({"reason": "A reason is required."}, status=400)
+
+        variation.status = decision
+        variation.decided_by = request.user
+        variation.decided_at = timezone.now()
+        variation.decision_reason = reason
+        variation.save()
+        return Response(self.get_serializer(variation).data)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """O2: the owner's decision. It moves the project's current value."""
+        return self._decide(request, VariationStatus.APPROVED, reason_required=False)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """Rejection needs a reason, as every other rejection here does (F4)."""
+        return self._decide(request, VariationStatus.REJECTED, reason_required=True)
 
 
 class SiteReferenceViewSet(TenantScopedViewSet):

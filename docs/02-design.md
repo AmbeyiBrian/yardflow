@@ -553,9 +553,15 @@ the column. Existing rows become projects with no `po_number`, no value and no P
 continue to route through the criticality rules because they are not project material.
 
 **ProjectVariation** — `project`, `reference`, `description`, `value_delta`, `budget_delta`,
-`effective_on`, `raised_by`, `approved_by`, `approved_at`. Deltas may be negative. Current contract
-value is `contract_value + sum(approved value_delta)`; the original column is never written again
-(`D21`). Append-only, for the reason §3.2 is: in a dispute the question is what was first agreed.
+`effective_on`, `raised_by`, `status`, `decided_by`, `decided_at`, `decision_reason`. Deltas may be
+negative. Current contract value is `contract_value + sum(approved value_delta)`; the original column
+is never written again (`D21`).
+
+`status` (PENDING/APPROVED/REJECTED) rather than a bare `approved_at`, because a rejection has to be
+recorded somewhere and deleting the row is not available — the model is append-only once decided,
+for the reason §3.2 is. A **pending** variation may still be corrected; nothing has been agreed yet,
+so nothing is being rewritten. The guard reads the status the row was loaded with rather than
+re-querying, which also keeps `all_objects` out of a model method (§2.1).
 
 **Subcontractor** — `organization`, `name`, `code`, contacts, `is_active`. Unique name per tenant,
 `PROTECT` on delete once referenced (`O4`). This is a register of contractors who do work, distinct

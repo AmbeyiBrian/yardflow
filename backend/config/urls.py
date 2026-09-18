@@ -76,6 +76,7 @@ from jobs.views import (
 from locations.views import LocationViewSet, StockNodeViewSet
 from network.views import (
     ClientViewSet,
+    ProjectVariationViewSet,
     ProjectViewSet,
     SiteReferenceViewSet,
     SiteViewSet,
@@ -197,6 +198,9 @@ router.register("clients", ClientViewSet, basename="client")
 router.register("sites", SiteViewSet, basename="site")
 router.register("site-references", SiteReferenceViewSet, basename="site-reference")
 router.register("projects", ProjectViewSet, basename="project")
+router.register(
+    "project-variations", ProjectVariationViewSet, basename="project-variation"
+)
 router.register("locations", LocationViewSet, basename="location")
 router.register("stock-nodes", StockNodeViewSet, basename="stock-node")
 

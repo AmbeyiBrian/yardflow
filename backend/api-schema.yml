@@ -4954,6 +4954,290 @@ paths:
                 items:
                   $ref: '#/components/schemas/PermissionCatalogue'
           description: ''
+  /api/v1/project-variations:
+    get:
+      operationId: project_variations_list
+      description: |-
+        ``/api/v1/project-variations`` (O2).
+
+        Decided variations are append-only, so there is no update action worth
+        offering once the owner has ruled: the model refuses it, and a route that
+        looked writable would only produce a confusing 400.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - PENDING
+          - REJECTED
+        description: |-
+          * `PENDING` - Awaiting the owner's decision
+          * `APPROVED` - Approved
+          * `REJECTED` - Rejected
+      tags:
+      - project-variations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProjectVariationList'
+          description: ''
+    post:
+      operationId: project_variations_create
+      description: |-
+        ``/api/v1/project-variations`` (O2).
+
+        Decided variations are append-only, so there is no update action worth
+        offering once the owner has ruled: the model refuses it, and a route that
+        looked writable would only produce a confusing 400.
+      tags:
+      - project-variations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectVariation'
+          description: ''
+  /api/v1/project-variations/{id}:
+    get:
+      operationId: project_variations_retrieve
+      description: |-
+        ``/api/v1/project-variations`` (O2).
+
+        Decided variations are append-only, so there is no update action worth
+        offering once the owner has ruled: the model refuses it, and a route that
+        looked writable would only produce a confusing 400.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project variation.
+        required: true
+      tags:
+      - project-variations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectVariation'
+          description: ''
+    put:
+      operationId: project_variations_update
+      description: |-
+        ``/api/v1/project-variations`` (O2).
+
+        Decided variations are append-only, so there is no update action worth
+        offering once the owner has ruled: the model refuses it, and a route that
+        looked writable would only produce a confusing 400.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project variation.
+        required: true
+      tags:
+      - project-variations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectVariation'
+          description: ''
+    patch:
+      operationId: project_variations_partial_update
+      description: |-
+        ``/api/v1/project-variations`` (O2).
+
+        Decided variations are append-only, so there is no update action worth
+        offering once the owner has ruled: the model refuses it, and a route that
+        looked writable would only produce a confusing 400.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project variation.
+        required: true
+      tags:
+      - project-variations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectVariationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectVariationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectVariationRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectVariation'
+          description: ''
+    delete:
+      operationId: project_variations_destroy
+      description: |-
+        ``/api/v1/project-variations`` (O2).
+
+        Decided variations are append-only, so there is no update action worth
+        offering once the owner has ruled: the model refuses it, and a route that
+        looked writable would only produce a confusing 400.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project variation.
+        required: true
+      tags:
+      - project-variations
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/project-variations/{id}/approve:
+    post:
+      operationId: project_variations_approve_create
+      description: 'O2: the owner''s decision. It moves the project''s current value.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project variation.
+        required: true
+      tags:
+      - project-variations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectVariation'
+          description: ''
+  /api/v1/project-variations/{id}/reject:
+    post:
+      operationId: project_variations_reject_create
+      description: Rejection needs a reason, as every other rejection here does (F4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project variation.
+        required: true
+      tags:
+      - project-variations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectVariationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectVariation'
+          description: ''
   /api/v1/projects:
     get:
       operationId: projects_list
@@ -11386,6 +11670,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Project'
+    PaginatedProjectVariationList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectVariation'
     PaginatedReelList:
       type: object
       required:
@@ -12169,6 +12472,35 @@ components:
         close_reason:
           type: string
           maxLength: 500
+    PatchedProjectVariationRequest:
+      type: object
+      properties:
+        project:
+          type: integer
+        reference:
+          type: string
+          minLength: 1
+          description: The client's variation or amendment reference.
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        value_delta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Change to the contract value, excluding VAT. May be negative.
+        budget_delta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Change to the cost budget, excluding VAT. May be negative.
+        effective_on:
+          type: string
+          format: date
+        decision_reason:
+          type: string
+          maxLength: 500
     PatchedRoleRequest:
       type: object
       description: 'B4: roles are data. A tenant may invent any role it likes.'
@@ -12344,12 +12676,22 @@ components:
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
           description: What the client pays, excluding VAT.
+        current_contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
         cost_budget:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
           description: What the manager may spend to deliver it, excluding VAT.
+        current_cost_budget:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
         starts_on:
           type: string
           format: date
@@ -12390,6 +12732,8 @@ components:
       - client_name
       - closed_at
       - closed_with_unreconciled
+      - current_contract_value
+      - current_cost_budget
       - id
       - manager_name
       - opened_at
@@ -12460,6 +12804,113 @@ components:
         * `OPEN` - Open
         * `CLOSED` - Closed
         * `CANCELLED` - Cancelled
+    ProjectVariation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        project_reference:
+          type: string
+          readOnly: true
+        reference:
+          type: string
+          description: The client's variation or amendment reference.
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        value_delta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Change to the contract value, excluding VAT. May be negative.
+        budget_delta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Change to the cost budget, excluding VAT. May be negative.
+        effective_on:
+          type: string
+          format: date
+        raised_by:
+          type: integer
+          readOnly: true
+        raised_by_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ProjectVariationStatusEnum'
+          readOnly: true
+        decided_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        decision_reason:
+          type: string
+          maxLength: 500
+      required:
+      - decided_at
+      - decided_by
+      - effective_on
+      - id
+      - project
+      - project_reference
+      - raised_by
+      - raised_by_name
+      - reference
+      - status
+    ProjectVariationRequest:
+      type: object
+      properties:
+        project:
+          type: integer
+        reference:
+          type: string
+          minLength: 1
+          description: The client's variation or amendment reference.
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        value_delta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Change to the contract value, excluding VAT. May be negative.
+        budget_delta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Change to the cost budget, excluding VAT. May be negative.
+        effective_on:
+          type: string
+          format: date
+        decision_reason:
+          type: string
+          maxLength: 500
+      required:
+      - effective_on
+      - project
+      - reference
+    ProjectVariationStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `PENDING` - Awaiting the owner's decision
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
     ProvisionTenantRequest:
       type: object
       description: 'A1: name, subdomain and initial owner account.'
