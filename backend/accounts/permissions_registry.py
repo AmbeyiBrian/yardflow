@@ -56,8 +56,15 @@ class PERM:
     # Disposition
     DISPOSAL_APPROVE = "disposal.approve"
 
-    # Projects (O2)
+    # Projects (O2, O14)
     PROJECT_VARIATION_APPROVE = "project.variation_approve"
+    #: Cost and budget on a project. A manager holds it for their own projects;
+    #: the scoping is in the queryset, not here (O14).
+    PROJECT_VIEW_COST = "project.view_cost"
+    #: Contract value and margin. The commercially sensitive half.
+    PROJECT_VIEW_MARGIN = "project.view_margin"
+    #: Day rates, which are pay-adjacent data (O15).
+    PROJECT_VIEW_RATES = "project.view_rates"
 
     # Configuration
     CATALOGUE_MANAGE = "catalogue.manage"
@@ -132,6 +139,27 @@ ALL_PERMISSIONS: tuple[PermissionSpec, ...] = (
         "set it (O2).",
     ),
     PermissionSpec(
+        PERM.PROJECT_VIEW_COST,
+        "See what a project has cost",
+        "Projects",
+        "A manager sees it for the projects they manage; the owner sees it for "
+        "all of them (O14).",
+    ),
+    PermissionSpec(
+        PERM.PROJECT_VIEW_MARGIN,
+        "See a project's contract value and margin",
+        "Projects",
+        "The commercially sensitive half, and the reason a manager is given cost "
+        "without it.",
+    ),
+    PermissionSpec(
+        PERM.PROJECT_VIEW_RATES,
+        "See and set day rates",
+        "Projects",
+        "An individual rate is pay-adjacent data, and the main device here is a "
+        "shared yard phone (O15).",
+    ),
+    PermissionSpec(
         PERM.CATALOGUE_MANAGE,
         "Manage the catalogue and master data",
         "Configuration",
@@ -195,9 +223,9 @@ def validate_codename(codename: str) -> str:
 # --------------------------------------------------------------------------
 # Seeded default roles (§3)
 # --------------------------------------------------------------------------
-# "The six above are seeded defaults. A tenant may create, rename or delete
+# "The seven above are seeded defaults. A tenant may create, rename or delete
 # roles and assign granular permissions to them." Platform admin is not a tenant
-# role, so five roles are seeded per organization.
+# role, so six roles are seeded per organization.
 
 DEFAULT_ROLES: dict[str, tuple[str, ...]] = {
     "Owner": tuple(ALL_CODENAMES),
@@ -205,6 +233,18 @@ DEFAULT_ROLES: dict[str, tuple[str, ...]] = {
         PERM.USERS_MANAGE,
         PERM.CATALOGUE_MANAGE,
         PERM.SETTINGS_MANAGE,
+        PERM.REPORT_VIEW_ALL,
+        # O14: owner *and* admin see everything commercial, rates included.
+        PERM.PROJECT_VIEW_COST,
+        PERM.PROJECT_VIEW_MARGIN,
+        PERM.PROJECT_VIEW_RATES,
+    ),
+    # O1, O6: the seventh seeded role. A manager sees what their projects have
+    # cost and what they may spend, but not the contract value behind it and
+    # not the margin — that is the split O14 asks for.
+    "Project manager": (
+        PERM.PROJECT_VIEW_COST,
+        PERM.GATE_OUT_REQUEST,
         PERM.REPORT_VIEW_ALL,
     ),
     "Storekeeper": (

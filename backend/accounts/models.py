@@ -9,11 +9,13 @@ may legitimately employ the same person, or reuse an info@ address.
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from typing import cast
 
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -162,6 +164,22 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     date_joined = models.DateTimeField(default=timezone.now)
 
+    # O15: a **costing** rate for this person's time, not their pay. Nothing in
+    # this system calculates what anyone is owed. Falls back to the rate on
+    # their role when empty, and where neither exists the job is reported as
+    # uncosted rather than costing zero.
+    #
+    # O14 gates it behind `project.view_rates`: an individual rate is
+    # pay-adjacent data, and the main device here is a shared yard phone.
+    day_rate = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Cost of a day of this person's time, excluding VAT. Not pay.",
+    )
+
     objects = UserManager()
 
     # Login accepts email *or* phone, resolved by a custom authentication
@@ -254,6 +272,18 @@ class Role(TenantModel, TimeStampedModel):
     # not make them undeletable — B4 explicitly allows deleting a role.
     is_system = models.BooleanField(
         default=False, help_text="Seeded when the tenant was created, rather than hand-made."
+    )
+
+    # O15: the fallback rate for anybody holding this role who has none of
+    # their own. One figure per role is what a tenant can realistically keep
+    # current; per-person rates are for where the difference actually matters.
+    day_rate = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Default cost of a day for this role, excluding VAT. Not pay.",
     )
 
     class Meta:

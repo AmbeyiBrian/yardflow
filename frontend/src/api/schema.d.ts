@@ -5596,12 +5596,28 @@ export interface components {
             effective_on?: string;
             decision_reason?: string;
         };
-        /** @description B4: roles are data. A tenant may invent any role it likes. */
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         PatchedRoleRequest: {
             name?: string;
             description?: string;
             /** @description Permissions granted. */
             codenames?: string[];
+            /**
+             * Format: decimal
+             * @description Default cost of a day for this role, excluding VAT. Not pay.
+             */
+            day_rate?: string | null;
         };
         PatchedSiteReferenceRequest: {
             site?: number;
@@ -5642,11 +5658,28 @@ export interface components {
             notes?: string;
             is_active?: boolean;
         };
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         PatchedUserRequest: {
             email?: (string) | null;
             /** @description Normalised to digits with an optional leading '+'. */
             phone?: string | null;
             full_name?: string;
+            /**
+             * Format: decimal
+             * @description Cost of a day of this person's time, excluding VAT. Not pay.
+             */
+            day_rate?: string | null;
             role_ids?: number[];
         };
         /** @description The permission registry, for building the role editor (T2.15, B4). */
@@ -5934,7 +5967,18 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
-        /** @description B4: roles are data. A tenant may invent any role it likes. */
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         Role: {
             readonly id: number;
             name: string;
@@ -5944,15 +5988,36 @@ export interface components {
             /** @description Permissions granted. */
             codenames?: string[];
             readonly user_count: number;
+            /**
+             * Format: decimal
+             * @description Default cost of a day for this role, excluding VAT. Not pay.
+             */
+            day_rate?: string | null;
             /** Format: date-time */
             readonly created_at: string;
         };
-        /** @description B4: roles are data. A tenant may invent any role it likes. */
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         RoleRequest: {
             name: string;
             description?: string;
             /** @description Permissions granted. */
             codenames?: string[];
+            /**
+             * Format: decimal
+             * @description Default cost of a day for this role, excluding VAT. Not pay.
+             */
+            day_rate?: string | null;
         };
         SerialUnit: {
             readonly id: number;
@@ -6295,6 +6360,18 @@ export interface components {
         UnreadCount: {
             unread: number;
         };
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         User: {
             readonly id: number;
             email?: (string) | null;
@@ -6302,6 +6379,11 @@ export interface components {
             phone?: string | null;
             full_name?: string;
             readonly is_active: boolean;
+            /**
+             * Format: decimal
+             * @description Cost of a day of this person's time, excluding VAT. Not pay.
+             */
+            day_rate?: string | null;
             readonly roles: {
                 [key: string]: unknown;
             }[];
@@ -6314,11 +6396,28 @@ export interface components {
             /** Format: date-time */
             readonly last_login: string | null;
         };
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         UserRequest: {
             email?: (string) | null;
             /** @description Normalised to digits with an optional leading '+'. */
             phone?: string | null;
             full_name?: string;
+            /**
+             * Format: decimal
+             * @description Cost of a day of this person's time, excluding VAT. Not pay.
+             */
+            day_rate?: string | null;
             role_ids?: number[];
         };
         Variance: {

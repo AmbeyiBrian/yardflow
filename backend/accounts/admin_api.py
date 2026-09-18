@@ -36,6 +36,7 @@ from accounts.services import (
 from core.api import TenantScopedViewSet
 from core.api_permissions import OrganizationIsActive
 from core.exceptions import DomainError
+from core.field_permissions import PermissionGatedFieldsMixin
 from core.models import AuditAction, Organization, OrganizationSettings
 from core.pagination import JoinedCursorPagination
 
@@ -66,7 +67,11 @@ class UserInactive(DomainError):
     default_message = "This account is deactivated. Reactivate it first."
 
 
-class RoleSerializer(serializers.ModelSerializer):
+class RoleSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer):
+    # O15: a rate is pay-adjacent data, and the main device here is a shared
+    # yard phone. Withheld, not blanked — see core.field_permissions.
+    permission_gated_fields = {PERM.PROJECT_VIEW_RATES: ("day_rate",)}
+
     """B4: roles are data. A tenant may invent any role it likes."""
 
     codenames = serializers.ListField(
@@ -83,6 +88,7 @@ class RoleSerializer(serializers.ModelSerializer):
             "is_system",
             "codenames",
             "user_count",
+            "day_rate",
             "created_at",
         )
         read_only_fields = ("is_system",)
@@ -123,7 +129,9 @@ class RoleSerializer(serializers.ModelSerializer):
         return value
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer):
+    permission_gated_fields = {PERM.PROJECT_VIEW_RATES: ("day_rate",)}
+
     role_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, write_only=True
     )
@@ -143,6 +151,7 @@ class UserSerializer(serializers.ModelSerializer):
             "phone",
             "full_name",
             "is_active",
+            "day_rate",
             "roles",
             "role_ids",
             "permissions",

@@ -10,6 +10,7 @@ approval engine can never disagree.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 from django.utils import timezone
 
@@ -209,3 +210,36 @@ def can_be_deleted(user: User) -> bool:
     from stock.queries import custody_holdings
 
     return not custody_holdings(user=user).exists()
+
+
+# --------------------------------------------------------------------------
+# Day rates (O15)
+# --------------------------------------------------------------------------
+
+
+def day_rate_for(user) -> tuple[Decimal | None, str]:
+    """The costing rate for a person's time, and where it came from (O15).
+
+    Their own rate first, then the highest rate among the roles they hold.
+    Returns ``(None, "NONE")`` when neither exists — and that is deliberately
+    **not** zero. A job whose labour costs nothing looks like a job delivered
+    for free, and would flatter its project exactly where the report is trying
+    to tell the truth (O12).
+
+    "Highest among their roles" rather than first-found, because a person
+    holding both Technician and Supervisor is being paid for as the more senior
+    of the two, and picking arbitrarily would make the figure depend on the
+    order rows happened to be created in.
+    """
+    if user.day_rate is not None:
+        return user.day_rate, "USER"
+
+    rates = [
+        user_role.role.day_rate
+        for user_role in user.user_roles.select_related("role")
+        if user_role.role.day_rate is not None
+    ]
+    if rates:
+        return max(rates), "ROLE"
+
+    return None, "NONE"

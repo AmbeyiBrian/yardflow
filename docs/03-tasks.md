@@ -962,7 +962,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a release above the threshold notifies and one below does not, and **neither is
   delayed by the notification**.
 
-- [ ] **T10.12 `[B]` Day rates**
+- [x] **T10.12 `[B]` Day rates**
   Refs: §4.14 · O15, O14
   `day_rate` on User and Role, behind the `project.view_rates` permission — owner and admin only.
   *Done when:* a PM's API response contains no rate field at all, absent rather than null.

@@ -12817,7 +12817,17 @@ components:
           maxLength: 500
     PatchedRoleRequest:
       type: object
-      description: 'B4: roles are data. A tenant may invent any role it likes.'
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         name:
           type: string
@@ -12832,6 +12842,12 @@ components:
             type: string
             minLength: 1
           description: Permissions granted.
+        day_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+          description: Default cost of a day for this role, excluding VAT. Not pay.
     PatchedSiteReferenceRequest:
       type: object
       properties:
@@ -12930,6 +12946,17 @@ components:
           type: boolean
     PatchedUserRequest:
       type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         email:
           nullable: true
@@ -12947,6 +12974,12 @@ components:
         full_name:
           type: string
           maxLength: 200
+        day_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+          description: Cost of a day of this person's time, excluding VAT. Not pay.
         role_ids:
           type: array
           items:
@@ -13602,7 +13635,17 @@ components:
       - still_open
     Role:
       type: object
-      description: 'B4: roles are data. A tenant may invent any role it likes.'
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         id:
           type: integer
@@ -13625,6 +13668,12 @@ components:
         user_count:
           type: integer
           readOnly: true
+        day_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+          description: Default cost of a day for this role, excluding VAT. Not pay.
         created_at:
           type: string
           format: date-time
@@ -13637,7 +13686,17 @@ components:
       - user_count
     RoleRequest:
       type: object
-      description: 'B4: roles are data. A tenant may invent any role it likes.'
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         name:
           type: string
@@ -13652,6 +13711,12 @@ components:
             type: string
             minLength: 1
           description: Permissions granted.
+        day_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+          description: Default cost of a day for this role, excluding VAT. Not pay.
       required:
       - name
     SerialUnit:
@@ -14502,6 +14567,17 @@ components:
       - unread
     User:
       type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         id:
           type: integer
@@ -14525,6 +14601,12 @@ components:
         is_active:
           type: boolean
           readOnly: true
+        day_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+          description: Cost of a day of this person's time, excluding VAT. Not pay.
         roles:
           type: array
           items:
@@ -14563,6 +14645,17 @@ components:
       - roles
     UserRequest:
       type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         email:
           nullable: true
@@ -14580,6 +14673,12 @@ components:
         full_name:
           type: string
           maxLength: 200
+        day_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+          description: Cost of a day of this person's time, excluding VAT. Not pay.
         role_ids:
           type: array
           items:
