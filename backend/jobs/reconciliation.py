@@ -1,6 +1,6 @@
 """Reconciliation (design §3.1, §10; H4, C7, M1).
 
-H4: "see per-site and per-work-order reconciliation — issued versus installed
+H4: "see per-site and per-project reconciliation — issued versus installed
 versus returned versus unaccounted — **so that I can answer the operator**."
 
 §3.1 is what makes this one query instead of five reports:
@@ -93,9 +93,9 @@ def reconcile_site(site) -> dict:
     return _reconcile(movements, label=str(site), scope="site", scope_id=site.pk)
 
 
-def reconcile_work_order(work_order) -> dict:
-    """Reconcile everything issued under one work order (H4, C7)."""
-    site_ids = list(work_order.sites.values_list("pk", flat=True))
+def reconcile_project(project) -> dict:
+    """Reconcile everything issued under one project (H4, C7)."""
+    site_ids = list(project.sites.values_list("pk", flat=True))
 
     from dispatch.models import GateOut
     from jobs.models import JobCloseout
@@ -103,7 +103,7 @@ def reconcile_work_order(work_order) -> dict:
     gate_out_ids = [
         str(pk)
         for pk in GateOut.objects.filter(
-            Q(work_order=work_order) | Q(site_id__in=site_ids)
+            Q(project=project) | Q(site_id__in=site_ids)
         )
         .distinct()
         .values_list("pk", flat=True)
@@ -120,7 +120,7 @@ def reconcile_work_order(work_order) -> dict:
     closeout_ids = [
         str(pk)
         for pk in JobCloseout.objects.filter(
-            Q(job__work_order=work_order) | Q(job__site_id__in=site_ids)
+            Q(job__project=project) | Q(job__site_id__in=site_ids)
         )
         .distinct()
         .values_list("pk", flat=True)
@@ -134,7 +134,7 @@ def reconcile_work_order(work_order) -> dict:
         | Q(from_node__site_id__in=site_ids)
     ).distinct()
     return _reconcile(
-        movements, label=str(work_order), scope="work_order", scope_id=work_order.pk
+        movements, label=str(project), scope="project", scope_id=project.pk
     )
 
 
@@ -185,7 +185,7 @@ def _gate_out_ids_for_site(site) -> list[str]:
 
     return [
         str(pk)
-        for pk in GateOut.objects.filter(Q(site=site) | Q(work_order__sites=site))
+        for pk in GateOut.objects.filter(Q(site=site) | Q(project__sites=site))
         .distinct()
         .values_list("pk", flat=True)
     ]
@@ -269,14 +269,14 @@ def _reconcile(movements, *, label: str, scope: str, scope_id) -> dict:
     }
 
 
-def work_order_unreconciled(work_order) -> dict:
-    """C7: what closing this work order would leave unexplained.
+def project_unreconciled(project) -> dict:
+    """C7: what closing this project would leave unexplained.
 
     Called by the close action to produce a warning rather than a block — C7 says
     "closing it **warns** if material remains unreconciled". Blocking belongs to
     H5, and that applies to jobs.
     """
-    result = reconcile_work_order(work_order)
+    result = reconcile_project(project)
     unaccounted = [item for item in result["items"] if not item["is_reconciled"]]
 
     return {

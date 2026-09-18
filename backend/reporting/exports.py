@@ -243,7 +243,7 @@ _REFERENCE_MODELS = {
     "item-types": "catalogue.ItemType",
     "clients": "network.Client",
     "sites": "network.Site",
-    "work-orders": "network.WorkOrder",
+    "projects": "network.Project",
     "locations": "locations.Location",
     "users": "accounts.User",
 }

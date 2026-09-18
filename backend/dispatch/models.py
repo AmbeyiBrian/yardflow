@@ -97,7 +97,7 @@ RELEASABLE_STATUSES = (GateOutStatus.APPROVED, GateOutStatus.PARTIALLY_RELEASED)
 class GateOut(TenantModel, TimeStampedModel):
     """A gate pass: a request to take material out of the yard (F1).
 
-    Destination is **exactly one** of site, work order, client or location — a
+    Destination is **exactly one** of site, project, client or location — a
     pass with two destinations could not be reconciled against either, and one
     with none could not be reconciled at all.
     """
@@ -118,8 +118,8 @@ class GateOut(TenantModel, TimeStampedModel):
     site = models.ForeignKey(
         "network.Site", on_delete=models.PROTECT, null=True, blank=True, related_name="gate_outs"
     )
-    work_order = models.ForeignKey(
-        "network.WorkOrder",
+    project = models.ForeignKey(
+        "network.Project",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -200,25 +200,25 @@ class GateOut(TenantModel, TimeStampedModel):
                 condition=(
                     Q(
                         site__isnull=False,
-                        work_order__isnull=True,
+                        project__isnull=True,
                         client__isnull=True,
                         to_location__isnull=True,
                     )
                     | Q(
                         site__isnull=True,
-                        work_order__isnull=False,
+                        project__isnull=False,
                         client__isnull=True,
                         to_location__isnull=True,
                     )
                     | Q(
                         site__isnull=True,
-                        work_order__isnull=True,
+                        project__isnull=True,
                         client__isnull=False,
                         to_location__isnull=True,
                     )
                     | Q(
                         site__isnull=True,
-                        work_order__isnull=True,
+                        project__isnull=True,
                         client__isnull=True,
                         to_location__isnull=False,
                     )
@@ -242,8 +242,8 @@ class GateOut(TenantModel, TimeStampedModel):
     def destination_label(self) -> str:
         if self.site_id:
             return str(self.site)
-        if self.work_order_id:
-            return str(self.work_order)
+        if self.project_id:
+            return str(self.project)
         if self.client_id:
             return str(self.client)
         if self.to_location_id:
@@ -336,11 +336,11 @@ class GateOut(TenantModel, TimeStampedModel):
     def clean(self) -> None:
         super().clean()
 
-        destinations = [self.site_id, self.work_order_id, self.client_id, self.to_location_id]
+        destinations = [self.site_id, self.project_id, self.client_id, self.to_location_id]
         named = [value for value in destinations if value is not None]
         if len(named) != 1:
             raise ValidationError(
-                "A gate pass needs exactly one destination — a site, a work order, "
+                "A gate pass needs exactly one destination — a site, a project, "
                 "a client or another location (F1)."
             )
 

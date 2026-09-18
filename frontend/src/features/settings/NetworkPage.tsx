@@ -18,14 +18,14 @@ import { useSearchParams } from 'react-router-dom';
 import { applyFieldErrors, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
-import type { Client, Location, Site, WorkOrder } from './types';
+import type { Client, Location, Site, Project } from './types';
 
-type Tab = 'sites' | 'clients' | 'work-orders' | 'locations';
+type Tab = 'sites' | 'clients' | 'projects' | 'locations';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'sites', label: 'Sites' },
   { key: 'clients', label: 'Clients' },
-  { key: 'work-orders', label: 'Work orders' },
+  { key: 'projects', label: 'Projects' },
   { key: 'locations', label: 'Locations' },
 ];
 
@@ -58,7 +58,7 @@ export default function NetworkPage() {
 
       {tab === 'sites' ? <SitesTab /> : null}
       {tab === 'clients' ? <ClientsTab /> : null}
-      {tab === 'work-orders' ? <WorkOrdersTab /> : null}
+      {tab === 'projects' ? <ProjectsTab /> : null}
       {tab === 'locations' ? <LocationsTab /> : null}
     </div>
   );
@@ -445,12 +445,12 @@ function ClientSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
 }
 
 /* -------------------------------------------------------------------------- */
-/* Work orders                                                                */
+/* Projects                                                                */
 /* -------------------------------------------------------------------------- */
 
-function WorkOrdersTab() {
+function ProjectsTab() {
   const [sheet, setSheet] = useState(false);
-  const workOrders = useList<WorkOrder>('work-orders', { page_size: 100 });
+  const projects = useList<Project>('projects', { page_size: 100 });
   const clients = useList<Client>('clients', { page_size: 200 });
 
   return (
@@ -459,18 +459,18 @@ function WorkOrdersTab() {
         {/* C7, D14: optional everywhere. Saying so here stops a storekeeper
             inventing one to get past a screen. */}
         <p className="text-sm text-slate-600">
-          Optional. A gate-out can name a work order, a site, both, or neither.
+          Optional. A gate-out can name a project, a site, both, or neither.
         </p>
-        <Button onClick={() => setSheet(true)}>New work order</Button>
+        <Button onClick={() => setSheet(true)}>New project</Button>
       </div>
 
-      {workOrders.isLoading ? (
+      {projects.isLoading ? (
         <Spinner className="text-slate-400" />
       ) : (
         <DataList
-          rows={workOrders.data?.results ?? []}
+          rows={projects.data?.results ?? []}
           rowKey={(row) => row.id}
-          empty={<EmptyState title="No work orders." hint="They group several sites under one job." />}
+          empty={<EmptyState title="No projects." hint="They group several sites under one job." />}
           columns={[
             { header: 'Reference', cell: (row) => row.reference },
             { header: 'Client', cell: (row) => row.client_name ?? '—' },
@@ -485,7 +485,7 @@ function WorkOrdersTab() {
         />
       )}
 
-      <WorkOrderSheet
+      <ProjectSheet
         open={sheet}
         onClose={() => setSheet(false)}
         clients={clients.data?.results ?? []}
@@ -494,7 +494,7 @@ function WorkOrdersTab() {
   );
 }
 
-function WorkOrderSheet({
+function ProjectSheet({
   open,
   onClose,
   clients,
@@ -507,7 +507,7 @@ function WorkOrderSheet({
     defaultValues: { client: '', reference: '', description: '' },
   });
   const [banner, setBanner] = useState<string | null>(null);
-  const create = useAction<Record<string, unknown>>({ resource: 'work-orders' });
+  const create = useAction<Record<string, unknown>>({ resource: 'projects' });
 
   const submit = form.handleSubmit(async (values) => {
     setBanner(null);
@@ -527,7 +527,7 @@ function WorkOrderSheet({
   return (
     <Sheet
       open={open}
-      title="New work order"
+      title="New project"
       onClose={onClose}
       footer={
         <>

@@ -77,7 +77,7 @@ export interface GateOut {
   status: GateOutStatus;
   purpose_type: GateOutPurpose;
   site: number | null;
-  work_order: number | null;
+  project: number | null;
   client: number | null;
   to_location: number | null;
   from_location: number;

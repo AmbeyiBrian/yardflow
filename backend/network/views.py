@@ -1,4 +1,4 @@
-"""Client, site and work order endpoints (design §6; C5, C6, C7)."""
+"""Client, site and project endpoints (design §6; C5, C6, C7)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
 from core.api import TenantScopedViewSet
-from network.models import Client, Site, SiteReference, WorkOrder, WorkOrderStatus
+from network.models import Client, Project, ProjectStatus, Site, SiteReference
 
 
 class ClientSerializer(serializers.ModelSerializer):
@@ -65,12 +65,12 @@ class SiteSerializer(serializers.ModelSerializer):
         )
 
 
-class WorkOrderSerializer(serializers.ModelSerializer):
+class ProjectSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source="client.name", read_only=True)
     site_count = serializers.SerializerMethodField()
 
     class Meta:
-        model = WorkOrder
+        model = Project
         fields = (
             "id",
             "client",
@@ -87,8 +87,8 @@ class WorkOrderSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("status", "opened_at", "closed_at", "closed_with_unreconciled")
 
-    def get_site_count(self, work_order: WorkOrder) -> int:
-        return work_order.sites.count()
+    def get_site_count(self, project: Project) -> int:
+        return project.sites.count()
 
 
 class ClientViewSet(TenantScopedViewSet):
@@ -190,11 +190,11 @@ class SiteReferenceViewSet(TenantScopedViewSet):
     search_fields = ["value", "label"]
 
 
-class WorkOrderViewSet(TenantScopedViewSet):
-    """``/api/v1/work-orders`` (C7, D14 — optional throughout)."""
+class ProjectViewSet(TenantScopedViewSet):
+    """``/api/v1/projects`` (C7, D14 — optional throughout)."""
 
-    serializer_class = WorkOrderSerializer
-    model = WorkOrder
+    serializer_class = ProjectSerializer
+    model = Project
     select_related = ("client",)
     prefetch_related = ("sites",)
     required_permissions = {
@@ -215,24 +215,24 @@ class WorkOrderViewSet(TenantScopedViewSet):
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):  # type: ignore[no-untyped-def]
-        """Close a work order, warning on unreconciled material (C7).
+        """Close a project, warning on unreconciled material (C7).
 
         A warning, not a block: C7 says "closing it warns". Blocking would be
-        H5's rule, and that applies to jobs, not work orders.
+        H5's rule, and that applies to jobs, not projects.
         """
         from django.utils import timezone
 
-        work_order = self.get_object()
-        summary = work_order.unreconciled_summary()
+        project = self.get_object()
+        summary = project.unreconciled_summary()
 
-        work_order.status = WorkOrderStatus.CLOSED
-        work_order.closed_at = timezone.now()
-        work_order.close_reason = request.data.get("reason", "")
-        work_order.closed_with_unreconciled = bool(summary.get("unreconciled"))
-        work_order.save(
+        project.status = ProjectStatus.CLOSED
+        project.closed_at = timezone.now()
+        project.close_reason = request.data.get("reason", "")
+        project.closed_with_unreconciled = bool(summary.get("unreconciled"))
+        project.save(
             update_fields=["status", "closed_at", "close_reason", "closed_with_unreconciled"]
         )
 
         return Response(
-            {**self.get_serializer(work_order).data, "unreconciled_warning": summary}
+            {**self.get_serializer(project).data, "unreconciled_warning": summary}
         )

@@ -115,7 +115,7 @@ def stock_in(tenant, node, item, quantity, *, owner_client=None, condition=Condi
 
 def make_gate_out(tenant, yard, requester, holder, *, site=None, **kwargs):
     kwargs.setdefault("purpose_type", GateOutPurpose.INSTALLATION)
-    if site is None and not any(kwargs.get(key) for key in ("work_order", "client", "to_location")):
+    if site is None and not any(kwargs.get(key) for key in ("project", "client", "to_location")):
         site = SiteFactory()
     return GateOut.objects.create(
         organization=tenant,

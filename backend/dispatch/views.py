@@ -171,7 +171,7 @@ class GateOutSerializer(serializers.ModelSerializer):
             "status",
             "purpose_type",
             "site",
-            "work_order",
+            "project",
             "client",
             "to_location",
             "from_location",
@@ -326,7 +326,7 @@ class GateOutViewSet(TenantScopedViewSet):
     model = GateOut
     select_related = (
         "site",
-        "work_order",
+        "project",
         "client",
         "to_location",
         "from_location",

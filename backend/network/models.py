@@ -1,4 +1,4 @@
-"""Clients, sites and work orders (design §4.4; C5, C6, C7, D13, D14).
+"""Clients, sites and projects (design §4.4; C5, C6, C7, D13, D14).
 
 The site register is the part of this design most likely to be got wrong by
 guessing. C6's rationale, quoted:
@@ -124,7 +124,7 @@ class Site(TenantModel, TimeStampedModel):
     )
 
     # C6: "optional radio identifiers may be captured as free fields, never
-    # validated." Never validated is deliberate — these come off a work order in
+    # validated." Never validated is deliberate — these come off a project in
     # whatever form the operator wrote them, and rejecting one would stop work.
     cell_id = models.CharField(max_length=100, blank=True)
     enodeb_id = models.CharField(max_length=100, blank=True)
@@ -204,27 +204,27 @@ class SiteReference(TenantModel, TimeStampedModel):
         return super().save(*args, **kwargs)
 
 
-class WorkOrderStatus(models.TextChoices):
+class ProjectStatus(models.TextChoices):
     OPEN = "OPEN", "Open"
     CLOSED = "CLOSED", "Closed"
 
 
-class WorkOrder(TenantModel, TimeStampedModel):
+class Project(TenantModel, TimeStampedModel):
     """An optional grouping of work across one or more sites (C7, D14).
 
     D14 and C7 both stress **optional**. Material may be issued directly to a
-    site, and nothing in the system may require a work order to exist — a
+    site, and nothing in the system may require a project to exist — a
     storekeeper under pressure will not invent one, and forcing it would produce
     fictional data.
     """
 
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="work_orders")
+    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="projects")
     reference = models.CharField(max_length=100)
     description = models.CharField(max_length=500, blank=True)
-    sites = models.ManyToManyField(Site, related_name="work_orders", blank=True)
+    sites = models.ManyToManyField(Site, related_name="projects", blank=True)
 
     status = models.CharField(
-        max_length=20, choices=WorkOrderStatus.choices, default=WorkOrderStatus.OPEN
+        max_length=20, choices=ProjectStatus.choices, default=ProjectStatus.OPEN
     )
     opened_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
@@ -237,12 +237,12 @@ class WorkOrder(TenantModel, TimeStampedModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["organization", "reference"], name="uniq_work_order_ref_per_org"
+                fields=["organization", "reference"], name="uniq_project_ref_per_org"
             ),
             models.CheckConstraint(
-                condition=Q(status=WorkOrderStatus.OPEN, closed_at__isnull=True)
-                | Q(status=WorkOrderStatus.CLOSED, closed_at__isnull=False),
-                name="closed_work_order_has_a_closing_time",
+                condition=Q(status=ProjectStatus.OPEN, closed_at__isnull=True)
+                | Q(status=ProjectStatus.CLOSED, closed_at__isnull=False),
+                name="closed_project_has_a_closing_time",
             ),
         ]
         ordering = ("-opened_at",)
@@ -251,7 +251,7 @@ class WorkOrder(TenantModel, TimeStampedModel):
         return self.reference
 
     def unreconciled_summary(self) -> dict:
-        """What remains unaccounted for on this work order (C7).
+        """What remains unaccounted for on this project (C7).
 
         C7 says closing "warns if material remains unreconciled". The real
         figures come from the reconciliation query in T5.7; until the ledger
@@ -259,8 +259,8 @@ class WorkOrder(TenantModel, TimeStampedModel):
         worse than saying so.
         """
         try:
-            from jobs.reconciliation import work_order_unreconciled
+            from jobs.reconciliation import project_unreconciled
 
-            return work_order_unreconciled(self)
+            return project_unreconciled(self)
         except ImportError:
             return {"available": False, "reason": "Reconciliation arrives with T5.7."}

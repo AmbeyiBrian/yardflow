@@ -2043,6 +2043,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/projects`` (C7, D14 — optional throughout). */
+        get: operations["projects_list"];
+        put?: never;
+        /** @description ``/api/v1/projects`` (C7, D14 — optional throughout). */
+        post: operations["projects_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/projects`` (C7, D14 — optional throughout). */
+        get: operations["projects_retrieve"];
+        /** @description ``/api/v1/projects`` (C7, D14 — optional throughout). */
+        put: operations["projects_update"];
+        post?: never;
+        /** @description ``/api/v1/projects`` (C7, D14 — optional throughout). */
+        delete: operations["projects_destroy"];
+        options?: never;
+        head?: never;
+        /** @description ``/api/v1/projects`` (C7, D14 — optional throughout). */
+        patch: operations["projects_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Close a project, warning on unreconciled material (C7).
+         *
+         *     A warning, not a block: C7 says "closing it warns". Blocking would be
+         *     H5's rule, and that applies to jobs, not projects.
+         */
+        post: operations["projects_close_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/unreconciled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What remains unaccounted for (C7). Real figures arrive with T5.7. */
+        get: operations["projects_unreconciled_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/qr/scan": {
         parameters: {
             query?: never;
@@ -2099,7 +2176,7 @@ export interface paths {
         /**
          * @description ``/api/v1/reconciliation`` (H4, T5.7).
          *
-         *     Takes a site or a work order and answers the operator's question. It reads
+         *     Takes a site or a project and answers the operator's question. It reads
          *     the ledger only, so it needs no permission of its own beyond membership —
          *     what it can show is already limited to the tenant in context (A3).
          */
@@ -3214,83 +3291,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/work-orders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description ``/api/v1/work-orders`` (C7, D14 — optional throughout). */
-        get: operations["work_orders_list"];
-        put?: never;
-        /** @description ``/api/v1/work-orders`` (C7, D14 — optional throughout). */
-        post: operations["work_orders_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/work-orders/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description ``/api/v1/work-orders`` (C7, D14 — optional throughout). */
-        get: operations["work_orders_retrieve"];
-        /** @description ``/api/v1/work-orders`` (C7, D14 — optional throughout). */
-        put: operations["work_orders_update"];
-        post?: never;
-        /** @description ``/api/v1/work-orders`` (C7, D14 — optional throughout). */
-        delete: operations["work_orders_destroy"];
-        options?: never;
-        head?: never;
-        /** @description ``/api/v1/work-orders`` (C7, D14 — optional throughout). */
-        patch: operations["work_orders_partial_update"];
-        trace?: never;
-    };
-    "/api/v1/work-orders/{id}/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Close a work order, warning on unreconciled material (C7).
-         *
-         *     A warning, not a block: C7 says "closing it warns". Blocking would be
-         *     H5's rule, and that applies to jobs, not work orders.
-         */
-        post: operations["work_orders_close_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/work-orders/{id}/unreconciled": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description What remains unaccounted for (C7). Real figures arrive with T5.7. */
-        get: operations["work_orders_unreconciled_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4024,7 +4024,7 @@ export interface components {
             readonly status: components["schemas"]["GateOutStatusEnum"];
             purpose_type: components["schemas"]["PurposeTypeEnum"];
             site?: number | null;
-            work_order?: number | null;
+            project?: number | null;
             client?: number | null;
             to_location?: number | null;
             from_location: number;
@@ -4127,7 +4127,7 @@ export interface components {
         GateOutRequest: {
             purpose_type: components["schemas"]["PurposeTypeEnum"];
             site?: number | null;
-            work_order?: number | null;
+            project?: number | null;
             client?: number | null;
             to_location?: number | null;
             from_location: number;
@@ -4236,7 +4236,7 @@ export interface components {
             site: number;
             readonly site_name: string;
             readonly site_ref: string;
-            work_order?: number | null;
+            project?: number | null;
             assignee: number;
             readonly assignee_name: string;
             description?: string;
@@ -4331,7 +4331,7 @@ export interface components {
             reference?: string;
             client: number;
             site: number;
-            work_order?: number | null;
+            project?: number | null;
             assignee: number;
             description?: string;
         };
@@ -4906,6 +4906,19 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Organization"][];
         };
+        PaginatedProjectList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Project"][];
+        };
         PaginatedReelList: {
             /**
              * Format: uri
@@ -5062,19 +5075,6 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Variance"][];
         };
-        PaginatedWorkOrderList: {
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
-             */
-            previous?: string | null;
-            results: components["schemas"]["WorkOrder"][];
-        };
         /** @description Set a new password from a reset or invitation token. */
         PasswordResetConfirmRequest: {
             uid: string;
@@ -5181,7 +5181,7 @@ export interface components {
         PatchedGateOutRequest: {
             purpose_type?: components["schemas"]["PurposeTypeEnum"];
             site?: number | null;
-            work_order?: number | null;
+            project?: number | null;
             client?: number | null;
             to_location?: number | null;
             from_location?: number;
@@ -5240,7 +5240,7 @@ export interface components {
             reference?: string;
             client?: number;
             site?: number;
-            work_order?: number | null;
+            project?: number | null;
             assignee?: number;
             description?: string;
         };
@@ -5293,6 +5293,13 @@ export interface components {
             notification_channels?: unknown;
             notification_matrix?: unknown;
         };
+        PatchedProjectRequest: {
+            client?: number;
+            reference?: string;
+            description?: string;
+            sites?: number[];
+            close_reason?: string;
+        };
         /** @description B4: roles are data. A tenant may invent any role it likes. */
         PatchedRoleRequest: {
             name?: string;
@@ -5337,13 +5344,6 @@ export interface components {
             full_name?: string;
             role_ids?: number[];
         };
-        PatchedWorkOrderRequest: {
-            client?: number;
-            reference?: string;
-            description?: string;
-            sites?: number[];
-            close_reason?: string;
-        };
         /** @description The permission registry, for building the role editor (T2.15, B4). */
         PermissionCatalogue: {
             codename: string;
@@ -5356,6 +5356,36 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        Project: {
+            readonly id: number;
+            client: number;
+            readonly client_name: string;
+            reference: string;
+            description?: string;
+            sites?: number[];
+            readonly site_count: number;
+            readonly status: components["schemas"]["ProjectStatusEnum"];
+            /** Format: date-time */
+            readonly opened_at: string;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            /** @description Closed while material remained unreconciled, with a reason. */
+            readonly closed_with_unreconciled: boolean;
+            close_reason?: string;
+        };
+        ProjectRequest: {
+            client: number;
+            reference: string;
+            description?: string;
+            sites?: number[];
+            close_reason?: string;
+        };
+        /**
+         * @description * `OPEN` - Open
+         *     * `CLOSED` - Closed
+         * @enum {string}
+         */
+        ProjectStatusEnum: "OPEN" | "CLOSED";
         /** @description A1: name, subdomain and initial owner account. */
         ProvisionTenantRequest: {
             name: string;
@@ -5951,36 +5981,6 @@ export interface components {
         WebAuthnRevokeRequest: {
             credential: number;
         };
-        WorkOrder: {
-            readonly id: number;
-            client: number;
-            readonly client_name: string;
-            reference: string;
-            description?: string;
-            sites?: number[];
-            readonly site_count: number;
-            readonly status: components["schemas"]["WorkOrderStatusEnum"];
-            /** Format: date-time */
-            readonly opened_at: string;
-            /** Format: date-time */
-            readonly closed_at: string | null;
-            /** @description Closed while material remained unreconciled, with a reason. */
-            readonly closed_with_unreconciled: boolean;
-            close_reason?: string;
-        };
-        WorkOrderRequest: {
-            client: number;
-            reference: string;
-            description?: string;
-            sites?: number[];
-            close_reason?: string;
-        };
-        /**
-         * @description * `OPEN` - Open
-         *     * `CLOSED` - Closed
-         * @enum {string}
-         */
-        WorkOrderStatusEnum: "OPEN" | "CLOSED";
     };
     responses: never;
     parameters: never;
@@ -9295,6 +9295,7 @@ export interface operations {
                 ordering?: string;
                 /** @description Number of results to return per page. */
                 page_size?: number;
+                project?: number;
                 /** @description A search term. */
                 search?: string;
                 site?: number;
@@ -9306,7 +9307,6 @@ export interface operations {
                  *     * `CANCELLED` - Cancelled
                  */
                 status?: "AWAITING_CLOSEOUT" | "CANCELLED" | "CLOSED" | "IN_PROGRESS" | "OPEN";
-                work_order?: number;
             };
             header?: never;
             path?: never;
@@ -9982,6 +9982,214 @@ export interface operations {
             };
         };
     };
+    projects_list: {
+        parameters: {
+            query?: {
+                client?: number;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `OPEN` - Open
+                 *     * `CLOSED` - Closed
+                 */
+                status?: "CLOSED" | "OPEN";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProjectList"];
+                };
+            };
+        };
+    };
+    projects_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_close_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_unreconciled_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
     qr_scan_retrieve: {
         parameters: {
             query: {
@@ -10030,10 +10238,10 @@ export interface operations {
     reconciliation_retrieve: {
         parameters: {
             query?: {
+                /** @description Project id to reconcile. */
+                project?: string;
                 /** @description Site id to reconcile. */
                 site?: string;
-                /** @description Work order id to reconcile. */
-                work_order?: string;
             };
             header?: never;
             path?: never;
@@ -11824,214 +12032,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Variance"];
-                };
-            };
-        };
-    };
-    work_orders_list: {
-        parameters: {
-            query?: {
-                client?: number;
-                /** @description The pagination cursor value. */
-                cursor?: string;
-                /** @description Which field to use when ordering the results. */
-                ordering?: string;
-                /** @description Number of results to return per page. */
-                page_size?: number;
-                /** @description A search term. */
-                search?: string;
-                /**
-                 * @description * `OPEN` - Open
-                 *     * `CLOSED` - Closed
-                 */
-                status?: "CLOSED" | "OPEN";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedWorkOrderList"];
-                };
-            };
-        };
-    };
-    work_orders_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkOrderRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["WorkOrderRequest"];
-                "multipart/form-data": components["schemas"]["WorkOrderRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkOrder"];
-                };
-            };
-        };
-    };
-    work_orders_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this work order. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkOrder"];
-                };
-            };
-        };
-    };
-    work_orders_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this work order. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkOrderRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["WorkOrderRequest"];
-                "multipart/form-data": components["schemas"]["WorkOrderRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkOrder"];
-                };
-            };
-        };
-    };
-    work_orders_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this work order. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    work_orders_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this work order. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedWorkOrderRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedWorkOrderRequest"];
-                "multipart/form-data": components["schemas"]["PatchedWorkOrderRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkOrder"];
-                };
-            };
-        };
-    };
-    work_orders_close_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this work order. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkOrderRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["WorkOrderRequest"];
-                "multipart/form-data": components["schemas"]["WorkOrderRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkOrder"];
-                };
-            };
-        };
-    };
-    work_orders_unreconciled_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this work order. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkOrder"];
                 };
             };
         };

@@ -44,9 +44,9 @@ class Job(TenantModel, TimeStampedModel):
         "network.Client", on_delete=models.PROTECT, related_name="jobs"
     )
     site = models.ForeignKey("network.Site", on_delete=models.PROTECT, related_name="jobs")
-    # C7, D14: the work order layer is optional throughout.
-    work_order = models.ForeignKey(
-        "network.WorkOrder",
+    # C7, D14: the project layer is optional throughout.
+    project = models.ForeignKey(
+        "network.Project",
         on_delete=models.PROTECT,
         null=True,
         blank=True,

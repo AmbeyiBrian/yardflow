@@ -557,7 +557,7 @@ def destination_node_for(gate_out: GateOut):
     if gate_out.client_id:
         # K1: in transit to the client, still our exposure until acknowledged.
         return node_for_client(gate_out.client)
-    # A site or work order destination is carried by a person until they install
+    # A site or project destination is carried by a person until they install
     # it (H2), so custody is the correct destination at the gate.
     return node_for_user(gate_out.custody_holder)
 

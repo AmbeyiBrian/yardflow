@@ -76,9 +76,9 @@ from jobs.views import (
 from locations.views import LocationViewSet, StockNodeViewSet
 from network.views import (
     ClientViewSet,
+    ProjectViewSet,
     SiteReferenceViewSet,
     SiteViewSet,
-    WorkOrderViewSet,
 )
 from notifications.views import NotificationPreferencesView, NotificationViewSet
 from receiving.views import GateInViewSet
@@ -196,7 +196,7 @@ router.register("item-types", ItemTypeViewSet, basename="item-type")
 router.register("clients", ClientViewSet, basename="client")
 router.register("sites", SiteViewSet, basename="site")
 router.register("site-references", SiteReferenceViewSet, basename="site-reference")
-router.register("work-orders", WorkOrderViewSet, basename="work-order")
+router.register("projects", ProjectViewSet, basename="project")
 router.register("locations", LocationViewSet, basename="location")
 router.register("stock-nodes", StockNodeViewSet, basename="stock-node")
 
@@ -281,7 +281,7 @@ v1_patterns = [
     path("stock/installed", InstalledBaseView.as_view(), name="installed-base"),
     path("stock/custody", CustodyStockView.as_view(), name="stock-custody"),
     path("stock/transfers", TransferView.as_view(), name="stock-transfer"),
-    # H4: the operator's question, answered for a site or a work order.
+    # H4: the operator's question, answered for a site or a project.
     path("reconciliation", ReconciliationView.as_view(), name="reconciliation"),
     # L2: what a user will be told, and through which channel.
     path(

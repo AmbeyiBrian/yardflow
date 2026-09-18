@@ -188,8 +188,8 @@ def _destination_type(document) -> str:
     """
     if getattr(document, "site_id", None):
         return "SITE"
-    if getattr(document, "work_order_id", None):
-        return "WORK_ORDER"
+    if getattr(document, "project_id", None):
+        return "PROJECT"
     if getattr(document, "client_id", None):
         return "CLIENT"
     if getattr(document, "to_location_id", None):

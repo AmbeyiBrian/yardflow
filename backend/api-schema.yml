@@ -4112,6 +4112,10 @@ paths:
         description: Number of results to return per page.
         schema:
           type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
       - name: search
         required: false
         in: query
@@ -4138,10 +4142,6 @@ paths:
           * `AWAITING_CLOSEOUT` - Awaiting closeout
           * `CLOSED` - Closed
           * `CANCELLED` - Cancelled
-      - in: query
-        name: work_order
-        schema:
-          type: integer
       tags:
       - jobs
       security:
@@ -4954,6 +4954,250 @@ paths:
                 items:
                   $ref: '#/components/schemas/PermissionCatalogue'
           description: ''
+  /api/v1/projects:
+    get:
+      operationId: projects_list
+      description: '``/api/v1/projects`` (C7, D14 — optional throughout).'
+      parameters:
+      - in: query
+        name: client
+        schema:
+          type: integer
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - CLOSED
+          - OPEN
+        description: |-
+          * `OPEN` - Open
+          * `CLOSED` - Closed
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProjectList'
+          description: ''
+    post:
+      operationId: projects_create
+      description: '``/api/v1/projects`` (C7, D14 — optional throughout).'
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}:
+    get:
+      operationId: projects_retrieve
+      description: '``/api/v1/projects`` (C7, D14 — optional throughout).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    put:
+      operationId: projects_update
+      description: '``/api/v1/projects`` (C7, D14 — optional throughout).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    patch:
+      operationId: projects_partial_update
+      description: '``/api/v1/projects`` (C7, D14 — optional throughout).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    delete:
+      operationId: projects_destroy
+      description: '``/api/v1/projects`` (C7, D14 — optional throughout).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/projects/{id}/close:
+    post:
+      operationId: projects_close_create
+      description: |-
+        Close a project, warning on unreconciled material (C7).
+
+        A warning, not a block: C7 says "closing it warns". Blocking would be
+        H5's rule, and that applies to jobs, not projects.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}/unreconciled:
+    get:
+      operationId: projects_unreconciled_retrieve
+      description: What remains unaccounted for (C7). Real figures arrive with T5.7.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
   /api/v1/qr/scan:
     get:
       operationId: qr_scan_retrieve
@@ -5016,20 +5260,20 @@ paths:
       description: |-
         ``/api/v1/reconciliation`` (H4, T5.7).
 
-        Takes a site or a work order and answers the operator's question. It reads
+        Takes a site or a project and answers the operator's question. It reads
         the ledger only, so it needs no permission of its own beyond membership —
         what it can show is already limited to the tenant in context (A3).
       parameters:
+      - in: query
+        name: project
+        schema:
+          type: string
+        description: Project id to reconcile.
       - in: query
         name: site
         schema:
           type: string
         description: Site id to reconcile.
-      - in: query
-        name: work_order
-        schema:
-          type: string
-        description: Work order id to reconcile.
       tags:
       - reconciliation
       security:
@@ -7353,250 +7597,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Variance'
           description: ''
-  /api/v1/work-orders:
-    get:
-      operationId: work_orders_list
-      description: '``/api/v1/work-orders`` (C7, D14 — optional throughout).'
-      parameters:
-      - in: query
-        name: client
-        schema:
-          type: integer
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: status
-        schema:
-          type: string
-          enum:
-          - CLOSED
-          - OPEN
-        description: |-
-          * `OPEN` - Open
-          * `CLOSED` - Closed
-      tags:
-      - work-orders
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedWorkOrderList'
-          description: ''
-    post:
-      operationId: work_orders_create
-      description: '``/api/v1/work-orders`` (C7, D14 — optional throughout).'
-      tags:
-      - work-orders
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkOrder'
-          description: ''
-  /api/v1/work-orders/{id}:
-    get:
-      operationId: work_orders_retrieve
-      description: '``/api/v1/work-orders`` (C7, D14 — optional throughout).'
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this work order.
-        required: true
-      tags:
-      - work-orders
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkOrder'
-          description: ''
-    put:
-      operationId: work_orders_update
-      description: '``/api/v1/work-orders`` (C7, D14 — optional throughout).'
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this work order.
-        required: true
-      tags:
-      - work-orders
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkOrder'
-          description: ''
-    patch:
-      operationId: work_orders_partial_update
-      description: '``/api/v1/work-orders`` (C7, D14 — optional throughout).'
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this work order.
-        required: true
-      tags:
-      - work-orders
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedWorkOrderRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedWorkOrderRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedWorkOrderRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkOrder'
-          description: ''
-    delete:
-      operationId: work_orders_destroy
-      description: '``/api/v1/work-orders`` (C7, D14 — optional throughout).'
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this work order.
-        required: true
-      tags:
-      - work-orders
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/v1/work-orders/{id}/close:
-    post:
-      operationId: work_orders_close_create
-      description: |-
-        Close a work order, warning on unreconciled material (C7).
-
-        A warning, not a block: C7 says "closing it warns". Blocking would be
-        H5's rule, and that applies to jobs, not work orders.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this work order.
-        required: true
-      tags:
-      - work-orders
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/WorkOrderRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkOrder'
-          description: ''
-  /api/v1/work-orders/{id}/unreconciled:
-    get:
-      operationId: work_orders_unreconciled_retrieve
-      description: What remains unaccounted for (C7). Real figures arrive with T5.7.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this work order.
-        required: true
-      tags:
-      - work-orders
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkOrder'
-          description: ''
 components:
   schemas:
     ActionEnum:
@@ -9491,7 +9491,7 @@ components:
         site:
           type: integer
           nullable: true
-        work_order:
+        project:
           type: integer
           nullable: true
         client:
@@ -9797,7 +9797,7 @@ components:
         site:
           type: integer
           nullable: true
-        work_order:
+        project:
           type: integer
           nullable: true
         client:
@@ -10048,7 +10048,7 @@ components:
         site_ref:
           type: string
           readOnly: true
-        work_order:
+        project:
           type: integer
           nullable: true
         assignee:
@@ -10302,7 +10302,7 @@ components:
           type: integer
         site:
           type: integer
-        work_order:
+        project:
           type: integer
           nullable: true
         assignee:
@@ -11365,6 +11365,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Organization'
+    PaginatedProjectList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
     PaginatedReelList:
       type: object
       required:
@@ -11593,25 +11612,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Variance'
-    PaginatedWorkOrderList:
-      type: object
-      required:
-      - results
-      properties:
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/WorkOrder'
     PasswordResetConfirmRequest:
       type: object
       description: Set a new password from a reset or invitation token.
@@ -11859,7 +11859,7 @@ components:
         site:
           type: integer
           nullable: true
-        work_order:
+        project:
           type: integer
           nullable: true
         client:
@@ -11980,7 +11980,7 @@ components:
           type: integer
         site:
           type: integer
-        work_order:
+        project:
           type: integer
           nullable: true
         assignee:
@@ -12116,6 +12116,25 @@ components:
           maxLength: 3
         notification_channels: {}
         notification_matrix: {}
+    PatchedProjectRequest:
+      type: object
+      properties:
+        client:
+          type: integer
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        sites:
+          type: array
+          items:
+            type: integer
+        close_reason:
+          type: string
+          maxLength: 500
     PatchedRoleRequest:
       type: object
       description: 'B4: roles are data. A tenant may invent any role it likes.'
@@ -12226,25 +12245,6 @@ components:
           items:
             type: integer
           writeOnly: true
-    PatchedWorkOrderRequest:
-      type: object
-      properties:
-        client:
-          type: integer
-        reference:
-          type: string
-          minLength: 1
-          maxLength: 100
-        description:
-          type: string
-          maxLength: 500
-        sites:
-          type: array
-          items:
-            type: integer
-        close_reason:
-          type: string
-          maxLength: 500
     PermissionCatalogue:
       type: object
       description: The permission registry, for building the role editor (T2.15, B4).
@@ -12272,6 +12272,90 @@ components:
             additionalProperties: {}
       required:
       - groups
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        client_name:
+          type: string
+          readOnly: true
+        reference:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        sites:
+          type: array
+          items:
+            type: integer
+        site_count:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ProjectStatusEnum'
+          readOnly: true
+        opened_at:
+          type: string
+          format: date-time
+          readOnly: true
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        closed_with_unreconciled:
+          type: boolean
+          readOnly: true
+          description: Closed while material remained unreconciled, with a reason.
+        close_reason:
+          type: string
+          maxLength: 500
+      required:
+      - client
+      - client_name
+      - closed_at
+      - closed_with_unreconciled
+      - id
+      - opened_at
+      - reference
+      - site_count
+      - status
+    ProjectRequest:
+      type: object
+      properties:
+        client:
+          type: integer
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        sites:
+          type: array
+          items:
+            type: integer
+        close_reason:
+          type: string
+          maxLength: 500
+      required:
+      - client
+      - reference
+    ProjectStatusEnum:
+      enum:
+      - OPEN
+      - CLOSED
+      type: string
+      description: |-
+        * `OPEN` - Open
+        * `CLOSED` - Closed
     ProvisionTenantRequest:
       type: object
       description: 'A1: name, subdomain and initial owner account.'
@@ -13735,90 +13819,6 @@ components:
           type: integer
       required:
       - credential
-    WorkOrder:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        client:
-          type: integer
-        client_name:
-          type: string
-          readOnly: true
-        reference:
-          type: string
-          maxLength: 100
-        description:
-          type: string
-          maxLength: 500
-        sites:
-          type: array
-          items:
-            type: integer
-        site_count:
-          type: integer
-          readOnly: true
-        status:
-          allOf:
-          - $ref: '#/components/schemas/WorkOrderStatusEnum'
-          readOnly: true
-        opened_at:
-          type: string
-          format: date-time
-          readOnly: true
-        closed_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        closed_with_unreconciled:
-          type: boolean
-          readOnly: true
-          description: Closed while material remained unreconciled, with a reason.
-        close_reason:
-          type: string
-          maxLength: 500
-      required:
-      - client
-      - client_name
-      - closed_at
-      - closed_with_unreconciled
-      - id
-      - opened_at
-      - reference
-      - site_count
-      - status
-    WorkOrderRequest:
-      type: object
-      properties:
-        client:
-          type: integer
-        reference:
-          type: string
-          minLength: 1
-          maxLength: 100
-        description:
-          type: string
-          maxLength: 500
-        sites:
-          type: array
-          items:
-            type: integer
-        close_reason:
-          type: string
-          maxLength: 500
-      required:
-      - client
-      - reference
-    WorkOrderStatusEnum:
-      enum:
-      - OPEN
-      - CLOSED
-      type: string
-      description: |-
-        * `OPEN` - Open
-        * `CLOSED` - Closed
   securitySchemes:
     jwtAuth:
       type: http

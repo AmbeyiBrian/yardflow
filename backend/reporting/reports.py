@@ -467,16 +467,16 @@ class OverdueCustodyReport(Report):
 
 @register
 class ConsumptionReport(Report):
-    """M1: "consumption per site and per work order".
+    """M1: "consumption per site and per project".
 
-    Reads `reconcile_site` and `reconcile_work_order` — the same functions T5.7
+    Reads `reconcile_site` and `reconcile_project` — the same functions T5.7
     is tested against. That is what makes T7.3's criterion ("the consumption
     report reconciles with T5.7") structural rather than coincidental: there is
     only one implementation of the four figures.
     """
 
     slug = "consumption"
-    title = "Consumption per site or work order"
+    title = "Consumption per site or project"
     description = "Issued, installed, consumed, returned — and what is unexplained."
     requirement = "M1, H4"
     columns = (
@@ -490,19 +490,19 @@ class ConsumptionReport(Report):
     )
     filters = (
         SITE_FILTER,
-        Filter("work_order", "Work order", kind="reference", resource="work-orders"),
+        Filter("project", "Project", kind="reference", resource="projects"),
     )
 
     def rows(self, params: dict):
-        from jobs.reconciliation import reconcile_site, reconcile_work_order
-        from network.models import Site, WorkOrder
+        from jobs.reconciliation import reconcile_project, reconcile_site
+        from network.models import Project, Site
 
         if params.get("site"):
             site = Site.objects.filter(pk=params["site"]).first()
             result = reconcile_site(site) if site else {"items": []}
-        elif params.get("work_order"):
-            order = WorkOrder.objects.filter(pk=params["work_order"]).first()
-            result = reconcile_work_order(order) if order else {"items": []}
+        elif params.get("project"):
+            order = Project.objects.filter(pk=params["project"]).first()
+            result = reconcile_project(order) if order else {"items": []}
         else:
             # Neither named: every site with anything issued against it. Slower,
             # but "which sites have material unaccounted for?" is the question an

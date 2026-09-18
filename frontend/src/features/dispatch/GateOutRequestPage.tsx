@@ -4,7 +4,7 @@
  * The criterion is a stopwatch: "a technician raises a request from a phone in
  * **under a minute**." Three decisions follow from that and nothing else.
  *
- * *The destination is one choice, not four.* F1 allows a site, a work order, a
+ * *The destination is one choice, not four.* F1 allows a site, a project, a
  * client or a location, and the model enforces exactly one (§4.7). Four separate
  * pickers would mean reading all four to find the one that applies, so this asks
  * "where is it going?" once and then asks for the right thing.
@@ -40,7 +40,7 @@ import {
 } from '../../components/ui';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Reel, SerialUnit, StockBalance } from '../receiving/types';
-import type { Client, ItemType, Location, Site, WorkOrder } from '../settings/types';
+import type { Client, ItemType, Location, Site, Project } from '../settings/types';
 import type { GateOut, GateOutLine, GateOutPurpose } from './types';
 
 const DRAFT_KEY = 'yardflow.gate-out.draft';
@@ -58,7 +58,7 @@ const PURPOSES: { value: GateOutPurpose; label: string; hint: string }[] = [
   { value: 'LOAN', label: 'Loan', hint: 'Expected back, so it goes on somebody’s record.' },
 ];
 
-type DestinationKind = 'site' | 'work_order' | 'client' | 'to_location';
+type DestinationKind = 'site' | 'project' | 'client' | 'to_location';
 
 interface Draft {
   purpose_type: GateOutPurpose;
@@ -140,13 +140,13 @@ export default function GateOutRequestPage() {
     // what the picker shows.
     const kind: DestinationKind = document.site
       ? 'site'
-      : document.work_order
-        ? 'work_order'
+      : document.project
+        ? 'project'
         : document.client
           ? 'client'
           : 'to_location';
     const destinationId =
-      document.site ?? document.work_order ?? document.client ?? document.to_location;
+      document.site ?? document.project ?? document.client ?? document.to_location;
 
     setDraft({
       purpose_type: document.purpose_type,
@@ -163,7 +163,7 @@ export default function GateOutRequestPage() {
 
   const locations = useList<Location>('locations', { page_size: 200 });
   const sites = useList<Site>('sites', { page_size: 300 });
-  const workOrders = useList<WorkOrder>('work-orders', { page_size: 200 });
+  const projects = useList<Project>('projects', { page_size: 200 });
   const clients = useList<Client>('clients', { page_size: 200 });
   const people = useList<{ id: number; full_name: string }>('users', { page_size: 200 });
 
@@ -212,8 +212,8 @@ export default function GateOutRequestPage() {
       // Exactly one destination — the model refuses more, and refuses none
       // (§4.7). Sending only the chosen one is what makes that easy to satisfy.
       site: draft.destination_kind === 'site' ? Number(draft.destination_id) : null,
-      work_order:
-        draft.destination_kind === 'work_order' ? Number(draft.destination_id) : null,
+      project:
+        draft.destination_kind === 'project' ? Number(draft.destination_id) : null,
       client: draft.destination_kind === 'client' ? Number(draft.destination_id) : null,
       to_location:
         draft.destination_kind === 'to_location' ? Number(draft.destination_id) : null,
@@ -254,11 +254,11 @@ export default function GateOutRequestPage() {
       })),
     },
     {
-      kind: 'work_order',
-      label: 'A work order',
-      options: (workOrders.data?.results ?? []).map((order) => ({
-        id: order.id,
-        label: order.reference,
+      kind: 'project',
+      label: 'A project',
+      options: (projects.data?.results ?? []).map((project) => ({
+        id: project.id,
+        label: project.reference,
       })),
     },
     {
@@ -328,7 +328,7 @@ export default function GateOutRequestPage() {
         <Field
           label="Where it is going"
           htmlFor="go-destination-kind"
-          hint="A work order is optional — a site on its own is fine."
+          hint="A project is optional — a site on its own is fine."
         >
           <Select
             id="go-destination-kind"

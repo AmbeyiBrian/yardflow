@@ -32,7 +32,7 @@ from jobs.models import (
     Variance,
     VarianceStatus,
 )
-from jobs.reconciliation import reconcile_job, reconcile_site, reconcile_work_order
+from jobs.reconciliation import reconcile_job, reconcile_project, reconcile_site
 from jobs.services import close_job, resolve_variance, submit_closeout
 
 
@@ -53,7 +53,7 @@ class JobSerializer(serializers.ModelSerializer):
             "site",
             "site_name",
             "site_ref",
-            "work_order",
+            "project",
             "assignee",
             "assignee_name",
             "description",
@@ -198,8 +198,8 @@ class JobViewSet(TenantScopedViewSet):
 
     serializer_class = JobSerializer
     model = Job
-    select_related = ("site", "client", "work_order", "assignee", "closed_by")
-    filterset_fields = ["status", "site", "client", "work_order"]
+    select_related = ("site", "client", "project", "assignee", "closed_by")
+    filterset_fields = ["status", "site", "client", "project"]
     # `assignee` is handled in get_queryset so it can accept "me"; leaving it in
     # filterset_fields as well would make django-filter try to cast "me" to an
     # id and 400 the request.
@@ -549,7 +549,7 @@ def _overdue_custody(organization_id) -> list[dict]:
 class ReconciliationView(APIView):
     """``/api/v1/reconciliation`` (H4, T5.7).
 
-    Takes a site or a work order and answers the operator's question. It reads
+    Takes a site or a project and answers the operator's question. It reads
     the ledger only, so it needs no permission of its own beyond membership —
     what it can show is already limited to the tenant in context (A3).
     """
@@ -560,7 +560,7 @@ class ReconciliationView(APIView):
         parameters=[
             OpenApiParameter("site", description="Site id to reconcile.", required=False),
             OpenApiParameter(
-                "work_order", description="Work order id to reconcile.", required=False
+                "project", description="Project id to reconcile.", required=False
             ),
         ],
         responses={
@@ -576,10 +576,10 @@ class ReconciliationView(APIView):
         },
     )
     def get(self, request):  # type: ignore[no-untyped-def]
-        from network.models import Site, WorkOrder
+        from network.models import Project, Site
 
         site_id = request.query_params.get("site")
-        work_order_id = request.query_params.get("work_order")
+        project_id = request.query_params.get("project")
 
         if site_id:
             site = Site.objects.filter(pk=site_id).first()
@@ -587,14 +587,14 @@ class ReconciliationView(APIView):
                 raise _not_found()
             return Response(reconcile_site(site))
 
-        if work_order_id:
-            work_order = WorkOrder.objects.filter(pk=work_order_id).first()
-            if work_order is None:
+        if project_id:
+            project = Project.objects.filter(pk=project_id).first()
+            if project is None:
                 raise _not_found()
-            return Response(reconcile_work_order(work_order))
+            return Response(reconcile_project(project))
 
         raise serializers.ValidationError(
-            {"site": ["Name a site or a work order to reconcile (H4)."]}
+            {"site": ["Name a site or a project to reconcile (H4)."]}
         )
 
 

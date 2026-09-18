@@ -3,7 +3,7 @@
 import factory
 from factory.django import DjangoModelFactory
 
-from network.models import Client, Site, SiteReference, WorkOrder
+from network.models import Client, Project, Site, SiteReference
 
 
 class ClientFactory(DjangoModelFactory):
@@ -31,9 +31,9 @@ class SiteReferenceFactory(DjangoModelFactory):
     value = factory.Sequence(lambda n: f"REF{n}")
 
 
-class WorkOrderFactory(DjangoModelFactory):
+class ProjectFactory(DjangoModelFactory):
     class Meta:
-        model = WorkOrder
+        model = Project
 
     client = factory.SubFactory(ClientFactory)
     reference = factory.Sequence(lambda n: f"WO-{2000 + n}")

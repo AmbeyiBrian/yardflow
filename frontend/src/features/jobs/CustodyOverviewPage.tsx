@@ -14,7 +14,7 @@
  * carrying. Overdue rows carry the holder's id for exactly that (I4).
  *
  * Reconciliation is a sibling screen rather than a section here: H4's four
- * figures are per *site or work order*, not per person, and the operator
+ * figures are per *site or project*, not per person, and the operator
  * conversation it exists for is a different conversation.
  */
 
@@ -253,20 +253,20 @@ function HolderSheet({
  * which number is wrong.
  */
 export function ReconciliationPage() {
-  const [scope, setScope] = useState<'site' | 'work_order'>('site');
+  const [scope, setScope] = useState<'site' | 'project'>('site');
   const [target, setTarget] = useState('');
 
   const sites = useList<{ id: number; name: string; internal_ref: string }>('sites', {
     page_size: 200,
   });
-  const workOrders = useList<{ id: number; reference: string; title: string }>(
-    'work-orders',
+  const projects = useList<{ id: number; reference: string; title: string }>(
+    'projects',
     { page_size: 200 },
   );
 
   const result = useResource<Reconciliation>(
     'reconciliation',
-    scope === 'site' ? { site: target } : { work_order: target },
+    scope === 'site' ? { site: target } : { project: target },
     { enabled: Boolean(target) },
   );
 
@@ -294,12 +294,12 @@ export function ReconciliationPage() {
             id="scope"
             value={scope}
             onChange={(event) => {
-              setScope(event.target.value as 'site' | 'work_order');
+              setScope(event.target.value as 'site' | 'project');
               setTarget('');
             }}
           >
             <option value="site">Site</option>
-            <option value="work_order">Work order</option>
+            <option value="project">Project</option>
           </Select>
         </div>
         <div className="flex-1">
@@ -319,9 +319,9 @@ export function ReconciliationPage() {
                     {site.name}
                   </option>
                 ))
-              : (workOrders.data?.results ?? []).map((order) => (
-                  <option key={order.id} value={order.id}>
-                    {order.reference} {order.title}
+              : (projects.data?.results ?? []).map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.reference} {project.title}
                   </option>
                 ))}
           </Select>
@@ -332,7 +332,7 @@ export function ReconciliationPage() {
 
       {!target ? (
         <EmptyState
-          title="Pick a site or a work order."
+          title="Pick a site or a project."
           hint="This is the screen the operator's question gets answered from."
         />
       ) : result.isLoading ? (

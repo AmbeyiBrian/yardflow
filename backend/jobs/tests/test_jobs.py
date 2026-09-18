@@ -48,7 +48,7 @@ from jobs.models import (
     VarianceStatus,
     VarianceType,
 )
-from jobs.reconciliation import reconcile_site, reconcile_work_order
+from jobs.reconciliation import reconcile_project, reconcile_site
 from jobs.services import (
     CloseoutNotReady,
     JobHasUnaccountedMaterial,
@@ -59,7 +59,7 @@ from jobs.services import (
 )
 from locations.factories import YardFactory
 from locations.nodes import external_node, node_for_user
-from network.factories import ClientFactory, SiteFactory, WorkOrderFactory
+from network.factories import ClientFactory, ProjectFactory, SiteFactory
 from receiving.models import GateIn, GateInLine, GateInSource
 from stock.models import Condition, MovementType
 from stock.services import MovementRequest, balance_at, post_movement
@@ -204,17 +204,17 @@ class TestJob:
         assert job.assignee == technician
         assert job.status == JobStatus.OPEN
 
-    def test_a_work_order_is_optional(self, tenant, site, technician):
+    def test_a_project_is_optional(self, tenant, site, technician):
         """C7, D14: optional throughout."""
         job = Job.objects.create(
             organization=tenant,
             client=site.client,
             site=site,
             assignee=technician,
-            work_order=None,
+            project=None,
         )
 
-        assert job.work_order_id is None
+        assert job.project_id is None
 
     def test_a_closed_job_records_when(self, tenant, job):
         from django.db import IntegrityError
@@ -591,42 +591,42 @@ class TestReconciliation:
 
         assert all(entry["issued"] == 0 for entry in result["items"])
 
-    def test_a_work_order_reconciles_across_its_sites(
+    def test_a_project_reconciles_across_its_sites(
         self, tenant, yard, storekeeper, technician
     ):
-        """H4: per work order as well as per site."""
+        """H4: per project as well as per site."""
         client = ClientFactory(name="Safaricom")
-        work_order = WorkOrderFactory(client=client, reference="WO-2001")
+        project = ProjectFactory(client=client, reference="WO-2001")
         first = SiteFactory(client=client, internal_ref="SLV-1")
         second = SiteFactory(client=client, internal_ref="SLV-2")
-        work_order.sites.add(first, second)
+        project.sites.add(first, second)
 
         item = ItemTypeFactory(name="Antenna")
         stock_in(tenant, yard.node, item, 50)
         issue_to(tenant, yard, item, 6, storekeeper, technician, first)
         issue_to(tenant, yard, item, 4, storekeeper, technician, second)
 
-        result = reconcile_work_order(work_order)
+        result = reconcile_project(project)
 
         assert result["totals"]["issued"] == Decimal("10")
 
-    def test_closing_a_work_order_warns_rather_than_blocks(
+    def test_closing_a_project_warns_rather_than_blocks(
         self, tenant, yard, storekeeper, technician
     ):
         """C7: "closing it warns if material remains unreconciled".
 
-        Blocking is H5's rule and applies to jobs, not work orders.
+        Blocking is H5's rule and applies to jobs, not projects.
         """
         client = ClientFactory()
-        work_order = WorkOrderFactory(client=client)
+        project = ProjectFactory(client=client)
         site = SiteFactory(client=client)
-        work_order.sites.add(site)
+        project.sites.add(site)
 
         item = ItemTypeFactory()
         stock_in(tenant, yard.node, item, 20)
         issue_to(tenant, yard, item, 5, storekeeper, technician, site)
 
-        summary = work_order.unreconciled_summary()
+        summary = project.unreconciled_summary()
 
         assert summary["available"] is True
         assert summary["unreconciled"] is True

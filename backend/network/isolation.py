@@ -4,7 +4,7 @@ from core.isolation import register_isolation_fixture
 
 
 def register() -> None:
-    from network.models import Client, Site, SiteReference, WorkOrder
+    from network.models import Client, Project, Site, SiteReference
 
     def make_client(organization):
         return Client.objects.create(organization=organization, name="Isolation Operator")
@@ -25,8 +25,8 @@ def register() -> None:
             value="ISO-REF-1",
         )
 
-    def make_work_order(organization):
-        return WorkOrder.objects.create(
+    def make_project(organization):
+        return Project.objects.create(
             organization=organization,
             client=make_client(organization),
             reference="ISO-WO-1",
@@ -40,5 +40,5 @@ def register() -> None:
         "site-reference", make_site_reference, payload={"label": "Renamed", "value": "X"}
     )
     register_isolation_fixture(
-        "work-order", make_work_order, payload={"reference": "ISO-WO-1"}
+        "project", make_project, payload={"reference": "ISO-WO-1"}
     )

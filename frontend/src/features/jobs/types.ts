@@ -26,7 +26,7 @@ export interface Job {
   site: number | null;
   site_name: string;
   site_ref: string;
-  work_order: number | null;
+  project: number | null;
   assignee: number | null;
   assignee_name: string;
   description: string;

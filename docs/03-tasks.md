@@ -883,7 +883,7 @@ half-applied one breaks the gate.
 
 Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
 
-- [ ] **T10.1 `[B]` Rename WorkOrder to Project**
+- [x] **T10.1 `[B]` Rename WorkOrder to Project**
   Refs: §4.4, §4.14 · O1, D20
   `RenameModel` WorkOrder → Project, `RenameField` on `Job.work_order` and `GateOut.work_order`,
   then drop and recreate `gate_out_has_exactly_one_destination` because it names the column. Route

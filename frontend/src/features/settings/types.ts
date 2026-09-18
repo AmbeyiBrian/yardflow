@@ -92,7 +92,7 @@ export interface SiteReference {
   value: string;
 }
 
-export interface WorkOrder {
+export interface Project {
   id: number;
   client: number;
   client_name?: string;

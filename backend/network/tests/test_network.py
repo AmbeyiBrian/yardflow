@@ -1,4 +1,4 @@
-"""T2.7–T2.10 — clients, sites, references and work orders (§4.4; C5–C7, D13, D14)."""
+"""T2.7–T2.10 — clients, sites, references and projects (§4.4; C5–C7, D13, D14)."""
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -7,11 +7,11 @@ from django.db import IntegrityError, transaction
 from core.rls import rls_bypass
 from network.factories import (
     ClientFactory,
+    ProjectFactory,
     SiteFactory,
     SiteReferenceFactory,
-    WorkOrderFactory,
 )
-from network.models import Client, Site, SiteReference, SiteStatus, WorkOrderStatus
+from network.models import Client, ProjectStatus, Site, SiteReference, SiteStatus
 
 
 class TestClient:
@@ -27,7 +27,7 @@ class TestClient:
         """C6: optional is the important word.
 
         Operator formats are unpublished (D13). A client with no pattern must
-        accept whatever the work order says.
+        accept whatever the project says.
         """
         client = ClientFactory(name="Towerco", site_code_pattern="")
 
@@ -65,7 +65,7 @@ class TestSiteRegister:
     def test_radio_identifiers_are_never_validated(self, tenant):
         """C6: "may be captured as free fields, never validated".
 
-        These come off a work order in whatever form the operator wrote them.
+        These come off a project in whatever form the operator wrote them.
         Rejecting one would stop work over a formatting opinion.
         """
         site = SiteFactory(cell_id="not a real cell id!!", enodeb_id="???")
@@ -163,58 +163,58 @@ class TestSiteReferences:
         SiteReferenceFactory(site=site, label="Towerco ref", value="whatever/they-use")
 
 
-class TestWorkOrders:
+class TestProjects:
     """C7, D14: optional throughout."""
 
-    def test_a_work_order_groups_sites_under_a_client(self, tenant):
+    def test_a_project_groups_sites_under_a_client(self, tenant):
         client = ClientFactory()
-        work_order = WorkOrderFactory(client=client, reference="WO-2001")
-        work_order.sites.add(SiteFactory(client=client), SiteFactory(client=client))
+        project = ProjectFactory(client=client, reference="WO-2001")
+        project.sites.add(SiteFactory(client=client), SiteFactory(client=client))
 
-        assert work_order.sites.count() == 2
+        assert project.sites.count() == 2
 
-    def test_a_work_order_may_have_no_sites(self, tenant):
+    def test_a_project_may_have_no_sites(self, tenant):
         """D14: optional means it must not require anything to be usable."""
-        assert WorkOrderFactory().sites.count() == 0
+        assert ProjectFactory().sites.count() == 0
 
     def test_references_are_unique_within_a_tenant(self, tenant):
-        WorkOrderFactory(reference="WO-2001")
+        ProjectFactory(reference="WO-2001")
 
         with pytest.raises(IntegrityError), transaction.atomic():
-            WorkOrderFactory(reference="WO-2001")
+            ProjectFactory(reference="WO-2001")
 
-    def test_a_work_order_opens_in_the_open_state(self, tenant):
-        work_order = WorkOrderFactory()
+    def test_a_project_opens_in_the_open_state(self, tenant):
+        project = ProjectFactory()
 
-        assert work_order.status == WorkOrderStatus.OPEN
-        assert work_order.closed_at is None
+        assert project.status == ProjectStatus.OPEN
+        assert project.closed_at is None
 
-    def test_a_closed_work_order_must_record_when(self, tenant):
+    def test_a_closed_project_must_record_when(self, tenant):
         """Otherwise "closed" carries no information an auditor can use."""
-        work_order = WorkOrderFactory()
+        project = ProjectFactory()
 
-        work_order.status = WorkOrderStatus.CLOSED
+        project.status = ProjectStatus.CLOSED
         with pytest.raises(IntegrityError), transaction.atomic():
-            work_order.save()
+            project.save()
 
     def test_closing_with_a_timestamp_is_accepted(self, tenant):
         from django.utils import timezone
 
-        work_order = WorkOrderFactory()
-        work_order.status = WorkOrderStatus.CLOSED
-        work_order.closed_at = timezone.now()
-        work_order.save()
+        project = ProjectFactory()
+        project.status = ProjectStatus.CLOSED
+        project.closed_at = timezone.now()
+        project.save()
 
-        work_order.refresh_from_db()
-        assert work_order.status == WorkOrderStatus.CLOSED
+        project.refresh_from_db()
+        assert project.status == ProjectStatus.CLOSED
 
-    def test_a_work_order_with_no_material_reconciles(self, tenant):
+    def test_a_project_with_no_material_reconciles(self, tenant):
         """C7: closing warns only when material is actually unreconciled.
 
         A zero here is now an answer rather than a placeholder — T5.7 built the
         reconciliation, so nothing issued genuinely means nothing outstanding.
         """
-        summary = WorkOrderFactory().unreconciled_summary()
+        summary = ProjectFactory().unreconciled_summary()
 
         assert summary["available"] is True
         assert summary["unreconciled"] is False
