@@ -874,6 +874,179 @@ The system's reason for existing. After this phase, Silvertech has something wor
 
 ---
 
+## Phase 10 — Projects and commercials
+
+Epic O. Phases 1–8 are built, so this phase changes **live structures**: a model rename touching
+three apps, and two columns that in a fresh build would have landed back in phases 3 and 4. Order
+matters more here than anywhere else in this document — the rename comes first and alone, because a
+half-applied one breaks the gate.
+
+Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
+
+- [ ] **T10.1 `[B]` Rename WorkOrder to Project**
+  Refs: §4.4, §4.14 · O1, D20
+  `RenameModel` WorkOrder → Project, `RenameField` on `Job.work_order` and `GateOut.work_order`,
+  then drop and recreate `gate_out_has_exactly_one_destination` because it names the column. Route
+  `/work-orders` becomes `/projects`. No new fields in this task.
+  *Done when:* the existing suite passes **unchanged**, existing work orders read as projects, and
+  the destination constraint still refuses a pass with two destinations.
+
+- [ ] **T10.2 `[B]` Project PO fields**
+  Refs: §4.14 · O1
+  `po_number` (unique per organization when set), `title`, `manager`, `contract_value`,
+  `cost_budget`, `starts_on`, `target_completion_on`, `CANCELLED` status, and the check constraint
+  `a_po_project_is_fully_specified`.
+  *Done when:* a project carrying a `po_number` with no manager is refused **by the database**, and
+  a project without one saves exactly as a work order did.
+
+- [ ] **T10.3 `[B]` Variations**
+  Refs: §4.14 · O2
+  `ProjectVariation` with value and budget deltas, append-only, approved by the owner.
+  `current_contract_value` reads original plus approved deltas.
+  *Done when:* `contract_value` is never written a second time, a negative delta reduces the current
+  value, and an approved variation cannot be edited.
+
+- [ ] **T10.4 `[B]` Subcontractor register**
+  Refs: §4.14 · O4
+  Name, code, contacts, `is_active`. Unique per tenant, `PROTECT` once referenced.
+  *Done when:* a referenced subcontractor can be deactivated but not deleted.
+
+- [ ] **T10.5 `[B]` Job delivery mode**
+  Refs: §4.14 · O3
+  `delivery_mode`, `subcontractor`, `agreed_price`, paired by check constraint. Both immutable once
+  the job is `CLOSED`.
+  *Done when:* `SUBCONTRACTED` without a price is refused, and changing the price on a closed job is
+  refused — it would rewrite a cost already counted.
+
+- [ ] **T10.6 `[B]` Movement valuation columns**
+  Refs: §3.2, §4.14 · O11, D27
+  `unit_cost` and `unit_cost_source` on `StockMovement`, captured when the movement posts. **This is
+  the retrofit named in §15:** movements that already exist cannot be valued without guessing, so
+  they carry `NONE`.
+  *Done when:* a movement posted today carries the cost that applied today, repricing the item type
+  afterwards leaves it unchanged, and historical rows read as `NONE` rather than as zero.
+
+- [ ] **T10.7 `[B]` Declared client value on gate-in**
+  Refs: §4.6, §4.14 · O11
+  Client-owned receipt lines carry `declared_unit_value`, feeding `unit_cost_source =
+  CLIENT_DECLARED`. This is the figure the operator debits on a shortfall, not what the item costs
+  us.
+  *Done when:* a client-owned receipt with no declared value posts as unvalued and is reported that
+  way, never as zero.
+
+- [ ] **T10.8 `[B]` `required_user` on ApprovalRequest**
+  Refs: §5.4 · O6
+  Nullable FK plus a check that **at most one** of `required_role` and `required_user` is set —
+  neither stays legal, for §5.2's auto-approval row. No routing change in this task.
+  *Done when:* every existing approval test passes unchanged and a row with both is rejected.
+
+- [ ] **T10.9 `[B]` Project routing in the engine**
+  Refs: §5.4 · O6, D22, D28
+  `project_of(document)`, branching before `collect_facts`. `self_approved` recorded on the action;
+  `due_at` left null so the escalation sweep skips it; `resolve_delegate()` not consulted; an
+  inactive PM raises a domain error naming the project and the remedy.
+  *Done when:* project material never matches a criticality rule, a self-approving PM is recorded
+  rather than blocked, and an inactive PM **raises** instead of falling through to criticality
+  routing.
+
+- [ ] **T10.10 `[B]` Gate-out job attribution**
+  Refs: §4.7, §5.4 · O5
+  `job` FK on `GateOut` as an attribution, not a destination. Where the destination is a site the
+  job must be at that site; the job and its project must be open.
+  *Done when:* a pass naming a job at a different site is refused, and a pass with no job behaves
+  exactly as it does today.
+
+- [ ] **T10.11 `[B]` High-value release notification**
+  Refs: §9, §4.14 · O7
+  Tenant threshold setting; owner and admin notified after a project release above it.
+  *Done when:* a release above the threshold notifies and one below does not, and **neither is
+  delayed by the notification**.
+
+- [ ] **T10.12 `[B]` Day rates**
+  Refs: §4.14 · O15, O14
+  `day_rate` on User and Role, behind the `project.view_rates` permission — owner and admin only.
+  *Done when:* a PM's API response contains no rate field at all, absent rather than null.
+
+- [ ] **T10.13 `[B]` Labour from the closeout**
+  Refs: §4.9, §4.14 · O15
+  Days per person captured on the closeout; `JobLabour` written on confirmation with the rate
+  captured onto the row; `rate_source = NONE` where no rate exists; `overlaps_day` set when that
+  person exceeds one day across all jobs on that date.
+  *Done when:* a person recorded on three jobs in one day is flagged and **not** refused, and a job
+  with no applicable rate reads as uncosted rather than costing zero.
+
+- [ ] **T10.14 `[B]` PM cost acceptance of closeouts**
+  Refs: §4.9 · O8
+  A confirmed closeout on a project job goes to the PM for cost acceptance. Rejection asks for a
+  corrected closeout.
+  *Done when:* stock moves on the storekeeper's confirmation while the PM's acceptance is still
+  pending — the ledger must not wait.
+
+- [ ] **T10.15 `[B]` Expenses**
+  Refs: §4.14 · O16, D29
+  `ExpenseCategory` seeded; `ProjectExpense` recorded by anyone, approved by the PM, append-only
+  after approval with correction by reversing entry, unevidenced entries flagged.
+  *Done when:* an expense reaches project cost only on approval, and an approved one cannot be
+  edited.
+
+- [ ] **T10.16 `[B]` PM level on disposals**
+  Refs: §5.4 · O10
+  The PM is **prepended** to the disposal's own matched levels rather than replacing them.
+  *Done when:* disposing project material needs the PM and the existing approver, in that order.
+
+- [ ] **T10.17 `[B]` The costing engine**
+  Refs: §4.14, §10 · O11
+  `commercials/costing.py` — the six figures in §4.14's table, one queryset each, nothing stored.
+  *Done when:* a full PO lifecycle produces a cost equal to the four lines summed by hand;
+  repricing an item type afterwards leaves a closed project unchanged; and an expectation resolved
+  late **reduces the loss with nobody editing anything**.
+
+- [ ] **T10.18 `[B]` Financial permissions**
+  Refs: §10 · O14
+  `project.view_cost`, `project.view_margin`, `project.view_rates`, applied at the serializer.
+  *Done when:* storekeeper, PM and owner responses are asserted **field by field**; a withheld
+  figure is absent, and the PM's labour total is accompanied by nothing that divides into a rate.
+
+- [ ] **T10.19 `[B]` Project performance reports**
+  Refs: §10 · O12
+  Four report classes: project performance, projects ranked, self-approved releases, uncosted and
+  overlapping labour.
+  *Done when:* each runs through the existing report machinery and exports to Excel and PDF.
+
+- [ ] **T10.20 `[B]` Project close and snapshot**
+  Refs: §4.14 · O13
+  Warn on open jobs and unreconciled material, reason required, `ProjectSnapshot` written, a closed
+  project refuses gate-outs and variations, owner reopen recorded.
+  *Done when:* a reversal posted after close does not move the closed project's reported figures.
+
+- [ ] **T10.21 `[F]` Project screens**
+  Refs: §7.4 · O1, O2, O12, O13
+  List, detail with cost against budget, variations, close.
+  *Done when:* a PM sees cost and budget, an owner also sees value and margin, and a storekeeper
+  cannot reach the screens at all.
+
+- [ ] **T10.22 `[F]` PM approval screens**
+  Refs: §7.4 · O6, O8, O16
+  Queues for material, closeouts and expenses. The material approval shows the budget position and
+  what this release adds; a project over budget is stated and **still approvable**.
+  *Done when:* an over-budget release can be approved after the overrun is shown, and a gate-out on
+  a project with an inactive PM says so in those words and names reassignment as the remedy.
+
+- [ ] **T10.23 `[F]` Days and expense capture**
+  Refs: §7.4 · O15, O16
+  Days per person on the closeout, with the over-a-day warning inline. Expense capture with a
+  receipt photo, reusing the attachment control.
+  *Done when:* a technician records days and an expense on a phone without leaving the job.
+
+- [ ] **T10.24 `[T]` End-to-end project lifecycle**
+  Refs: §14
+  Playwright on a mobile viewport: create a PO project, subcontract one job, issue material through
+  PM approval, close out with days, record and approve an expense, close the project, read the
+  performance report.
+  *Done when:* it runs in CI against a seeded tenant.
+
+---
+
 ## Milestones
 
 | Milestone | Completes | Meaning |
@@ -886,18 +1059,26 @@ The system's reason for existing. After this phase, Silvertech has something wor
 | **M6 — Complete lifecycle** | Phase 6 | Quarantine, disposal and client returns handled. |
 | **M7 — Audit-ready** | Phase 7 | Every report an operator or ISO auditor asks for, exportable. |
 | **M8 — Field-hardened** | Phase 8 | Works with poor connectivity, non-repudiable approvals. |
+| **M9 — Commercially accountable** | Phase 10 | A PO has a manager, a budget and a margin. Answers *did this job make money*, not just *where is the material*. |
 
 **M4 is the point of no return in value terms.** If the schedule compresses, trade scope from
 phases 5–8, never from 1–4.
 
-**All eight milestones are complete.** What remains before a customer uses this in anger is
-Phase 9's deployment work (§12.1) and the two things only Silvertech can supply: the Ujumbe SMS
-account for the SMS channel, and an approved WhatsApp sender if they want that channel enabled
-(it ships written and off, per Q1).
+**Milestones M1–M8 are complete.** The yard is fully accounted for; what phase 10 adds is the
+commercial layer over it.
+
+Still outstanding beyond phase 10: phase 9's deployment work (§12.1), and the two things only
+Silvertech can supply — the Ujumbe SMS account for the SMS channel, and an approved WhatsApp sender
+if they want that channel enabled (it ships written and off, per `D30`).
+
+**Phase 10 carries one risk the earlier phases did not.** T10.1 and T10.6 alter structures the
+running system depends on: a rename across three apps, and a new column on the ledger. Both are
+additive and reversible, but they are the first tasks in this document that touch data already
+worth something. Neither should be batched with anything else.
 
 ---
 
 ## Approval
 
-This is step 3 of 4. On approval, implementation begins at **T1.1**, one task at a time, verified
-against its requirement and ticked before the next starts.
+This is step 3 of 4. Phases 1–8 are complete. On approval, implementation resumes at **T10.1**, one
+task at a time, verified against its requirement and ticked before the next starts.

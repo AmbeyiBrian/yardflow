@@ -1308,17 +1308,20 @@ Each phase ends with something demonstrable.
 | **6. Disposition & client returns** | Quarantine decisions, disposal with approval, client returns, waybills, acknowledgement | J2, J3, K |
 | **7. Reporting** | All day-one reports, Excel and PDF export, async exports, dashboards | M1, M2 |
 | **8. Offline & biometrics** | Service worker, Dexie queue, sync idempotency, exception queue, WebAuthn enrolment and approval step-up, SMS channel | N, B5, F4 |
-| **9. Projects & commercials** | WorkOrder→Project migration, PO fields and variations, subcontractor register, job delivery mode, PM routing, movement valuation, labour, expenses, project performance reporting, financial permissions | O |
+| **9. Production deployment** | The AWS move (§12.1), deferred until the customer is ready | Non-functional |
+| **10. Projects & commercials** | WorkOrder→Project migration, PO fields and variations, subcontractor register, job delivery mode, PM routing, movement valuation, labour, expenses, project performance reporting, financial permissions | O |
 
 Phases 1–4 deliver the system's core value: controlled, approved, auditable gate movements. If the
 schedule compresses, phases 5–8 are where scope can be traded, not earlier.
 
-**Phase 9 is last by dependency, not by importance.** Project cost is a query over the ledger, the
+**Phase 10 is last by dependency, not by importance.** Project cost is a query over the ledger, the
 closeouts and the custody expectations — so it cannot be built before those exist and be worth
 anything. The two pieces that must land **earlier than phase 9** are the `unit_cost` columns on
-`StockMovement` (§3.2), which belong in phase 3 because backfilling a valuation onto historical
-movements is guesswork, and the `required_user` column on `ApprovalRequest` (§5.4), which belongs in
-phase 4 alongside the engine it changes.
+`StockMovement` (§3.2) and the `required_user` column on `ApprovalRequest` (§5.4). Both belonged in
+phases 3 and 4 respectively, and both phases are already built — so they arrive now as migrations
+against live structures instead. Valuation cannot be backfilled onto historical movements without
+guessing, so movements posted before phase 10 carry `unit_cost_source = NONE` and §10 reports the
+projects that include them as partly unvalued, rather than quietly understating them.
 
 ---
 
