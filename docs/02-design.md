@@ -572,12 +572,19 @@ from the free-text `supplier_name` on gate-in, which stays as it is.
 `IN_HOUSE` permits neither. Delivery mode and price are immutable once `status = CLOSED` — changing
 either would rewrite a cost already counted (`O3`).
 
-**JobLabour** — `job`, `person`, `work_date`, `days` Decimal(3,1), `day_rate`, `rate_source`
-(`USER` | `ROLE` | `NONE`), unique on `(job, person, work_date)`. Written when the closeout is
-confirmed, from the days captured on it (`O15`).
+**JobLabour** — `job`, `closeout`, `person`, `work_date`, `days` Decimal(4,1), `day_rate`,
+`rate_source` (`USER` | `ROLE` | `NONE`), `overlaps_day`, unique on `(job, person, work_date)`.
 
-Rate resolution is `User.day_rate` falling back to `Role.day_rate`, **captured onto the row** at
-write time (`D27`). Where neither exists the row is written with a null rate and `rate_source =
+Written when the closeout is **submitted**, not confirmed. Two reasons, found while building it:
+`CloseoutStatus.CONFIRMED` exists on the model but no service ever sets it — H3's confirmation
+happens through gate-in return matching — so "on confirmation" had no hook to hang from. And the
+days are the technician's report about their own week, not a fact about the returns a storekeeper
+checks in; waiting for the storekeeper would not make them truer.
+
+Rate resolution is `User.day_rate` falling back to the **highest** `Role.day_rate` among the roles
+they hold, **captured onto the row** at write time (`D27`). Highest rather than first-found, because
+someone holding both Technician and Supervisor should not be costed differently depending on which
+row happened to be created first. Where neither exists the row is written with a null rate and `rate_source =
 NONE`: the job then appears in §10 as *uncosted labour*, which is honest, where a zero would silently
 flatter the project.
 
