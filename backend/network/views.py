@@ -9,7 +9,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
+from commercials.visibility import may_see_project_cost
 from core.api import TenantScopedViewSet
+from core.field_permissions import PermissionGatedFieldsMixin
 from network.models import (
     Client,
     Project,
@@ -74,7 +76,18 @@ class SiteSerializer(serializers.ModelSerializer):
         )
 
 
-class ProjectSerializer(serializers.ModelSerializer):
+class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer):
+    # O14: two permissions, two different audiences. A manager works to a
+    # budget and needs to see what they have spent against it; the contract
+    # value behind it, and therefore the margin, is the owner's business.
+    #
+    # Withheld at the serializer, not hidden in the interface: a field the API
+    # still returns is not restricted, it is merely out of sight (§10).
+    permission_gated_fields = {
+        PERM.PROJECT_VIEW_COST: ("cost_budget", "current_cost_budget"),
+        PERM.PROJECT_VIEW_MARGIN: ("contract_value", "current_contract_value"),
+    }
+
     client_name = serializers.CharField(source="client.name", read_only=True)
     manager_name = serializers.CharField(source="manager.get_full_name", read_only=True)
     # O2: what the award is worth now. `contract_value` keeps saying what was
@@ -117,6 +130,15 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def get_site_count(self, project: Project) -> int:
         return project.sites.count()
+
+    def to_representation(self, instance):  # type: ignore[no-untyped-def]
+        data = super().to_representation(instance)
+        # O14 scopes a manager to **their own** projects, which a permission
+        # alone cannot express — see `may_see_project_cost`.
+        if not may_see_project_cost(self.context.get("request"), instance):
+            data.pop("cost_budget", None)
+            data.pop("current_cost_budget", None)
+        return data
 
     def validate(self, attrs: dict) -> dict:
         """Say what the check constraint would say, before it says it (O1).
@@ -390,6 +412,17 @@ class ProjectViewSet(TenantScopedViewSet):
     filterset_fields = ["client", "status"]
     search_fields = ["reference", "description"]
     ordering_fields = ["opened_at", "reference"]
+
+    @action(detail=True, methods=["get"])
+    def performance(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """O12: cost against value. Figures the caller may not see are absent."""
+        from commercials.costing import performance_for
+        from commercials.serializers import ProjectPerformanceSerializer
+
+        result = performance_for(self.get_object())
+        return Response(
+            ProjectPerformanceSerializer(result, context={"request": request}).data
+        )
 
     @action(detail=True, methods=["get"])
     def unreconciled(self, request, pk=None):  # type: ignore[no-untyped-def]

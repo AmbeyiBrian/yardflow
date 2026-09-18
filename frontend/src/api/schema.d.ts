@@ -2378,6 +2378,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description O12: cost against value. Figures the caller may not see are absent. */
+        get: operations["projects_performance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/unreconciled": {
         parameters: {
             query?: never;
@@ -5844,6 +5861,18 @@ export interface components {
             incurred_on?: string;
             description?: string;
         };
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         PatchedProjectRequest: {
             client?: number;
             reference?: string;
@@ -5987,6 +6016,18 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         Project: {
             readonly id: number;
             client: number;
@@ -6075,6 +6116,18 @@ export interface components {
          * @enum {string}
          */
         ProjectExpenseStatusEnum: "SUBMITTED" | "APPROVED" | "REJECTED";
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
         ProjectRequest: {
             client: number;
             reference: string;
@@ -11620,6 +11673,28 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["ProjectRequest"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_performance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

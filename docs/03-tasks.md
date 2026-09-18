@@ -1001,7 +1001,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   repricing an item type afterwards leaves a closed project unchanged; and an expectation resolved
   late **reduces the loss with nobody editing anything**.
 
-- [ ] **T10.18 `[B]` Financial permissions**
+- [x] **T10.18 `[B]` Financial permissions**
   Refs: §10 · O14
   `project.view_cost`, `project.view_margin`, `project.view_rates`, applied at the serializer.
   *Done when:* storekeeper, PM and owner responses are asserted **field by field**; a withheld

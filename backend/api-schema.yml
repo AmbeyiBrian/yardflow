@@ -5939,6 +5939,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/Project'
           description: ''
+  /api/v1/projects/{id}/performance:
+    get:
+      operationId: projects_performance_retrieve
+      description: 'O12: cost against value. Figures the caller may not see are absent.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
   /api/v1/projects/{id}/unreconciled:
     get:
       operationId: projects_unreconciled_retrieve
@@ -13455,6 +13477,17 @@ components:
           maxLength: 500
     PatchedProjectRequest:
       type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         client:
           type: integer
@@ -13732,6 +13765,17 @@ components:
       - groups
     Project:
       type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         id:
           type: integer
@@ -13950,6 +13994,17 @@ components:
         * `REJECTED` - Rejected
     ProjectRequest:
       type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
       properties:
         client:
           type: integer
