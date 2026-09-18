@@ -934,7 +934,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a client-owned receipt with no declared value posts as unvalued and is reported that
   way, never as zero.
 
-- [ ] **T10.8 `[B]` `required_user` on ApprovalRequest**
+- [x] **T10.8 `[B]` `required_user` on ApprovalRequest**
   Refs: §5.4 · O6
   Nullable FK plus a check that **at most one** of `required_role` and `required_user` is set —
   neither stays legal, for §5.2's auto-approval row. No routing change in this task.

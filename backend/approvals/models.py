@@ -110,6 +110,19 @@ class ApprovalRequest(TenantModel, TimeStampedModel):
         related_name="approval_requests",
     )
 
+    # O6: project material routes to a *named person* — the project's manager —
+    # where every other level routes to a role. A rule table keyed on category
+    # and criticality cannot express "the manager of whichever project this
+    # happens to be for" without inventing a placeholder role that nobody holds
+    # and anybody could be granted, so the person is carried here instead.
+    required_user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="approval_requests_addressed",
+    )
+
     status = models.CharField(
         max_length=20,
         choices=ApprovalRequestStatus.choices,
@@ -136,6 +149,17 @@ class ApprovalRequest(TenantModel, TimeStampedModel):
         indexes = [
             models.Index(fields=["organization", "document_type", "document_id"]),
             models.Index(fields=["organization", "status", "due_at"]),
+            models.Index(fields=["organization", "required_user", "status"]),
+        ]
+        constraints = [
+            # At most one, never both. *Neither* stays legal, because §5.2's
+            # auto-approval row is exactly that: a request nobody was asked to
+            # answer, kept so the trail has no gap.
+            models.CheckConstraint(
+                condition=Q(required_role__isnull=True)
+                | Q(required_user__isnull=True),
+                name="a_request_is_addressed_to_a_role_or_a_person_not_both",
+            ),
         ]
 
     def __str__(self) -> str:
