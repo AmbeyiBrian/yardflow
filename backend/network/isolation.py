@@ -4,7 +4,14 @@ from core.isolation import register_isolation_fixture
 
 
 def register() -> None:
-    from network.models import Client, Project, ProjectVariation, Site, SiteReference
+    from network.models import (
+        Client,
+        Project,
+        ProjectVariation,
+        Site,
+        SiteReference,
+        Subcontractor,
+    )
 
     def make_client(organization):
         return Client.objects.create(organization=organization, name="Isolation Operator")
@@ -48,6 +55,11 @@ def register() -> None:
             raised_by=User.objects.filter(organization=organization).first(),
         )
 
+    def make_subcontractor(organization):
+        return Subcontractor.objects.create(
+            organization=organization, name="Isolation Contractor"
+        )
+
     register_isolation_fixture("client", make_client, payload={"name": "Renamed"})
     register_isolation_fixture(
         "site", make_site, payload={"name": "Renamed", "internal_ref": "ISO-1"}
@@ -57,6 +69,9 @@ def register() -> None:
     )
     register_isolation_fixture(
         "project", make_project, payload={"reference": "ISO-WO-1"}
+    )
+    register_isolation_fixture(
+        "subcontractor", make_subcontractor, payload={"name": "Renamed"}
     )
     register_isolation_fixture(
         "project-variation",

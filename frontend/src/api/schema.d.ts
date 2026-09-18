@@ -3041,6 +3041,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subcontractors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/subcontractors`` (O4).
+         *
+         *     No destroy action. A contractor referenced by a job is part of that
+         *     project's cost for as long as the record is worth anything, and the
+         *     database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+         *     Deactivating is how one leaves the list.
+         */
+        get: operations["subcontractors_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/subcontractors`` (O4).
+         *
+         *     No destroy action. A contractor referenced by a job is part of that
+         *     project's cost for as long as the record is worth anything, and the
+         *     database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+         *     Deactivating is how one leaves the list.
+         */
+        post: operations["subcontractors_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subcontractors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/subcontractors`` (O4).
+         *
+         *     No destroy action. A contractor referenced by a job is part of that
+         *     project's cost for as long as the record is worth anything, and the
+         *     database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+         *     Deactivating is how one leaves the list.
+         */
+        get: operations["subcontractors_retrieve"];
+        /**
+         * @description ``/api/v1/subcontractors`` (O4).
+         *
+         *     No destroy action. A contractor referenced by a job is part of that
+         *     project's cost for as long as the record is worth anything, and the
+         *     database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+         *     Deactivating is how one leaves the list.
+         */
+        put: operations["subcontractors_update"];
+        post?: never;
+        /**
+         * @description ``/api/v1/subcontractors`` (O4).
+         *
+         *     No destroy action. A contractor referenced by a job is part of that
+         *     project's cost for as long as the record is worth anything, and the
+         *     database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+         *     Deactivating is how one leaves the list.
+         */
+        delete: operations["subcontractors_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description ``/api/v1/subcontractors`` (O4).
+         *
+         *     No destroy action. A contractor referenced by a job is part of that
+         *     project's cost for as long as the record is worth anything, and the
+         *     database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+         *     Deactivating is how one leaves the list.
+         */
+        patch: operations["subcontractors_partial_update"];
+        trace?: never;
+    };
     "/api/v1/sync-exceptions": {
         parameters: {
             query?: never;
@@ -5144,6 +5224,19 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["StockNode"][];
         };
+        PaginatedSubcontractorList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Subcontractor"][];
+        };
         PaginatedSyncExceptionList: {
             /**
              * Format: uri
@@ -5495,6 +5588,15 @@ export interface components {
             counted_at?: string;
             counted_by?: number | null;
             notes?: string;
+        };
+        PatchedSubcontractorRequest: {
+            name?: string;
+            code?: string;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            notes?: string;
+            is_active?: boolean;
         };
         PatchedUserRequest: {
             email?: (string) | null;
@@ -6014,6 +6116,25 @@ export interface components {
          * @enum {string}
          */
         StockNodeTypeEnum: "LOCATION" | "PERSON" | "SITE" | "CLIENT" | "EXTERNAL" | "CONSUMED" | "SCRAP";
+        Subcontractor: {
+            readonly id: number;
+            name: string;
+            code?: string;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            notes?: string;
+            is_active?: boolean;
+        };
+        SubcontractorRequest: {
+            name: string;
+            code?: string;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            notes?: string;
+            is_active?: boolean;
+        };
         SubmissionBatchRequest: {
             submissions: components["schemas"]["SubmissionItemRequest"][];
         };
@@ -11999,6 +12120,159 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Movement"];
+                };
+            };
+        };
+    };
+    subcontractors_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSubcontractorList"];
+                };
+            };
+        };
+    };
+    subcontractors_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubcontractorRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubcontractorRequest"];
+                "multipart/form-data": components["schemas"]["SubcontractorRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subcontractor"];
+                };
+            };
+        };
+    };
+    subcontractors_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontractor. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subcontractor"];
+                };
+            };
+        };
+    };
+    subcontractors_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontractor. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubcontractorRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubcontractorRequest"];
+                "multipart/form-data": components["schemas"]["SubcontractorRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subcontractor"];
+                };
+            };
+        };
+    };
+    subcontractors_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontractor. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    subcontractors_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontractor. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSubcontractorRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSubcontractorRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSubcontractorRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subcontractor"];
                 };
             };
         };

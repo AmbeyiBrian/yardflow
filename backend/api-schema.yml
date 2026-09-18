@@ -7184,6 +7184,216 @@ paths:
               schema:
                 $ref: '#/components/schemas/Movement'
           description: ''
+  /api/v1/subcontractors:
+    get:
+      operationId: subcontractors_list
+      description: |-
+        ``/api/v1/subcontractors`` (O4).
+
+        No destroy action. A contractor referenced by a job is part of that
+        project's cost for as long as the record is worth anything, and the
+        database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+        Deactivating is how one leaves the list.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - subcontractors
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSubcontractorList'
+          description: ''
+    post:
+      operationId: subcontractors_create
+      description: |-
+        ``/api/v1/subcontractors`` (O4).
+
+        No destroy action. A contractor referenced by a job is part of that
+        project's cost for as long as the record is worth anything, and the
+        database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+        Deactivating is how one leaves the list.
+      tags:
+      - subcontractors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubcontractorRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubcontractorRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubcontractorRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subcontractor'
+          description: ''
+  /api/v1/subcontractors/{id}:
+    get:
+      operationId: subcontractors_retrieve
+      description: |-
+        ``/api/v1/subcontractors`` (O4).
+
+        No destroy action. A contractor referenced by a job is part of that
+        project's cost for as long as the record is worth anything, and the
+        database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+        Deactivating is how one leaves the list.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontractor.
+        required: true
+      tags:
+      - subcontractors
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subcontractor'
+          description: ''
+    put:
+      operationId: subcontractors_update
+      description: |-
+        ``/api/v1/subcontractors`` (O4).
+
+        No destroy action. A contractor referenced by a job is part of that
+        project's cost for as long as the record is worth anything, and the
+        database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+        Deactivating is how one leaves the list.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontractor.
+        required: true
+      tags:
+      - subcontractors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubcontractorRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubcontractorRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubcontractorRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subcontractor'
+          description: ''
+    patch:
+      operationId: subcontractors_partial_update
+      description: |-
+        ``/api/v1/subcontractors`` (O4).
+
+        No destroy action. A contractor referenced by a job is part of that
+        project's cost for as long as the record is worth anything, and the
+        database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+        Deactivating is how one leaves the list.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontractor.
+        required: true
+      tags:
+      - subcontractors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcontractorRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcontractorRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcontractorRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subcontractor'
+          description: ''
+    delete:
+      operationId: subcontractors_destroy
+      description: |-
+        ``/api/v1/subcontractors`` (O4).
+
+        No destroy action. A contractor referenced by a job is part of that
+        project's cost for as long as the record is worth anything, and the
+        database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+        Deactivating is how one leaves the list.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontractor.
+        required: true
+      tags:
+      - subcontractors
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/sync-exceptions:
     get:
       operationId: sync_exceptions_list
@@ -11841,6 +12051,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StockNode'
+    PaginatedSubcontractorList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subcontractor'
     PaginatedSyncExceptionList:
       type: object
       required:
@@ -12587,6 +12816,33 @@ components:
           nullable: true
         notes:
           type: string
+    PatchedSubcontractorRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        code:
+          type: string
+          maxLength: 50
+        contact_name:
+          type: string
+          maxLength: 200
+        contact_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        contact_phone:
+          type: string
+          maxLength: 30
+        notes:
+          type: string
+        is_active:
+          type: boolean
     PatchedUserRequest:
       type: object
       properties:
@@ -13813,6 +14069,67 @@ components:
         * `EXTERNAL` - Supplier or client-issuing store
         * `CONSUMED` - Used up on site
         * `SCRAP` - Disposed of
+    Subcontractor:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        code:
+          type: string
+          maxLength: 50
+        contact_name:
+          type: string
+          maxLength: 200
+        contact_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        contact_phone:
+          type: string
+          maxLength: 30
+        notes:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - id
+      - name
+    SubcontractorRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        code:
+          type: string
+          maxLength: 50
+        contact_name:
+          type: string
+          maxLength: 200
+        contact_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        contact_phone:
+          type: string
+          maxLength: 30
+        notes:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - name
     SubmissionBatchRequest:
       type: object
       properties:

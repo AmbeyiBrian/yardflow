@@ -487,3 +487,38 @@ class ProjectVariation(TenantModel, TimeStampedModel):
             "Variations are never deleted — the record of what was agreed, and "
             "when it changed, is the point of them (D21)."
         )
+
+
+class Subcontractor(TenantModel, TimeStampedModel):
+    """A third party delivering jobs on a project (O4).
+
+    Distinct from the free-text ``supplier_name`` on a gate-in, deliberately.
+    A supplier sells goods and is named once on a receipt; a subcontractor
+    *does work*, is paid an agreed price per job, and their cost has to roll up
+    by party — which it cannot do if the party is whatever somebody typed.
+    """
+
+    name = models.CharField(max_length=200)
+    code = models.CharField(max_length=50, blank=True)
+
+    contact_name = models.CharField(max_length=200, blank=True)
+    contact_email = models.EmailField(blank=True)
+    contact_phone = models.CharField(max_length=30, blank=True)
+
+    notes = models.TextField(blank=True)
+
+    # O4: deactivated, never deleted. A contractor who delivered work last year
+    # is part of that project's cost for as long as the record is worth
+    # anything, so the register only ever grows.
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "name"], name="uniq_subcontractor_name_per_org"
+            )
+        ]
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name

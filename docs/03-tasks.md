@@ -906,7 +906,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* `contract_value` is never written a second time, a negative delta reduces the current
   value, and an approved variation cannot be edited.
 
-- [ ] **T10.4 `[B]` Subcontractor register**
+- [x] **T10.4 `[B]` Subcontractor register**
   Refs: §4.14 · O4
   Name, code, contacts, `is_active`. Unique per tenant, `PROTECT` once referenced.
   *Done when:* a referenced subcontractor can be deactivated but not deleted.

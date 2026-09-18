@@ -17,6 +17,7 @@ from network.models import (
     ProjectVariation,
     Site,
     SiteReference,
+    Subcontractor,
     VariationStatus,
 )
 
@@ -179,6 +180,21 @@ class ProjectVariationSerializer(serializers.ModelSerializer):
         return project
 
 
+class SubcontractorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subcontractor
+        fields = (
+            "id",
+            "name",
+            "code",
+            "contact_name",
+            "contact_email",
+            "contact_phone",
+            "notes",
+            "is_active",
+        )
+
+
 class ClientViewSet(TenantScopedViewSet):
     """``/api/v1/clients`` (C5)."""
 
@@ -317,6 +333,28 @@ class ProjectVariationViewSet(TenantScopedViewSet):
     def reject(self, request, pk=None):  # type: ignore[no-untyped-def]
         """Rejection needs a reason, as every other rejection here does (F4)."""
         return self._decide(request, VariationStatus.REJECTED, reason_required=True)
+
+
+class SubcontractorViewSet(TenantScopedViewSet):
+    """``/api/v1/subcontractors`` (O4).
+
+    No destroy action. A contractor referenced by a job is part of that
+    project's cost for as long as the record is worth anything, and the
+    database refuses the delete anyway (``PROTECT`` on ``Job.subcontractor``).
+    Deactivating is how one leaves the list.
+    """
+
+    serializer_class = SubcontractorSerializer
+    model = Subcontractor
+    required_permissions = {
+        "create": PERM.CATALOGUE_MANAGE,
+        "update": PERM.CATALOGUE_MANAGE,
+        "partial_update": PERM.CATALOGUE_MANAGE,
+        "destroy": PERM.CATALOGUE_MANAGE,
+    }
+    filterset_fields = ["is_active"]
+    search_fields = ["name", "code", "contact_name"]
+    ordering_fields = ["name"]
 
 
 class SiteReferenceViewSet(TenantScopedViewSet):
