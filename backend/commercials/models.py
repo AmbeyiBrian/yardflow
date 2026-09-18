@@ -140,6 +140,21 @@ class ProjectExpense(TenantModel, TimeStampedModel):
         return f"{self.category} {self.amount} on {self.project}"
 
     @property
+    def is_evidenced(self) -> bool:
+        """Whether a receipt is attached (O16).
+
+        An unevidenced expense is accepted and flagged to the manager, not
+        refused. Refusing it would lose the **cost** when all that is missing is
+        the evidence — a real receipt that would not photograph is still a real
+        cost.
+        """
+        from core.models import Attachment
+
+        return Attachment.objects.filter(
+            target_type=self._meta.label, target_id=str(self.pk)
+        ).exists()
+
+    @property
     def signed_amount(self) -> Decimal:
         """What this contributes to project cost: negative for a reversal."""
         return -self.amount if self.reverses_id else self.amount

@@ -1032,7 +1032,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* an over-budget release can be approved after the overrun is shown, and a gate-out on
   a project with an inactive PM says so in those words and names reassignment as the remedy.
 
-- [ ] **T10.23 `[F]` Days and expense capture**
+- [x] **T10.23 `[F]` Days and expense capture**
   Refs: §7.4 · O15, O16
   Days per person on the closeout, with the over-a-day warning inline. Expense capture with a
   receipt photo, reusing the attachment control.

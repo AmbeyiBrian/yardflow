@@ -66,6 +66,14 @@ ATTACHABLE_TARGETS: dict[str, tuple[str, ...]] = {
     "jobs.Variance": (PERM.JOB_CLOSEOUT, PERM.GATE_OUT_APPROVE),
     "stock.StockCount": (PERM.STOCK_ADJUST,),
     "custody.CustodyTransfer": (PERM.CUSTODY_TRANSFER,),
+    # O16: the receipt behind an expense. Open to anyone who may raise a
+    # gate-out or close out a job, because the person who paid for the fuel is
+    # the one holding the receipt — and O16 has anybody record an expense.
+    "commercials.ProjectExpense": (
+        PERM.GATE_OUT_REQUEST,
+        PERM.JOB_CLOSEOUT,
+        PERM.PROJECT_VIEW_COST,
+    ),
 }
 
 #: N-7 keeps these unreadable without a signed link; this keeps the store to the

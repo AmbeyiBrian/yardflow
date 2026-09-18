@@ -26,6 +26,8 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
         source="recorded_by.full_name", read_only=True
     )
     is_reversal = serializers.SerializerMethodField()
+    # O16: shown to the manager rather than used to refuse the record.
+    is_evidenced = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ProjectExpense
@@ -47,6 +49,7 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
             "decision_reason",
             "reverses",
             "is_reversal",
+            "is_evidenced",
             "created_at",
         )
         read_only_fields = (

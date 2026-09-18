@@ -215,3 +215,16 @@ export interface OverdueReport {
   by_person: OverdueRow[];
   by_item: OverdueRow[];
 }
+
+
+/**
+ * O15: a person's days on this job, captured on the closeout.
+ *
+ * Days, not hours. A yard reports in half days and a technician doing mental
+ * arithmetic at dusk is where an invented figure comes from.
+ */
+export interface LabourInput {
+  person: string;
+  work_date: string;
+  days: string;
+}

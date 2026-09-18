@@ -80,6 +80,7 @@ const ProjectDetailPage = lazyRoute(() =>
   import('../features/projects/ProjectsPage').then((m) => ({ default: m.ProjectDetailPage })),
 );
 const ProjectQueuesPage = lazyRoute(() => import('../features/projects/ProjectQueuesPage'));
+const RecordExpensePage = lazyRoute(() => import('../features/projects/RecordExpensePage'));
 
 const GateOutRequestPage = lazyRoute(() => import('../features/dispatch/GateOutRequestPage'));
 const GateOutListPage = lazyRoute(() => import('../features/dispatch/GateOutPages'));
@@ -258,6 +259,18 @@ export function AppRoutes() {
               element={
                 <RequirePermission anyOf={[PERM.PROJECT_VIEW_COST, PERM.CATALOGUE_MANAGE]}>
                   <ProjectsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="expenses/new"
+              element={
+                // O16: anyone may record one. The person who paid for the fuel
+                // is the one holding the receipt.
+                <RequirePermission
+                  anyOf={[PERM.GATE_OUT_REQUEST, PERM.JOB_CLOSEOUT, PERM.PROJECT_VIEW_COST]}
+                >
+                  <RecordExpensePage />
                 </RequirePermission>
               }
             />

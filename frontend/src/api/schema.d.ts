@@ -6113,6 +6113,7 @@ export interface components {
             readonly decision_reason: string;
             readonly reverses: number | null;
             readonly is_reversal: boolean;
+            readonly is_evidenced: boolean;
             /** Format: date-time */
             readonly created_at: string;
         };

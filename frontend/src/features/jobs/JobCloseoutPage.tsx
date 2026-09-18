@@ -55,6 +55,7 @@ import type {
   CustodyBalance,
   Job,
   JobCloseout,
+  LabourInput,
   Reconciliation,
   Reel,
   SerialUnit,
@@ -76,6 +77,11 @@ const ACTIONS: { value: CloseoutAction; label: string; note: string }[] = [
   },
 ];
 
+/** Today, as the date input wants it. */
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function JobCloseoutPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -92,10 +98,15 @@ export default function JobCloseoutPage() {
   // kinds differently (§3.1) — merged into one picker below, because to the
   // person holding them they are just "my stuff".
   const bulk = useList<CustodyBalance>('stock/custody', { holder: user?.id });
+  const people = useList<{ id: number; full_name: string }>('users', { page_size: 200 });
   const serials = useList<SerialUnit>('serials', { holder: 'me', page_size: 100 });
   const drums = useList<Reel>('drums', { holder: 'me', page_size: 100 });
 
   const [lines, setLines] = useState<CloseoutLineInput[]>([]);
+  // O15: days worked, per person, on the form that already has to be filled in.
+  // Optional — a delivery dropped at a site has no days to report, and
+  // requiring them would produce invented ones.
+  const [labour, setLabour] = useState<LabourInput[]>([]);
   const [notes, setNotes] = useState('');
   const [draft, setDraft] = useState<JobCloseout | null>(null);
   const [photos, setPhotos] = useState(0);
@@ -178,6 +189,13 @@ export default function JobCloseoutPage() {
           condition: line.condition || '',
           notes: line.notes || '',
         })),
+        labour: labour
+          .filter((entry) => entry.person && entry.days)
+          .map((entry) => ({
+            person: Number(entry.person),
+            work_date: entry.work_date,
+            days: entry.days,
+          })),
       });
       setDraft(created);
     } catch (error) {
@@ -370,6 +388,130 @@ export default function JobCloseoutPage() {
                   </div>
                 );
               })}
+
+              {/*
+                O15: days worked, on the form that already has to be filled in.
+                A separate timesheet would be a new habit, and a habit nobody
+                has is where a missing figure comes from.
+              */}
+              <div className="flex flex-col gap-2 border-t border-slate-200 pt-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-slate-700">Days worked</p>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      setLabour((current) => [
+                        ...current,
+                        {
+                          person: String(user?.id ?? ''),
+                          work_date: today(),
+                          days: '1.0',
+                        },
+                      ])
+                    }
+                  >
+                    Add a day
+                  </Button>
+                </div>
+
+                {labour.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Optional. Leave it empty if there is nothing to report — an
+                    invented figure is worse than none.
+                  </p>
+                ) : null}
+
+                {labour.map((entry, index) => {
+                  const total = labour
+                    .filter((other) => other.person === entry.person &&
+                      other.work_date === entry.work_date)
+                    .reduce((sum, other) => sum + Number(other.days || 0), 0);
+                  return (
+                    <div key={index} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3">
+                      <Field label="Who" htmlFor={`labour-person-${index}`}>
+                        <Select
+                          id={`labour-person-${index}`}
+                          value={entry.person}
+                          onChange={(event) =>
+                            setLabour((current) =>
+                              current.map((row, position) =>
+                                position === index
+                                  ? { ...row, person: event.target.value }
+                                  : row,
+                              ),
+                            )
+                          }
+                        >
+                          <option value="">Choose…</option>
+                          {(people.data?.results ?? []).map((person) => (
+                            <option key={person.id} value={person.id}>
+                              {person.full_name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <Field label="Date" htmlFor={`labour-date-${index}`}>
+                          <Input
+                            id={`labour-date-${index}`}
+                            type="date"
+                            value={entry.work_date}
+                            onChange={(event) =>
+                              setLabour((current) =>
+                                current.map((row, position) =>
+                                  position === index
+                                    ? { ...row, work_date: event.target.value }
+                                    : row,
+                                ),
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field label="Days" htmlFor={`labour-days-${index}`}>
+                          <Input
+                            id={`labour-days-${index}`}
+                            inputMode="decimal"
+                            value={entry.days}
+                            onChange={(event) =>
+                              setLabour((current) =>
+                                current.map((row, position) =>
+                                  position === index
+                                    ? { ...row, days: event.target.value }
+                                    : row,
+                                ),
+                              )
+                            }
+                          />
+                        </Field>
+                      </div>
+
+                      {/*
+                        O15: warns, never refuses. Someone may genuinely have
+                        split a day across two jobs, and blocking the second
+                        closeout because of the first is not the system's call.
+                      */}
+                      {total > 1 ? (
+                        <Banner tone="warning">
+                          That is {total} days for one person on one date. Fine if
+                          it is right — it will be flagged for the owner either way.
+                        </Banner>
+                      ) : null}
+
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          setLabour((current) =>
+                            current.filter((_, position) => position !== index),
+                          )
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
 
               <Field label="Anything else about this job" htmlFor="closeout-notes">
                 <Textarea

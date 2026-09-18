@@ -13972,6 +13972,9 @@ components:
         is_reversal:
           type: boolean
           readOnly: true
+        is_evidenced:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -13986,6 +13989,7 @@ components:
       - decision_reason
       - id
       - incurred_on
+      - is_evidenced
       - is_reversal
       - project
       - project_reference
