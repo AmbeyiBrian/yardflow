@@ -4066,6 +4066,8 @@ export interface components {
             handler_reference?: string;
             from_location: number;
             readonly from_location_name: string;
+            /** @description The project this write-off is charged to, if any (O10). */
+            project?: number | null;
             readonly requested_by: number | null;
             /** Format: date-time */
             readonly submitted_at: string | null;
@@ -4132,6 +4134,8 @@ export interface components {
             handler_name?: string;
             handler_reference?: string;
             from_location: number;
+            /** @description The project this write-off is charged to, if any (O10). */
+            project?: number | null;
             notes?: string;
             /** Format: uuid */
             client_uuid?: string | null;
@@ -5660,6 +5664,8 @@ export interface components {
             handler_name?: string;
             handler_reference?: string;
             from_location?: number;
+            /** @description The project this write-off is charged to, if any (O10). */
+            project?: number | null;
             notes?: string;
             /** Format: uuid */
             client_uuid?: string | null;

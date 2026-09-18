@@ -112,6 +112,11 @@ class GateOut(TenantModel, TimeStampedModel):
         editable=False,
     )
 
+    #: D22: on a gate pass the manager **replaces** the criticality rules. This
+    #: is the weakening the requirements record as R2, and it is deliberate —
+    #: see §5.4. Disposal does the opposite (O10).
+    project_approval_replaces_rules = True
+
     purpose_type = models.CharField(max_length=30, choices=GateOutPurpose.choices)
 
     # Exactly one destination — see the check constraint.

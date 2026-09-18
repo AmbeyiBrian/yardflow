@@ -236,6 +236,7 @@ class DisposalSerializer(serializers.ModelSerializer):
             "handler_reference",
             "from_location",
             "from_location_name",
+            "project",
             "requested_by",
             "submitted_at",
             "approved_at",

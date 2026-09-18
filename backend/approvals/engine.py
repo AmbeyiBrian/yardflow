@@ -282,6 +282,27 @@ class ProjectHasNoActiveManager(DomainError):
     """
 
 
+def _project_level(document) -> RequiredLevel | None:
+    """The manager's level for this document, if it belongs to a project.
+
+    ``None`` when there is no project, or the project has no manager — an
+    unpriced project is the old work order (D20) and nobody is budgeting it.
+    """
+    project = project_of(document)
+    if project is None or project.manager_id is None:
+        return None
+
+    manager = project.manager
+    if not manager.is_active:
+        raise ProjectHasNoActiveManager(
+            f"{manager.full_name or manager} manages {project}, and their "
+            f"account is not active. Material for this project cannot move "
+            f"until an owner assigns a new manager (D28).",
+            details={"project": str(project), "manager": str(manager)},
+        )
+    return RequiredLevel(level=1, user=manager)
+
+
 def project_of(document):  # type: ignore[no-untyped-def]
     """The project a document costs to, if any (`O5`, `O6`).
 
@@ -308,17 +329,13 @@ def required_levels(document, *, facts: ApprovalFacts | None = None) -> list[Req
     # category and criticality without inventing a placeholder role that nobody
     # holds — and that placeholder would then be grantable to anyone, undoing
     # the very control it stood in for.
-    project = project_of(document)
-    if project is not None and project.manager_id is not None:
-        manager = project.manager
-        if not manager.is_active:
-            raise ProjectHasNoActiveManager(
-                f"{manager.full_name or manager} manages {project}, and their "
-                f"account is not active. Material for this project cannot move "
-                f"until an owner assigns a new manager (D28).",
-                details={"project": str(project), "manager": str(manager)},
-            )
-        return [RequiredLevel(level=1, user=manager)]
+    project_level = _project_level(document)
+    # O6/D22 on a gate pass: the manager is the only level, and the criticality
+    # rules are not consulted at all.
+    if project_level is not None and getattr(
+        document, "project_approval_replaces_rules", False
+    ):
+        return [project_level]
 
     facts = facts or collect_facts(document)
 
@@ -340,7 +357,18 @@ def required_levels(document, *, facts: ApprovalFacts | None = None) -> list[Req
             continue
         matched.append(rule)
 
-    return _dedupe_by_sequence(matched)
+    levels = _dedupe_by_sequence(matched)
+
+    # O10 on a disposal: the manager is added **above** the document's own
+    # rules rather than replacing them. A write-off is permanent, so nothing
+    # already in place is given up for it — the PM answers first, then whoever
+    # the criticality rules already required.
+    if project_level is not None:
+        levels = [project_level] + [
+            RequiredLevel(level=level.level + 1, role=level.role, rule=level.rule)
+            for level in levels
+        ]
+    return levels
 
 
 def _dedupe_by_sequence(rules: list[ApprovalRule]) -> list[RequiredLevel]:

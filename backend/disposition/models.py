@@ -299,6 +299,22 @@ class Disposal(TenantModel, TimeStampedModel):
     handler_name = models.CharField(max_length=200, blank=True)
     handler_reference = models.CharField(max_length=100, blank=True)
 
+    # O10: which project bears the write-off, where it belongs to one. Optional,
+    # because most scrap is nobody's PO in particular.
+    project = models.ForeignKey(
+        "network.Project",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="disposals",
+        help_text="The project this write-off is charged to, if any (O10).",
+    )
+
+    #: O10: the project manager is **added above** the disposal's own rules
+    #: rather than replacing them, unlike a gate-out (D22). Disposal is
+    #: permanent, so nothing already in place is given up for it.
+    project_approval_replaces_rules = False
+
     from_location = models.ForeignKey(
         "locations.Location", on_delete=models.PROTECT, related_name="disposals"
     )

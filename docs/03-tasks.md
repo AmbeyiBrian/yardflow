@@ -989,7 +989,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* an expense reaches project cost only on approval, and an approved one cannot be
   edited.
 
-- [ ] **T10.16 `[B]` PM level on disposals**
+- [x] **T10.16 `[B]` PM level on disposals**
   Refs: §5.4 · O10
   The PM is **prepended** to the disposal's own matched levels rather than replacing them.
   *Done when:* disposing project material needs the PM and the existing approver, in that order.

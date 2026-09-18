@@ -9609,6 +9609,10 @@ components:
         from_location_name:
           type: string
           readOnly: true
+        project:
+          type: integer
+          nullable: true
+          description: The project this write-off is charged to, if any (O10).
         requested_by:
           type: integer
           readOnly: true
@@ -9803,6 +9807,10 @@ components:
           maxLength: 100
         from_location:
           type: integer
+        project:
+          type: integer
+          nullable: true
+          description: The project this write-off is charged to, if any (O10).
         notes:
           type: string
         client_uuid:
@@ -13042,6 +13050,10 @@ components:
           maxLength: 100
         from_location:
           type: integer
+        project:
+          type: integer
+          nullable: true
+          description: The project this write-off is charged to, if any (O10).
         notes:
           type: string
         client_uuid:
