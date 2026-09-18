@@ -29,7 +29,7 @@ from locations.nodes import (
     quarantine_location,
 )
 from receiving.models import DocumentStatus, GateIn, GateInLine, GateInSerial, GateInSource
-from stock.models import Condition, MovementType, Reel, SerialUnit
+from stock.models import Condition, MovementType, OwnerType, Reel, SerialUnit, UnitCostSource
 from stock.services import DuplicateSerial, MovementRequest, post_movement
 
 
@@ -52,6 +52,21 @@ class AttachmentRequired(DomainError):
 # --------------------------------------------------------------------------
 # T3.8 — asset tag generation
 # --------------------------------------------------------------------------
+
+
+def _declared_valuation(line: GateInLine) -> dict:
+    """The client's figure for a client-owned line, if the note carried one (O11).
+
+    Only for client-owned material. Our own stock is valued from the catalogue,
+    which is what ``post_movement`` falls back to — supplying the same number
+    here would just be a second place for it to go stale.
+    """
+    if line.owner_type != OwnerType.CLIENT or line.declared_unit_value is None:
+        return {}
+    return {
+        "unit_cost": line.declared_unit_value,
+        "unit_cost_source": UnitCostSource.CLIENT_DECLARED,
+    }
 
 
 def generate_asset_tag(organization, item_type) -> str:
@@ -312,6 +327,10 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
             "movement_type": MovementType.RECEIPT,
             "from_node": source,
             "to_node": destination,
+            # O11: the client's own figure, where the issue note carried one.
+            # Own material is left to the catalogue price, which is what
+            # `post_movement` falls back to.
+            **_declared_valuation(line),
         }
 
         if line.tracking_mode == TrackingMode.SERIALIZED:

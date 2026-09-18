@@ -252,6 +252,22 @@ class GateInLine(TenantModel, TimeStampedModel):
         related_name="gate_in_lines",
     )
 
+    # O11: what the client says this material is worth. Captured on receipt
+    # because it is the figure the operator will debit if it goes missing — not
+    # what the item would cost us, which for consignment stock is beside the
+    # point. Carried onto every movement of it from here (D27).
+    declared_unit_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text=(
+            "The client's stated value per unit, excluding VAT. Client-owned "
+            "lines only — leave it empty when the issue note gives no figure."
+        ),
+    )
+
     # C2: values for the category's custom fields.
     custom_field_values = models.JSONField(default=dict, blank=True)
 

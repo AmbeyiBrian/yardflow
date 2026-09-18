@@ -71,6 +71,7 @@ class GateInLineSerializer(serializers.ModelSerializer):
             "owner_client_name",
             "custom_field_values",
             "no_serial_reason",
+            "declared_unit_value",
             "notes",
             "serials",
             "reels",

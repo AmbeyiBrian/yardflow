@@ -926,7 +926,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a movement posted today carries the cost that applied today, repricing the item type
   afterwards leaves it unchanged, and historical rows read as `NONE` rather than as zero.
 
-- [ ] **T10.7 `[B]` Declared client value on gate-in**
+- [x] **T10.7 `[B]` Declared client value on gate-in**
   Refs: §4.6, §4.14 · O11
   Client-owned receipt lines carry `declared_unit_value`, feeding `unit_cost_source =
   CLIENT_DECLARED`. This is the figure the operator debits on a shortfall, not what the item costs

@@ -4146,6 +4146,11 @@ export interface components {
             readonly owner_client_name: string;
             custom_field_values?: unknown;
             no_serial_reason?: string;
+            /**
+             * Format: decimal
+             * @description The client's stated value per unit, excluding VAT. Client-owned lines only — leave it empty when the issue note gives no figure.
+             */
+            declared_unit_value?: string | null;
             notes?: string;
             serials?: components["schemas"]["GateInSerial"][];
             reels?: components["schemas"]["GateInReel"][];
@@ -4162,6 +4167,11 @@ export interface components {
             owner_client?: number | null;
             custom_field_values?: unknown;
             no_serial_reason?: string;
+            /**
+             * Format: decimal
+             * @description The client's stated value per unit, excluding VAT. Client-owned lines only — leave it empty when the issue note gives no figure.
+             */
+            declared_unit_value?: string | null;
             notes?: string;
             serials?: components["schemas"]["GateInSerialRequest"][];
             reels?: components["schemas"]["GateInReelRequest"][];

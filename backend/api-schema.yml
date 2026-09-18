@@ -9796,6 +9796,13 @@ components:
         no_serial_reason:
           type: string
           maxLength: 300
+        declared_unit_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: The client's stated value per unit, excluding VAT. Client-owned
+            lines only — leave it empty when the issue note gives no figure.
         notes:
           type: string
           maxLength: 500
@@ -9846,6 +9853,13 @@ components:
         no_serial_reason:
           type: string
           maxLength: 300
+        declared_unit_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: The client's stated value per unit, excluding VAT. Client-owned
+            lines only — leave it empty when the issue note gives no figure.
         notes:
           type: string
           maxLength: 500
