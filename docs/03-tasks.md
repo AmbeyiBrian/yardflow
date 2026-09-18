@@ -1025,7 +1025,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a PM sees cost and budget, an owner also sees value and margin, and a storekeeper
   cannot reach the screens at all.
 
-- [ ] **T10.22 `[F]` PM approval screens**
+- [x] **T10.22 `[F]` PM approval screens**
   Refs: §7.4 · O6, O8, O16
   Queues for material, closeouts and expenses. The material approval shows the budget position and
   what this release adds; a project over budget is stated and **still approvable**.

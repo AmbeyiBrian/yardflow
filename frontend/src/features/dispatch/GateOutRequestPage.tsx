@@ -64,6 +64,12 @@ interface Draft {
   purpose_type: GateOutPurpose;
   destination_kind: DestinationKind;
   destination_id: string;
+  /**
+   * O5: which job this material is for. An **attribution**, not a destination —
+   * the pass still goes to exactly one place. This is what makes it project
+   * material, and what routes it to that project's manager (O6).
+   */
+  job: string;
   from_location: string;
   custody_holder: string;
   notes: string;
@@ -82,6 +88,7 @@ function emptyDraft(holderId: string): Draft {
     purpose_type: 'INSTALLATION',
     destination_kind: 'site',
     destination_id: '',
+    job: '',
     from_location: '',
     custody_holder: holderId,
     notes: '',
@@ -152,6 +159,7 @@ export default function GateOutRequestPage() {
       purpose_type: document.purpose_type,
       destination_kind: kind,
       destination_id: destinationId ? String(destinationId) : '',
+      job: document.job ? String(document.job) : '',
       from_location: document.from_location ? String(document.from_location) : '',
       custody_holder: document.custody_holder ? String(document.custody_holder) : holderId,
       notes: document.notes ?? '',
@@ -166,6 +174,31 @@ export default function GateOutRequestPage() {
   const projects = useList<Project>('projects', { page_size: 200 });
   const clients = useList<Client>('clients', { page_size: 200 });
   const people = useList<{ id: number; full_name: string }>('users', { page_size: 200 });
+
+  // O5: the jobs this pass could plausibly be for. Scoped to the destination
+  // site, because a job elsewhere would attribute the material to a project it
+  // never reached — which the server refuses anyway (§4.7).
+  const jobsAtSite = useList<{
+    id: number;
+    reference: string;
+    project: number | null;
+    project_reference?: string;
+    status: string;
+  }>(
+    'jobs',
+    { site: draft.destination_id, status: 'OPEN', page_size: 100 },
+    { enabled: draft.destination_kind === 'site' && Boolean(draft.destination_id) },
+  ).data?.results ?? [];
+
+  const selectedJob = jobsAtSite.find((job) => String(job.id) === draft.job);
+  const selectedProject = projects.data?.results.find(
+    (project) => project.id === selectedJob?.project,
+  );
+  // A project with a PO but no manager is one nobody can approve material for.
+  const blockedProject =
+    selectedProject && selectedProject.po_number && !selectedProject.manager
+      ? selectedProject.po_number
+      : '';
 
   const create = useAction<Record<string, unknown>, { id: number }>({
     resource: 'gate-outs',
@@ -217,6 +250,7 @@ export default function GateOutRequestPage() {
       client: draft.destination_kind === 'client' ? Number(draft.destination_id) : null,
       to_location:
         draft.destination_kind === 'to_location' ? Number(draft.destination_id) : null,
+      job: draft.job ? Number(draft.job) : null,
       from_location: Number(draft.from_location),
       custody_holder: Number(draft.custody_holder),
       notes: draft.notes,
@@ -362,6 +396,47 @@ export default function GateOutRequestPage() {
             ))}
           </Select>
         </Field>
+
+        {/*
+          O5: naming the job is what makes this project material, and what sends
+          it to that project's manager instead of through the criticality rules.
+          Only offered for a site destination, because that is the case the job
+          resolves — a pass addressed to a project already says which.
+        */}
+        {draft.destination_kind === 'site' && draft.destination_id ? (
+          <Field
+            label="For which job"
+            htmlFor="go-job"
+            hint="Optional. Naming it is what costs the material to a project."
+          >
+            <Select
+              id="go-job"
+              value={draft.job}
+              onChange={(event) => set({ job: event.target.value })}
+            >
+              <option value="">Not for a particular job</option>
+              {jobsAtSite.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.reference || `Job ${job.id}`}
+                  {job.project_reference ? ` · ${job.project_reference}` : ''}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
+
+        {/*
+          D28: a project whose manager cannot act is stopped, and the failure
+          mode to avoid is a request that merely looks slow. So it is said here,
+          before the pass is raised, in the words the remedy needs.
+        */}
+        {blockedProject ? (
+          <Banner tone="error">
+            {blockedProject} has no active manager, so material cannot leave for
+            it. An owner has to assign a new manager before this pass can be
+            approved.
+          </Banner>
+        ) : null}
 
         <Field label="Out of" htmlFor="go-from">
           <Select

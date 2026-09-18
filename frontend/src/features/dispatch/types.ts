@@ -78,6 +78,8 @@ export interface GateOut {
   purpose_type: GateOutPurpose;
   site: number | null;
   project: number | null;
+  /** O5: which job this is for. An attribution, not a destination. */
+  job?: number | null;
   client: number | null;
   to_location: number | null;
   from_location: number;

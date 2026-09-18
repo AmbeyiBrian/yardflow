@@ -92,20 +92,10 @@ export interface SiteReference {
   value: string;
 }
 
-export interface Project {
-  id: number;
-  client: number;
-  client_name?: string;
-  reference: string;
-  description: string;
-  sites: number[];
-  site_count?: number;
-  status: string;
-  opened_at: string | null;
-  closed_at: string | null;
-  closed_with_unreconciled: boolean;
-  close_reason: string;
-}
+// One definition, in the feature that owns it. Two copies drifted the moment
+// Epic O added the commercial fields, and the settings screens need the same
+// shape the project screens do.
+export type { Project } from '../projects/types';
 
 export interface Location {
   id: number;

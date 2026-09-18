@@ -79,6 +79,7 @@ const ProjectsPage = lazyRoute(() => import('../features/projects/ProjectsPage')
 const ProjectDetailPage = lazyRoute(() =>
   import('../features/projects/ProjectsPage').then((m) => ({ default: m.ProjectDetailPage })),
 );
+const ProjectQueuesPage = lazyRoute(() => import('../features/projects/ProjectQueuesPage'));
 
 const GateOutRequestPage = lazyRoute(() => import('../features/dispatch/GateOutRequestPage'));
 const GateOutListPage = lazyRoute(() => import('../features/dispatch/GateOutPages'));
@@ -257,6 +258,14 @@ export function AppRoutes() {
               element={
                 <RequirePermission anyOf={[PERM.PROJECT_VIEW_COST, PERM.CATALOGUE_MANAGE]}>
                   <ProjectsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="my-projects"
+              element={
+                <RequirePermission anyOf={[PERM.PROJECT_VIEW_COST]}>
+                  <ProjectQueuesPage />
                 </RequirePermission>
               }
             />
