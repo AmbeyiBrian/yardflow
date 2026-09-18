@@ -13,8 +13,10 @@ only validation is a pattern a tenant may optionally set per client.
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
 
@@ -207,6 +209,9 @@ class SiteReference(TenantModel, TimeStampedModel):
 class ProjectStatus(models.TextChoices):
     OPEN = "OPEN", "Open"
     CLOSED = "CLOSED", "Closed"
+    # O1: a PO that was awarded and then withdrawn is not the same thing as one
+    # that was delivered, and its cost should not read as a delivered project's.
+    CANCELLED = "CANCELLED", "Cancelled"
 
 
 class Project(TenantModel, TimeStampedModel):
@@ -222,6 +227,52 @@ class Project(TenantModel, TimeStampedModel):
     reference = models.CharField(max_length=100)
     description = models.CharField(max_length=500, blank=True)
     sites = models.ManyToManyField(Site, related_name="projects", blank=True)
+
+    # O1: the commercial layer. All of it optional, because a project without a
+    # PO number is the work order this model used to be (D20) and must keep
+    # working exactly as it did.
+    po_number = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        help_text="The client's purchase order number. One PO is one project (D21).",
+    )
+    title = models.CharField(max_length=200, blank=True)
+
+    manager = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="projects_managed",
+        help_text=(
+            "The project manager. Approves material leaving for this project, "
+            "and is the only approver on it (O6)."
+        ),
+    )
+
+    # D24: VAT-exclusive, and the help text says so because a VAT-inclusive
+    # figure keyed in by mistake overstates the project by 16% and nothing
+    # downstream would catch it.
+    contract_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="What the client pays, excluding VAT.",
+    )
+    cost_budget = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="What the manager may spend to deliver it, excluding VAT.",
+    )
+
+    starts_on = models.DateField(null=True, blank=True)
+    target_completion_on = models.DateField(null=True, blank=True)
 
     status = models.CharField(
         max_length=20, choices=ProjectStatus.choices, default=ProjectStatus.OPEN
@@ -239,16 +290,46 @@ class Project(TenantModel, TimeStampedModel):
             models.UniqueConstraint(
                 fields=["organization", "reference"], name="uniq_project_ref_per_org"
             ),
+            # O1: a PO number identifies one project and one only (D21).
+            # Partial, because the many projects without one are not competing
+            # for the same name.
+            models.UniqueConstraint(
+                fields=["organization", "po_number"],
+                condition=Q(po_number__gt=""),
+                name="uniq_project_po_number_per_org",
+            ),
             models.CheckConstraint(
                 condition=Q(status=ProjectStatus.OPEN, closed_at__isnull=True)
-                | Q(status=ProjectStatus.CLOSED, closed_at__isnull=False),
+                | Q(
+                    status__in=(ProjectStatus.CLOSED, ProjectStatus.CANCELLED),
+                    closed_at__isnull=False,
+                ),
                 name="closed_project_has_a_closing_time",
+            ),
+            # O1: a PO with no manager is a PO nobody can release material
+            # against (O6), and one with no budget is one nobody can manage to.
+            # Refused here rather than in a serializer, because a project that
+            # reached the database half-specified would only be discovered at
+            # the gate, by a storekeeper with a van waiting.
+            models.CheckConstraint(
+                condition=Q(po_number="")
+                | Q(
+                    manager__isnull=False,
+                    contract_value__isnull=False,
+                    cost_budget__isnull=False,
+                ),
+                name="a_po_project_is_fully_specified",
             ),
         ]
         ordering = ("-opened_at",)
 
     def __str__(self) -> str:
-        return self.reference
+        return self.po_number or self.reference
+
+    @property
+    def is_po(self) -> bool:
+        """Whether this project carries a purchase order, and so a budget (O1)."""
+        return bool(self.po_number)
 
     def unreconciled_summary(self) -> dict:
         """What remains unaccounted for on this project (C7).

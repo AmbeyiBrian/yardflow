@@ -5296,7 +5296,26 @@ export interface components {
         PatchedProjectRequest: {
             client?: number;
             reference?: string;
+            /** @description The client's purchase order number. One PO is one project (D21). */
+            po_number?: string;
+            title?: string;
             description?: string;
+            /** @description The project manager. Approves material leaving for this project, and is the only approver on it (O6). */
+            manager?: number | null;
+            /**
+             * Format: decimal
+             * @description What the client pays, excluding VAT.
+             */
+            contract_value?: string | null;
+            /**
+             * Format: decimal
+             * @description What the manager may spend to deliver it, excluding VAT.
+             */
+            cost_budget?: string | null;
+            /** Format: date */
+            starts_on?: string | null;
+            /** Format: date */
+            target_completion_on?: string | null;
             sites?: number[];
             close_reason?: string;
         };
@@ -5361,7 +5380,27 @@ export interface components {
             client: number;
             readonly client_name: string;
             reference: string;
+            /** @description The client's purchase order number. One PO is one project (D21). */
+            po_number?: string;
+            title?: string;
             description?: string;
+            /** @description The project manager. Approves material leaving for this project, and is the only approver on it (O6). */
+            manager?: number | null;
+            readonly manager_name: string;
+            /**
+             * Format: decimal
+             * @description What the client pays, excluding VAT.
+             */
+            contract_value?: string | null;
+            /**
+             * Format: decimal
+             * @description What the manager may spend to deliver it, excluding VAT.
+             */
+            cost_budget?: string | null;
+            /** Format: date */
+            starts_on?: string | null;
+            /** Format: date */
+            target_completion_on?: string | null;
             sites?: number[];
             readonly site_count: number;
             readonly status: components["schemas"]["ProjectStatusEnum"];
@@ -5376,16 +5415,36 @@ export interface components {
         ProjectRequest: {
             client: number;
             reference: string;
+            /** @description The client's purchase order number. One PO is one project (D21). */
+            po_number?: string;
+            title?: string;
             description?: string;
+            /** @description The project manager. Approves material leaving for this project, and is the only approver on it (O6). */
+            manager?: number | null;
+            /**
+             * Format: decimal
+             * @description What the client pays, excluding VAT.
+             */
+            contract_value?: string | null;
+            /**
+             * Format: decimal
+             * @description What the manager may spend to deliver it, excluding VAT.
+             */
+            cost_budget?: string | null;
+            /** Format: date */
+            starts_on?: string | null;
+            /** Format: date */
+            target_completion_on?: string | null;
             sites?: number[];
             close_reason?: string;
         };
         /**
          * @description * `OPEN` - Open
          *     * `CLOSED` - Closed
+         *     * `CANCELLED` - Cancelled
          * @enum {string}
          */
-        ProjectStatusEnum: "OPEN" | "CLOSED";
+        ProjectStatusEnum: "OPEN" | "CLOSED" | "CANCELLED";
         /** @description A1: name, subdomain and initial owner account. */
         ProvisionTenantRequest: {
             name: string;
@@ -9997,8 +10056,9 @@ export interface operations {
                 /**
                  * @description * `OPEN` - Open
                  *     * `CLOSED` - Closed
+                 *     * `CANCELLED` - Cancelled
                  */
-                status?: "CLOSED" | "OPEN";
+                status?: "CANCELLED" | "CLOSED" | "OPEN";
             };
             header?: never;
             path?: never;

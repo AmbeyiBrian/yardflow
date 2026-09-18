@@ -67,6 +67,7 @@ class SiteSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source="client.name", read_only=True)
+    manager_name = serializers.CharField(source="manager.get_full_name", read_only=True)
     site_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -76,7 +77,15 @@ class ProjectSerializer(serializers.ModelSerializer):
             "client",
             "client_name",
             "reference",
+            "po_number",
+            "title",
             "description",
+            "manager",
+            "manager_name",
+            "contract_value",
+            "cost_budget",
+            "starts_on",
+            "target_completion_on",
             "sites",
             "site_count",
             "status",
@@ -89,6 +98,30 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def get_site_count(self, project: Project) -> int:
         return project.sites.count()
+
+    def validate(self, attrs: dict) -> dict:
+        """Say what the check constraint would say, before it says it (O1).
+
+        The database refuses a half-specified PO either way (``Meta.constraints``).
+        Reaching it produces an IntegrityError and a 500; this turns the same
+        refusal into a field error the form can point at.
+        """
+        merged = {**({} if self.instance is None else {
+            "po_number": self.instance.po_number,
+            "manager": self.instance.manager,
+            "contract_value": self.instance.contract_value,
+            "cost_budget": self.instance.cost_budget,
+        }), **attrs}
+        if not merged.get("po_number"):
+            return attrs
+        missing = {
+            name: "Required once the project carries a PO number."
+            for name in ("manager", "contract_value", "cost_budget")
+            if merged.get(name) is None
+        }
+        if missing:
+            raise serializers.ValidationError(missing)
+        return attrs
 
 
 class ClientViewSet(TenantScopedViewSet):

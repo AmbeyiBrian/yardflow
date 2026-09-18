@@ -891,7 +891,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* the existing suite passes **unchanged**, existing work orders read as projects, and
   the destination constraint still refuses a pass with two destinations.
 
-- [ ] **T10.2 `[B]` Project PO fields**
+- [x] **T10.2 `[B]` Project PO fields**
   Refs: §4.14 · O1
   `po_number` (unique per organization when set), `title`, `manager`, `contract_value`,
   `cost_budget`, `starts_on`, `target_completion_on`, `CANCELLED` status, and the check constraint

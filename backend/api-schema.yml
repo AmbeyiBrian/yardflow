@@ -4992,11 +4992,13 @@ paths:
         schema:
           type: string
           enum:
+          - CANCELLED
           - CLOSED
           - OPEN
         description: |-
           * `OPEN` - Open
           * `CLOSED` - Closed
+          * `CANCELLED` - Cancelled
       tags:
       - projects
       security:
@@ -12125,9 +12127,41 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+        po_number:
+          type: string
+          description: The client's purchase order number. One PO is one project (D21).
+          maxLength: 100
+        title:
+          type: string
+          maxLength: 200
         description:
           type: string
           maxLength: 500
+        manager:
+          type: integer
+          nullable: true
+          description: The project manager. Approves material leaving for this project,
+            and is the only approver on it (O6).
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What the client pays, excluding VAT.
+        cost_budget:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What the manager may spend to deliver it, excluding VAT.
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+        target_completion_on:
+          type: string
+          format: date
+          nullable: true
         sites:
           type: array
           items:
@@ -12286,9 +12320,44 @@ components:
         reference:
           type: string
           maxLength: 100
+        po_number:
+          type: string
+          description: The client's purchase order number. One PO is one project (D21).
+          maxLength: 100
+        title:
+          type: string
+          maxLength: 200
         description:
           type: string
           maxLength: 500
+        manager:
+          type: integer
+          nullable: true
+          description: The project manager. Approves material leaving for this project,
+            and is the only approver on it (O6).
+        manager_name:
+          type: string
+          readOnly: true
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What the client pays, excluding VAT.
+        cost_budget:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What the manager may spend to deliver it, excluding VAT.
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+        target_completion_on:
+          type: string
+          format: date
+          nullable: true
         sites:
           type: array
           items:
@@ -12322,6 +12391,7 @@ components:
       - closed_at
       - closed_with_unreconciled
       - id
+      - manager_name
       - opened_at
       - reference
       - site_count
@@ -12335,9 +12405,41 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+        po_number:
+          type: string
+          description: The client's purchase order number. One PO is one project (D21).
+          maxLength: 100
+        title:
+          type: string
+          maxLength: 200
         description:
           type: string
           maxLength: 500
+        manager:
+          type: integer
+          nullable: true
+          description: The project manager. Approves material leaving for this project,
+            and is the only approver on it (O6).
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What the client pays, excluding VAT.
+        cost_budget:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          description: What the manager may spend to deliver it, excluding VAT.
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+        target_completion_on:
+          type: string
+          format: date
+          nullable: true
         sites:
           type: array
           items:
@@ -12352,10 +12454,12 @@ components:
       enum:
       - OPEN
       - CLOSED
+      - CANCELLED
       type: string
       description: |-
         * `OPEN` - Open
         * `CLOSED` - Closed
+        * `CANCELLED` - Cancelled
     ProvisionTenantRequest:
       type: object
       description: 'A1: name, subdomain and initial owner account.'
