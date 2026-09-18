@@ -41,7 +41,15 @@ industry with minimal effort.
 | **Gate-out (Gate Pass)** | Material leaving a location, subject to approval. |
 | **Client** | An operator or vendor Silvertech works for (Safaricom, Huawei…). |
 | **Site** | A physical telecom site where work is performed. |
-| **Work order** | An optional grouping of work across one or more sites. |
+| **Work order** | The original name for the grouping of work across sites. Epic O turns this layer into the **project**. |
+| **Project** | A grouping of jobs across sites, usually one purchase order, with a value, a budget and a manager. |
+| **PO** | A purchase order from a client. One PO is one project. |
+| **Project manager (PM)** | The named person accountable for one project's delivery and its budget. |
+| **Variation** | An amendment to a project's contract value or budget. Added, never edited into the original. |
+| **Subcontractor** | A third party delivering jobs on a project, paid an agreed price per job. |
+| **Delivery mode** | Whether a job is delivered in-house or by a subcontractor. |
+| **Exposure** | Material issued to a project and not yet accounted for. Not a cost until the closeout says what happened to it. |
+| **Day rate** | A costing rate for a person's time, held per user and falling back to their role. Not pay. |
 | **Item type** | A catalogue entry (e.g. "RRU 2x40W", "LDF4 feeder cable"). |
 | **Tracking mode** | How a given item type is counted: serialized, bulk, or reel. |
 | **Stock lot** | A quantity of an item type at a location, with a known owner. |
@@ -61,8 +69,9 @@ industry with minimal effort.
 | **Storekeeper** | Runs the yard. Also acts as gate guard. Raises gate-outs, receives gate-ins, verifies loads at the gate. |
 | **Approver** | Any role granted approval rights. Not a fixed person. |
 | **Technician** | Field staff. Requests material, receives it, closes out jobs, returns material. Often also the driver. |
+| **Project manager** | Accountable for one project's delivery and budget. Sole approver of material leaving for it; confirms its closeouts, approves its expenses, sets subcontractor prices, closes it. Sees its cost, not its margin. |
 
-**Roles are data, not code.** The six above are seeded defaults. A tenant may create, rename or
+**Roles are data, not code.** The seven above are seeded defaults. A tenant may create, rename or
 delete roles and assign granular permissions to them.
 
 ---
@@ -92,6 +101,23 @@ These were settled during discovery and are not open for re-litigation in design
 | D17 | **Offline capture limited to gate-in and gate-out**, syncing when connectivity returns. |
 | D18 | No data migration. Starting clean. |
 | D19 | No third-party integrations in v1, but the design must not preclude them. |
+| D20 | **The work-order layer becomes the project layer** (amends D14). One grouping, not two: a project without a PO number is the old optional work order. |
+| D21 | **One PO is one project.** Scope changes are variations that amend it; the original award is never edited. |
+| D22 | **Project material routes to the project manager as the only approval level** (amends D4 for that material). No delegation, no escalation — it waits. Criticality routing continues to govern everything else. |
+| D23 | **Project cost is derived from the ledger, never typed.** Material costs when installed, consumed or unaccounted for; material issued and still outstanding is exposure, not cost. |
+| D24 | **Every figure is VAT-exclusive.** No invoices or payables in v1. Project cost is material, subcontractor price, own labour and recorded direct expenses. |
+| D25 | **Money tracking (D16) is required once a project carries a PO.** A tenant that does not use priced projects may still leave it off. |
+| D26 | **Own labour is costed**, so in-house and subcontracted work can be compared. Days per person are entered on the closeout that already exists; the rate is per person, falling back to the role's. |
+| D27 | **Rates and prices are captured onto the record when it posts** — unit cost onto the movement, day rate onto the labour entry. Repricing anything never rewrites a closed project. |
+| D28 | **A project whose PM is inactive is unblocked only by reassigning the PM.** There is no fallback approver anywhere in the project approval path. |
+| D29 | **Direct expenses are recorded by whoever incurs them and approved by the PM** before they reach project cost. They are the only cost line with no ledger movement and no contract behind it — just a receipt. |
+| D30 | **Notifications ship on SMS and email.** WhatsApp sits behind the existing channel adapter and is switched on once the Business sender is approved — nothing waits on Meta. |
+| D31 | **The technician submits the closeout; the storekeeper may submit on their behalf.** One endpoint, with `submitted_by` and `on_behalf_of` recording which, so who really does it is answerable from the data after a month of use. |
+| D32 | **An approved gate pass expires if not released.** Configurable per tenant, 24 hours by default. An approval is a decision about a particular load on a particular day. |
+| D33 | **One approver satisfies a level.** Seniority is expressed by adding levels, never by requiring two people at one level. |
+| D34 | **Cable is reported as metres consumed**, with the remainder returning on the same drum at a new remaining length. |
+| D35 | **Overdue custody escalates technician → storekeeper → owner.** No supervisor role is introduced. |
+| D36 | **The storekeeper is also the gate guard at Silvertech**, but release remains a separate permission so another tenant can put a dedicated guard on it. |
 
 ---
 
@@ -338,6 +364,7 @@ rules, so that control matches risk.
 - A gate-out containing lines from several categories takes the **highest** applicable approval level.
 - Requests may auto-approve where the rules say no approval is required.
 - **Edge case:** a requester who also holds approval rights must not approve their own request unless a setting explicitly permits it. Default: not permitted.
+- **These rules do not apply to project material.** A gate-out attributed to a project routes to that project's manager instead, as the only level — see O6. Criticality routing governs everything else.
 - Rules are written by the tenant from **Settings → Approvals**, not by the platform owner. A new
   organization is seeded with one — high-criticality material needs the owner's approval — so
   approval arrives switched on and visible rather than silently empty.
@@ -617,6 +644,230 @@ that I do not have to remember.
 
 ---
 
+### Epic O — Projects, PO performance and PM control
+
+Epic O introduces the commercial layer. Everything before it answers *where is the material*; this
+answers *did the work make money*. The two must never disagree, so every figure here is derived
+from the same append-only ledger — nothing in this epic is a number a person can type over.
+
+**The work-order layer becomes the project layer.** `WorkOrder` was always the optional grouping of
+jobs across sites; a project is that same layer with a PO, a value and a manager attached. It stays
+optional in the sense that matters — a project without a PO number is exactly the old work order,
+and material may still go straight to a site. There is no second grouping.
+
+**O1.** As an owner or admin, I want to open a project from a purchase order, so that a PO has one
+place where its scope, its budget and its performance live.
+- Fields: client, **PO number**, title, description, **contract value**, **cost budget**, **project
+  manager**, sites, start and target dates, status.
+- **One PO is one project.** The PO number is unique per tenant. Scope that grows is recorded as a
+  variation (O2), never as a second project against the same PO.
+- **Contract value** is what the client pays. **Cost budget** is what the PM may spend to deliver
+  it. They are separate figures because they are visible to different people (O14).
+- All monetary values are **VAT-exclusive**, and every field that takes money says so on screen. A
+  VAT-inclusive figure keyed in by mistake overstates a project by 16% and nothing downstream would
+  catch it.
+- A project with no PO number is permitted — it is the legacy work-order case — and then contract
+  value, budget and PM are optional. A project **with** a PO number requires all three.
+- Status: open, closed, cancelled. A closed or cancelled project accepts no new gate-outs.
+
+**O2.** As an owner, I want scope changes recorded as variations, so that the original award and
+what it became are both visible.
+- A variation carries: reference, description, change to contract value, change to cost budget,
+  date, who raised it, who approved it.
+- Current contract value is the original plus approved variations. **The original is never edited**,
+  for the same reason the ledger is never edited — in a dispute, what was first agreed is the
+  question being asked.
+- Variations are approved by the owner, not the PM. The PM spends the budget; they do not set it.
+- A variation may be negative — descopes happen.
+
+**O3.** As a PM, I want each job on my project marked as in-house or subcontracted, so that its cost
+is known.
+- A job belongs to **at most one** project.
+- Every job on a project carries a **delivery mode**: `IN_HOUSE` or `SUBCONTRACTED`.
+- A subcontracted job names the **subcontractor** and the **agreed price** for that job.
+- The agreed price is set by the PM (O9); changing it after it is set records the old value, the new
+  value, who changed it and when.
+- Delivery mode may change while the job is open. It may not change once the job is closed — that
+  would rewrite a cost already counted.
+- **A PO may be mixed**: some jobs in-house, some subcontracted, some split across several
+  contractors. The project carries no delivery mode of its own.
+
+**O4.** As an admin, I want a register of subcontractors, so that cost rolls up by contractor rather
+than by whatever someone typed.
+- Fields: name, code, contact name, phone, email, active flag. Tenant-scoped like every other master
+  record.
+- Unique name per tenant. A subcontractor referenced by any job may be deactivated, never deleted.
+- This is a register of **contractors who do work**, not of suppliers who sell goods. Suppliers stay
+  as free text on gate-in (still out of scope, section 7).
+
+**O5.** As a storekeeper, I want a gate-out to name the job it is for, so that material can be
+attributed to the right project.
+- A gate-out may name a **job**. When it does, the project follows from that job and the pass is
+  **project material**.
+- Destination rules are unchanged — exactly one destination, as the database already enforces. The
+  job is an attribution, not a destination.
+- Where the destination is a site, the named job must be a job **at that site**.
+- The named job must be open, and its project open.
+- A gate-out with no job is not project material and behaves exactly as it does today.
+- **Edge case:** one gate pass cannot serve two projects; the storekeeper raises two passes. Same
+  rule, same reason, as the existing refusal of two destinations — material that cannot be
+  attributed to one project cannot be reconciled against one either.
+
+**O6.** As a PM, I want to be the approver on material leaving for my project, so that nothing is
+spent against my budget without me.
+- When a gate-out is project material, the **required approver is that project's PM**, and the
+  criticality rules in F3 **do not apply to it**. The PM is the only level.
+- Non-project gate-outs are untouched: F3's criticality routing continues exactly as today.
+- The PM is a **named user**, not a role. This is a real extension to the approval engine, which
+  today routes only to roles.
+- **There is no delegation and no escalation on this level.** An unanswered request waits for the
+  PM. This is deliberate, and it is the accepted cost of single-signature control.
+- If the PM leaves or their account is deactivated, project material cannot move until an **owner
+  reassigns the PM**. There is no fallback approver anywhere in this path. This is the single point
+  of failure the design knowingly accepts (D28), and it should be said plainly on screen when a
+  project's PM is inactive rather than presenting as an approval that is merely slow.
+- A PM **may** approve a gate-out they raised themselves. It is recorded as raised and approved by
+  the same person and appears in the owner's report (O12) — permitted, but never invisible. This is
+  a deliberate exception to F3's default that a requester may not approve their own request.
+- The approval screen shows the project, its budget, its cost to date and what this release would
+  add, so the decision is made against a number rather than a feeling.
+- Rejection requires a reason, as F4 already requires.
+
+**O7.** As an owner, I want to be told when something expensive leaves on a project, so that
+single-signature approval is not also unwatched.
+- A tenant setting holds a **notification threshold** as a money value.
+- When a project gate-out above the threshold is approved, the owner and admin are notified, naming
+  the project, the pass, its value and the PM who approved it.
+- **This blocks nothing.** The material moves; the notification follows.
+
+**O8.** As a PM, I want to confirm job closeouts on my project, so that what lands on my cost is
+what I agree happened.
+- After the storekeeper confirms the returns (H3), a closeout on a project job goes to the PM.
+- The PM sees the declared installed, consumed, returning and unaccounted quantities, with the cost
+  each carries.
+- Rejection returns it to the storekeeper with a reason.
+- **Ledger postings do not wait for the PM.** Installed and consumed material posts on the
+  storekeeper's confirmation exactly as §4.9 specifies today. The PM's step is acceptance of the
+  cost, not a gate on the record — a ledger that waits for a financial signature stops being a
+  record of what happened.
+- The PM may query a closeout without holding the ledger hostage: rejection is a request for a
+  corrected closeout, and any movement already posted in error is undone by a reversal (D8), never
+  by withholding the posting in the first place.
+
+**O9.** As a PM, I want to set and see the agreed subcontractor price on my jobs, so that I am
+managing to a real cost.
+- Setting or changing an agreed price is a PM action, recorded in the audit trail.
+- The price is per job, not per project, so a partly delivered PO shows partly accrued cost.
+
+**O10.** As a PM, I want disposal of my project's material to need my agreement, so that write-offs
+do not appear on my cost without me.
+- Where material being disposed or written off is attributed to a project, the PM is added as a
+  level on top of the existing disposal approval rules (Epic J).
+- Unlike O6 this **adds** a level rather than replacing one — disposal is permanent, and the
+  existing control stays.
+
+**O11.** As the system, I want project cost derived from the ledger, so that the yard's record and
+the commercial record cannot disagree.
+- **Material cost** counts material the closeout confirms as **installed**, **consumed** or
+  **unaccounted for**, valued at the item type's unit cost **as at the movement**, captured onto the
+  movement when it posts. Repricing an item type must not rewrite a closed project's history.
+- **Unaccounted material of your own is a cost**, at that captured unit cost. Material issued to a
+  project and never accounted for is a loss the PO absorbed, and a loss outside the P&L is a loss
+  nobody manages.
+- **Material still out** — issued to the project and neither returned nor accounted for — is
+  reported as **exposure**, separately, and is **not** cost. It becomes cost only when the closeout
+  says what happened to it.
+- **Client-owned free-issue material carries no cost** while it behaves. A shortfall at closeout
+  **does** become a project cost, at the value the client carries it at, because that is what the
+  operator will debit.
+- **Subcontractor cost** accrues at the agreed price when a subcontracted job **closes**.
+- **Labour cost** accrues from the days recorded on a closeout, at the rate captured onto each
+  labour entry (O15). In-house and subcontracted jobs therefore both carry a delivery cost and can
+  be compared without misleading anyone.
+- **Direct expenses** accrue when the PM approves them (O16).
+- These four are the whole of project cost. Anything not in them — finance overheads, office costs,
+  depreciation — is out of scope and the report says margin is stated before them.
+- Cost is **computed, never stored as an editable figure**. Nothing in this epic offers a screen
+  where a person types a project's cost.
+
+**O12.** As an owner, I want project performance reporting, so that I can see which POs make money.
+- Per project: contract value and current value after variations, cost budget, cost to date split
+  into **material, subcontractor, labour and expenses**, exposure, losses from unaccounted material, variance
+  against budget, margin, and progress measured as jobs closed against jobs opened.
+- In-house and subcontracted projects may be ranked against each other, because both now carry a
+  delivery cost. But a job closed with **no days recorded** costs nothing to deliver and would
+  flatter its project, so the report shows how many closed jobs are missing days and will not
+  present a margin as final while any are.
+- Across projects: a list ranked by margin, by overrun and by exposure, filterable by client, PM and
+  status.
+- Projects over budget are **flagged, not blocked** — nothing in this epic stops a gate-out or an
+  approval on budget grounds. The overrun surfaces here and on the owner's dashboard.
+- A separate view lists gate-outs a PM raised and approved themselves (O6).
+- Exportable, like the other reports in Epic M.
+
+**O13.** As a PM, I want to close my project, so that its performance becomes final.
+- Closing warns about open jobs and unreconciled material, the way work-order close already does
+  (C7).
+- Closing with either requires a reason, recorded on the project — the same pattern as
+  `closed_with_variance` on a job.
+- On close the performance figures are **snapshotted**, so a closed project reports what it reported
+  on the day it closed even if a later reversal moves the underlying ledger.
+- A closed project accepts no new gate-outs and no new variations. Reopening is an owner action and
+  is recorded.
+
+**O14.** As an owner, I want project financial data restricted, so that margins are not visible on a
+yard phone.
+- Three new permissions: **view project cost**, **view project value and margin**, and **view day
+  rates**.
+- **PM:** cost, budget and variance on **their own** projects. Not contract value, not margin, not
+  other people's projects.
+- **Owner and admin:** everything, on every project, day rates included.
+- **Storekeeper and technician:** no financial data at all. Enforced in the API serializers, not by
+  hiding fields in the interface — a restricted user's API response must not contain the numbers.
+- **Labour is shown to a PM as a single figure**, never split by person. A PM who could see both a
+  person's days and that person's labour cost could divide one by the other and read their rate,
+  so the split is withheld, not merely hidden on screen.
+
+**O15.** As an admin, I want technician time costed to jobs, so that work delivered in-house can be
+compared with work given to a contractor without misleading anyone.
+- A **day rate** is held **per user**, falling back to the rate on their **role**. Where neither
+  exists, time cannot be costed and the job says so — it must not quietly cost zero.
+- Days worked are recorded **on the job closeout that already exists** (H2), per person. No new
+  form and no new habit. One closeout may name several people with different days.
+- Days are recorded to one decimal place, so half days work.
+- **A person cannot silently exceed one day.** On submission the closeout totals that person's days
+  already recorded across every job for the same date and warns when the total passes one. It
+  warns rather than refuses: a technician apportioning fractions in a yard at dusk will guess, and a
+  refusal would block a late closeout because of an earlier one. The overlap is recorded so the
+  owner can see it.
+- The rate is **captured onto the labour entry** when the closeout is confirmed, so a later rate
+  change never rewrites a closed project (D27).
+- Labour applies to **in-house jobs**. A subcontracted job carries its agreed price instead;
+  recording both against one job is refused, because it counts the same delivery twice.
+- Days are **self-reported**. D31 lets a storekeeper submit a closeout on a technician's behalf, so
+  the days may be secondhand — and they now carry money, which they did not before. The report
+  names closed jobs with no days rather than letting them cost nothing (O12).
+- Setting or changing a rate is an owner or admin action, recorded in the audit trail. Rates are
+  **costing figures, not pay**, and nothing in this system calculates what anyone is owed.
+
+**O16.** As a technician or storekeeper, I want to record what a job cost me out of pocket, so that
+the project's margin includes the costs that do not pass through the yard.
+- An expense carries: project, optional job, **category**, amount, date, description, who incurred
+  it, and an **attachment** — a photograph of the receipt.
+- Categories are tenant-configurable, seeded with transport, fuel, equipment hire, wayleaves and
+  permits, accommodation, and other.
+- **Anyone may record one; the PM approves it.** It reaches project cost only on approval. This is
+  the only cost line with no ledger movement and no contract behind it, so it is also the only one
+  where a second person looks at the figure before it counts.
+- Rejection requires a reason and returns it to whoever recorded it.
+- An expense with no attachment may be recorded but is flagged to the PM as unevidenced.
+- Approved expenses are **append-only**, like everything else that affects a figure. A mistake is
+  corrected by a reversing entry, not by editing the original.
+- Expenses are **not** captured offline. D17 limits offline work to gate-in and gate-out, and
+  nothing in this epic widens it.
+
+---
+
 ## 6. Non-functional requirements
 
 | # | Requirement |
@@ -642,23 +893,25 @@ that I do not have to remember.
 - Accounting, ERP or client-system integrations
 - Batch/lot tracking as a distinct mode (only serialized, bulk and reel exist)
 - Native mobile applications
-- Purchase orders and supplier management beyond naming a supplier on a gate-in
+- Supplier management beyond naming a supplier on a gate-in. Epic O adds a **subcontractor**
+  register; suppliers stay free text
+- Payroll. Day rates are a **costing** rate, not pay, and nothing here calculates what anyone is
+  owed
+- Subcontractor payables — their claims, invoices, payments and retention. Only the agreed price
+  per job is held
+- Milestone or certificate billing, invoices raised to clients, and receivables
+- VAT, retention and withholding tax. Every figure in Epic O is VAT-exclusive
 - Maintenance scheduling and calibration tracking for tools
 - Data migration from the existing paper records
 
 ---
 
-## 8. Open questions and flagged risks
+## 8. Accepted risks
 
-| # | Question / risk | Impact if wrong |
+| # | Risk | Impact |
 |---|---|---|
-| Q1 | **WhatsApp delivery.** The WhatsApp Business API needs an approved sender and template messages, which takes time and has per-message cost. Should v1 ship with SMS plus email, and add WhatsApp once the account is approved? | Medium. Affects the approval loop, which is the system's core value. |
-| Q2 | **Does a technician close out a job, or does the storekeeper do it for them?** Story H2 assumes the technician does. If field staff will not use the app reliably, reconciliation quality collapses. | High. Worth confirming with actual technicians, not just the owner. |
-| Q3 | **Gate pass expiry.** Should an approved gate pass expire if not released within N hours? Assumed yes, configurable, default 24 hours. | Low. |
-| Q4 | **Multiple approvals.** Can one gate-out require two approvers at the same level, or is one always enough? Assumed one. | Medium. Changes the approval data model. |
-| Q5 | **Partial installation of a serialized unit** is impossible, but partial consumption of a drum on site is normal. Confirm technicians can report metres consumed rather than whole drums. Assumed yes. | Low. |
-| Q6 | **Who supervises a technician** for the overdue escalation chain in I3? There is no explicit supervisor role. Assumed escalation goes technician → storekeeper → owner. | Low. |
-| Q7 | **Is the storekeeper always the gate guard?** The design keeps release as a separate permission so a dedicated guard can exist at another tenant. Confirm this is right for Silvertech. | Low. |
+| R1 | **Self-reported days are the weakest link in the new numbers.** Labour cost (O15) rests on a field filled in at closeout, and D31 allows a storekeeper to fill it in secondhand. A job closed with no days costs nothing to deliver and flatters its project. O12 names those jobs, but a report is not a control. | High. It is the one place where poor field discipline now moves a money figure, not just a quantity. |
+| R2 | **PM self-approval is permitted** (O6), criticality routing is off for project material (D22), and there is no second signature anywhere. One person can raise and release any material on their own project. The only check is a report the owner has to actually read. | High. Accepted deliberately, but it is the largest control weakening in this epic and should be reviewed after real use. |
 
 ---
 
@@ -670,4 +923,5 @@ This document is step 1 of 4. On approval it is followed by:
 3. **Tasks** — a sequenced implementation checklist
 4. **Implementation** — one task at a time, verified against its requirement
 
-Please review, correct anything wrong, and answer the open questions in section 8.
+Every open question raised during discovery has been answered and folded into section 4. What remains
+in section 8 are two risks accepted with open eyes, not decisions outstanding.
