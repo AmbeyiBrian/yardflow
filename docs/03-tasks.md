@@ -994,7 +994,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   The PM is **prepended** to the disposal's own matched levels rather than replacing them.
   *Done when:* disposing project material needs the PM and the existing approver, in that order.
 
-- [ ] **T10.17 `[B]` The costing engine**
+- [x] **T10.17 `[B]` The costing engine**
   Refs: §4.14, §10 · O11
   `commercials/costing.py` — the six figures in §4.14's table, one queryset each, nothing stored.
   *Done when:* a full PO lifecycle produces a cost equal to the four lines summed by hand;
