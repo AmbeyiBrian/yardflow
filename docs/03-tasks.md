@@ -949,7 +949,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   rather than blocked, and an inactive PM **raises** instead of falling through to criticality
   routing.
 
-- [ ] **T10.10 `[B]` Gate-out job attribution**
+- [x] **T10.10 `[B]` Gate-out job attribution** *(done before T10.9 — routing needs it)*
   Refs: §4.7, §5.4 · O5
   `job` FK on `GateOut` as an attribution, not a destination. Where the destination is a site the
   job must be at that site; the job and its project must be open.

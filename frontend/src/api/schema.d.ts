@@ -4229,6 +4229,8 @@ export interface components {
             purpose_type: components["schemas"]["PurposeTypeEnum"];
             site?: number | null;
             project?: number | null;
+            /** @description The job this material is for. Optional; it is what makes a pass project material (O5). */
+            job?: number | null;
             client?: number | null;
             to_location?: number | null;
             from_location: number;
@@ -4332,6 +4334,8 @@ export interface components {
             purpose_type: components["schemas"]["PurposeTypeEnum"];
             site?: number | null;
             project?: number | null;
+            /** @description The job this material is for. Optional; it is what makes a pass project material (O5). */
+            job?: number | null;
             client?: number | null;
             to_location?: number | null;
             from_location: number;
@@ -5427,6 +5431,8 @@ export interface components {
             purpose_type?: components["schemas"]["PurposeTypeEnum"];
             site?: number | null;
             project?: number | null;
+            /** @description The job this material is for. Optional; it is what makes a pass project material (O5). */
+            job?: number | null;
             client?: number | null;
             to_location?: number | null;
             from_location?: number;
@@ -8814,10 +8820,12 @@ export interface operations {
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 custody_holder?: number;
+                job?: number;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
                 page_size?: number;
+                project?: number;
                 /**
                  * @description * `INSTALLATION` - Installation
                  *     * `MAINTENANCE` - Maintenance

@@ -3014,6 +3014,10 @@ paths:
         name: custody_holder
         schema:
           type: integer
+      - in: query
+        name: job
+        schema:
+          type: integer
       - name: ordering
         required: false
         in: query
@@ -3024,6 +3028,10 @@ paths:
         required: false
         in: query
         description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: project
         schema:
           type: integer
       - in: query
@@ -10012,6 +10020,11 @@ components:
         project:
           type: integer
           nullable: true
+        job:
+          type: integer
+          nullable: true
+          description: The job this material is for. Optional; it is what makes a
+            pass project material (O5).
         client:
           type: integer
           nullable: true
@@ -10318,6 +10331,11 @@ components:
         project:
           type: integer
           nullable: true
+        job:
+          type: integer
+          nullable: true
+          description: The job this material is for. Optional; it is what makes a
+            pass project material (O5).
         client:
           type: integer
           nullable: true
@@ -12446,6 +12464,11 @@ components:
         project:
           type: integer
           nullable: true
+        job:
+          type: integer
+          nullable: true
+          description: The job this material is for. Optional; it is what makes a
+            pass project material (O5).
         client:
           type: integer
           nullable: true

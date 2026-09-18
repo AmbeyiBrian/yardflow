@@ -172,6 +172,7 @@ class GateOutSerializer(serializers.ModelSerializer):
             "purpose_type",
             "site",
             "project",
+            "job",
             "client",
             "to_location",
             "from_location",
@@ -333,7 +334,15 @@ class GateOutViewSet(TenantScopedViewSet):
         "custody_holder",
     )
     prefetch_related = ("lines", "lines__item_type", "lines__serials", "lines__reels")
-    filterset_fields = ["status", "purpose_type", "custody_holder", "site", "client"]
+    filterset_fields = [
+        "status",
+        "purpose_type",
+        "custody_holder",
+        "site",
+        "client",
+        "job",
+        "project",
+    ]
     search_fields = ["number", "notes", "vehicle_reg", "driver_name"]
     ordering_fields = ["created_at", "number", "expires_at"]
 

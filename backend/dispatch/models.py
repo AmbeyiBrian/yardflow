@@ -132,6 +132,21 @@ class GateOut(TenantModel, TimeStampedModel):
         blank=True,
         related_name="gate_outs",
     )
+
+    # O5: an *attribution*, not a destination. The exactly-one-destination
+    # constraint above is untouched: a pass still goes to exactly one place, and
+    # this says which job it is for so the material can be costed to a project.
+    # Material that cannot be attributed to one project cannot be reconciled
+    # against one either — the same reason the destination is single.
+    job = models.ForeignKey(
+        "jobs.Job",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="gate_outs",
+        help_text="The job this material is for. Optional; it is what makes a "
+        "pass project material (O5).",
+    )
     to_location = models.ForeignKey(
         "locations.Location",
         on_delete=models.PROTECT,
@@ -348,6 +363,59 @@ class GateOut(TenantModel, TimeStampedModel):
             raise ValidationError(
                 {"client": "A return to client must name the client (K1)."}
             )
+
+        self._check_job_attribution()
+
+    def _check_job_attribution(self) -> None:
+        """O5: the named job has to be one this pass could plausibly serve.
+
+        A job at another site would attribute the material to a project it never
+        reached, and the error would only surface as a margin nobody can explain.
+        """
+        job = self.job if self.job_id is not None else None
+        if job is None:
+            return
+
+        if self.site_id is not None and job.site_id != self.site_id:
+            raise ValidationError(
+                {
+                    "job": (
+                        f"{job} is a job at {job.site}, but this pass is going to "
+                        f"a different site. Material cannot be costed to a project "
+                        f"it never reached (O5)."
+                    )
+                }
+            )
+
+        from jobs.models import JobStatus
+
+        settled = (JobStatus.CLOSED.value, JobStatus.CANCELLED.value)
+        if job.status in settled:
+            raise ValidationError(
+                {"job": f"{job} is {job.get_status_display().lower()}. Its cost is "
+                        "settled, so nothing more can be issued against it (O3)."}
+            )
+
+        project = job.project
+        if project is not None and project.status != "OPEN":
+            raise ValidationError(
+                {"job": f"{project} is closed and its figures are final (O13)."}
+            )
+
+    @property
+    def project_attribution(self):  # type: ignore[no-untyped-def]
+        """The project this pass costs to, if any (O5).
+
+        A pass addressed straight to a project is project material; so is one
+        naming a job that belongs to one. Both resolve here, so routing and
+        costing never disagree about which.
+        """
+        job = self.job if self.job_id is not None else None
+        if job is not None and job.project_id is not None:
+            return job.project
+        if self.project_id is not None:
+            return self.project
+        return None
 
     def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         self.full_clean(exclude=["organization", "status"])
