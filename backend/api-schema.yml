@@ -5905,10 +5905,13 @@ paths:
     post:
       operationId: projects_close_create
       description: |-
-        Close a project, warning on unreconciled material (C7).
+        Close a project and freeze what it reported (C7, O13).
 
-        A warning, not a block: C7 says "closing it warns". Blocking would be
-        H5's rule, and that applies to jobs, not projects.
+        Still a warning rather than a block on unreconciled material — C7 says
+        "closing it warns", and blocking is H5's rule for jobs. What O13 adds is
+        that closing with open jobs or unreconciled material needs a **reason**,
+        and that the figures are snapshotted so a later reversal cannot move
+        them under the people who signed them off.
       parameters:
       - in: path
         name: id
@@ -5952,6 +5955,40 @@ paths:
         required: true
       tags:
       - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}/reopen:
+    post:
+      operationId: projects_reopen_create
+      description: 'O13: an owner''s action, and recorded.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+        required: true
       security:
       - jwtAuth: []
       responses:

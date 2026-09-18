@@ -407,7 +407,10 @@ class ProjectViewSet(TenantScopedViewSet):
         "update": PERM.CATALOGUE_MANAGE,
         "partial_update": PERM.CATALOGUE_MANAGE,
         "destroy": PERM.CATALOGUE_MANAGE,
-        "close": PERM.CATALOGUE_MANAGE,
+        # O13: closing is the manager's — `close_project` checks that it is
+        # *their* project. Reopening is the owner's.
+        "close": PERM.PROJECT_VIEW_COST,
+        "reopen": PERM.PROJECT_VIEW_MARGIN,
     }
     filterset_fields = ["client", "status"]
     search_fields = ["reference", "description"]
@@ -431,24 +434,35 @@ class ProjectViewSet(TenantScopedViewSet):
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):  # type: ignore[no-untyped-def]
-        """Close a project, warning on unreconciled material (C7).
+        """Close a project and freeze what it reported (C7, O13).
 
-        A warning, not a block: C7 says "closing it warns". Blocking would be
-        H5's rule, and that applies to jobs, not projects.
+        Still a warning rather than a block on unreconciled material — C7 says
+        "closing it warns", and blocking is H5's rule for jobs. What O13 adds is
+        that closing with open jobs or unreconciled material needs a **reason**,
+        and that the figures are snapshotted so a later reversal cannot move
+        them under the people who signed them off.
         """
-        from django.utils import timezone
+        from commercials.closing import close_project
 
-        project = self.get_object()
-        summary = project.unreconciled_summary()
-
-        project.status = ProjectStatus.CLOSED
-        project.closed_at = timezone.now()
-        project.close_reason = request.data.get("reason", "")
-        project.closed_with_unreconciled = bool(summary.get("unreconciled"))
-        project.save(
-            update_fields=["status", "closed_at", "close_reason", "closed_with_unreconciled"]
+        project, summary = close_project(
+            self.get_object(),
+            actor=request.user,
+            reason=request.data.get("reason", ""),
+            request=request,
         )
-
         return Response(
             {**self.get_serializer(project).data, "unreconciled_warning": summary}
         )
+
+    @action(detail=True, methods=["post"])
+    def reopen(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """O13: an owner's action, and recorded."""
+        from commercials.closing import reopen_project
+
+        project = reopen_project(
+            self.get_object(),
+            actor=request.user,
+            reason=request.data.get("reason", ""),
+            request=request,
+        )
+        return Response(self.get_serializer(project).data)

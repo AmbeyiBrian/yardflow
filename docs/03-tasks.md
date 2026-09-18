@@ -1013,7 +1013,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   overlapping labour.
   *Done when:* each runs through the existing report machinery and exports to Excel and PDF.
 
-- [ ] **T10.20 `[B]` Project close and snapshot**
+- [x] **T10.20 `[B]` Project close and snapshot**
   Refs: §4.14 · O13
   Warn on open jobs and unreconciled material, reason required, `ProjectSnapshot` written, a closed
   project refuses gate-outs and variations, owner reopen recorded.

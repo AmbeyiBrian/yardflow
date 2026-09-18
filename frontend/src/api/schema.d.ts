@@ -2366,10 +2366,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Close a project, warning on unreconciled material (C7).
+         * @description Close a project and freeze what it reported (C7, O13).
          *
-         *     A warning, not a block: C7 says "closing it warns". Blocking would be
-         *     H5's rule, and that applies to jobs, not projects.
+         *     Still a warning rather than a block on unreconciled material — C7 says
+         *     "closing it warns", and blocking is H5's rule for jobs. What O13 adds is
+         *     that closing with open jobs or unreconciled material needs a **reason**,
+         *     and that the figures are snapshotted so a later reversal cannot move
+         *     them under the people who signed them off.
          */
         post: operations["projects_close_create"];
         delete?: never;
@@ -2389,6 +2392,23 @@ export interface paths {
         get: operations["projects_performance_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description O13: an owner's action, and recorded. */
+        post: operations["projects_reopen_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11695,6 +11715,34 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_reopen_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
