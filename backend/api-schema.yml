@@ -2731,6 +2731,180 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExceptionRegister'
           description: ''
+  /api/v1/expense-categories:
+    get:
+      operationId: expense_categories_list
+      description: '``/api/v1/expense-categories`` (O16).'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - expense-categories
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExpenseCategoryList'
+          description: ''
+    post:
+      operationId: expense_categories_create
+      description: '``/api/v1/expense-categories`` (O16).'
+      tags:
+      - expense-categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+  /api/v1/expense-categories/{id}:
+    get:
+      operationId: expense_categories_retrieve
+      description: '``/api/v1/expense-categories`` (O16).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this expense category.
+        required: true
+      tags:
+      - expense-categories
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    put:
+      operationId: expense_categories_update
+      description: '``/api/v1/expense-categories`` (O16).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this expense category.
+        required: true
+      tags:
+      - expense-categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    patch:
+      operationId: expense_categories_partial_update
+      description: '``/api/v1/expense-categories`` (O16).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this expense category.
+        required: true
+      tags:
+      - expense-categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategoryRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    delete:
+      operationId: expense_categories_destroy
+      description: '``/api/v1/expense-categories`` (O16).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this expense category.
+        required: true
+      tags:
+      - expense-categories
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/gate-ins:
     get:
       operationId: gate_ins_list
@@ -5013,6 +5187,249 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PermissionCatalogue'
+          description: ''
+  /api/v1/project-expenses:
+    get:
+      operationId: project_expenses_list
+      description: |-
+        ``/api/v1/project-expenses`` (O16, D29).
+
+        Anyone may record one — a technician at a fuel station is closer to the fact
+        than anybody back at the yard. The manager decides.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: integer
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: job
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - REJECTED
+          - SUBMITTED
+        description: |-
+          * `SUBMITTED` - Waiting on the project manager
+          * `APPROVED` - Approved — counts against the project
+          * `REJECTED` - Rejected
+      tags:
+      - project-expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProjectExpenseList'
+          description: ''
+    post:
+      operationId: project_expenses_create
+      description: |-
+        ``/api/v1/project-expenses`` (O16, D29).
+
+        Anyone may record one — a technician at a fuel station is closer to the fact
+        than anybody back at the yard. The manager decides.
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectExpenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectExpenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectExpenseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/{id}:
+    get:
+      operationId: project_expenses_retrieve
+      description: |-
+        ``/api/v1/project-expenses`` (O16, D29).
+
+        Anyone may record one — a technician at a fuel station is closer to the fact
+        than anybody back at the yard. The manager decides.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+    patch:
+      operationId: project_expenses_partial_update
+      description: |-
+        ``/api/v1/project-expenses`` (O16, D29).
+
+        Anyone may record one — a technician at a fuel station is closer to the fact
+        than anybody back at the yard. The manager decides.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectExpenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectExpenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectExpenseRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/{id}/decide:
+    post:
+      operationId: project_expenses_decide_create
+      description: 'O16: it reaches project cost only on approval.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideExpenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DecideExpenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DecideExpenseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/{id}/reverse:
+    post:
+      operationId: project_expenses_reverse_create
+      description: 'O16: corrected by its opposite, never by an edit.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseExpenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReverseExpenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReverseExpenseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/pending:
+    get:
+      operationId: project_expenses_pending_retrieve
+      description: What this manager has waiting on them (O16).
+      tags:
+      - project-expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
           description: ''
   /api/v1/project-variations:
     get:
@@ -9037,6 +9454,16 @@ components:
         * `ACKNOWLEDGED` - Acknowledged
         * `DECLINED` - Declined
         * `CANCELLED` - Cancelled
+    DecideExpenseRequest:
+      type: object
+      properties:
+        approved:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - approved
     DecisionReasonRequest:
       type: object
       properties:
@@ -9714,6 +10141,37 @@ components:
       required:
       - count
       - items
+    ExpenseCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 30
+        is_active:
+          type: boolean
+      required:
+      - id
+      - name
+    ExpenseCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 30
+        is_active:
+          type: boolean
+      required:
+      - name
     FieldTypeEnum:
       enum:
       - TEXT
@@ -11912,6 +12370,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Disposition'
+    PaginatedExpenseCategoryList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseCategory'
     PaginatedGateInList:
       type: object
       required:
@@ -12102,6 +12579,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Organization'
+    PaginatedProjectExpenseList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectExpense'
     PaginatedProjectList:
       type: object
       required:
@@ -12587,6 +13083,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DispositionLineRequest'
+    PatchedExpenseCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 30
+        is_active:
+          type: boolean
     PatchedGateInRequest:
       type: object
       properties:
@@ -12912,6 +13420,27 @@ components:
           maxLength: 3
         notification_channels: {}
         notification_matrix: {}
+    PatchedProjectExpenseRequest:
+      type: object
+      properties:
+        project:
+          type: integer
+        job:
+          type: integer
+          nullable: true
+        category:
+          type: integer
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Excluding VAT (D24).
+        incurred_on:
+          type: string
+          format: date
+        description:
+          type: string
+          maxLength: 500
     PatchedProjectRequest:
       type: object
       properties:
@@ -13291,6 +13820,122 @@ components:
       - reference
       - site_count
       - status
+    ProjectExpense:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        project_reference:
+          type: string
+          readOnly: true
+        job:
+          type: integer
+          nullable: true
+        category:
+          type: integer
+        category_name:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Excluding VAT (D24).
+        incurred_on:
+          type: string
+          format: date
+        description:
+          type: string
+          maxLength: 500
+        recorded_by:
+          type: integer
+          readOnly: true
+        recorded_by_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ProjectExpenseStatusEnum'
+          readOnly: true
+        decided_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        decision_reason:
+          type: string
+          readOnly: true
+        reverses:
+          type: integer
+          readOnly: true
+          nullable: true
+        is_reversal:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - category
+      - category_name
+      - created_at
+      - decided_at
+      - decided_by
+      - decision_reason
+      - id
+      - incurred_on
+      - is_reversal
+      - project
+      - project_reference
+      - recorded_by
+      - recorded_by_name
+      - reverses
+      - status
+    ProjectExpenseRequest:
+      type: object
+      properties:
+        project:
+          type: integer
+        job:
+          type: integer
+          nullable: true
+        category:
+          type: integer
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: Excluding VAT (D24).
+        incurred_on:
+          type: string
+          format: date
+        description:
+          type: string
+          maxLength: 500
+      required:
+      - amount
+      - category
+      - incurred_on
+      - project
+    ProjectExpenseStatusEnum:
+      enum:
+      - SUBMITTED
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `SUBMITTED` - Waiting on the project manager
+        * `APPROVED` - Approved — counts against the project
+        * `REJECTED` - Rejected
     ProjectRequest:
       type: object
       properties:
@@ -13820,6 +14465,15 @@ components:
       - cutoff
       - retention_months
       - still_open
+    ReverseExpenseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+      - reason
     Role:
       type: object
       description: |-

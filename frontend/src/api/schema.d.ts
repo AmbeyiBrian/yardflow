@@ -1144,6 +1144,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expense-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/expense-categories`` (O16). */
+        get: operations["expense_categories_list"];
+        put?: never;
+        /** @description ``/api/v1/expense-categories`` (O16). */
+        post: operations["expense_categories_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/expense-categories`` (O16). */
+        get: operations["expense_categories_retrieve"];
+        /** @description ``/api/v1/expense-categories`` (O16). */
+        put: operations["expense_categories_update"];
+        post?: never;
+        /** @description ``/api/v1/expense-categories`` (O16). */
+        delete: operations["expense_categories_destroy"];
+        options?: never;
+        head?: never;
+        /** @description ``/api/v1/expense-categories`` (O16). */
+        patch: operations["expense_categories_partial_update"];
+        trace?: never;
+    };
     "/api/v1/gate-ins": {
         parameters: {
             query?: never;
@@ -2057,6 +2095,113 @@ export interface paths {
          *     permission nothing checks.
          */
         get: operations["permissions_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/project-expenses`` (O16, D29).
+         *
+         *     Anyone may record one — a technician at a fuel station is closer to the fact
+         *     than anybody back at the yard. The manager decides.
+         */
+        get: operations["project_expenses_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/project-expenses`` (O16, D29).
+         *
+         *     Anyone may record one — a technician at a fuel station is closer to the fact
+         *     than anybody back at the yard. The manager decides.
+         */
+        post: operations["project_expenses_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-expenses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/project-expenses`` (O16, D29).
+         *
+         *     Anyone may record one — a technician at a fuel station is closer to the fact
+         *     than anybody back at the yard. The manager decides.
+         */
+        get: operations["project_expenses_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description ``/api/v1/project-expenses`` (O16, D29).
+         *
+         *     Anyone may record one — a technician at a fuel station is closer to the fact
+         *     than anybody back at the yard. The manager decides.
+         */
+        patch: operations["project_expenses_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/project-expenses/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description O16: it reaches project cost only on approval. */
+        post: operations["project_expenses_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-expenses/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description O16: corrected by its opposite, never by an edit. */
+        post: operations["project_expenses_reverse_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-expenses/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What this manager has waiting on them (O16). */
+        get: operations["project_expenses_pending_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3856,6 +4001,10 @@ export interface components {
          * @enum {string}
          */
         CustodyTransferStatusEnum: "PENDING" | "ACKNOWLEDGED" | "DECLINED" | "CANCELLED";
+        DecideExpenseRequest: {
+            approved: boolean;
+            reason?: string;
+        };
         DecisionReasonRequest: {
             reason?: string;
         };
@@ -4113,6 +4262,17 @@ export interface components {
             items: {
                 [key: string]: unknown;
             }[];
+        };
+        ExpenseCategory: {
+            readonly id: number;
+            name: string;
+            code?: string;
+            is_active?: boolean;
+        };
+        ExpenseCategoryRequest: {
+            name: string;
+            code?: string;
+            is_active?: boolean;
         };
         /**
          * @description * `TEXT` - Text
@@ -5081,6 +5241,19 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Disposition"][];
         };
+        PaginatedExpenseCategoryList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["ExpenseCategory"][];
+        };
         PaginatedGateInList: {
             /**
              * Format: uri
@@ -5210,6 +5383,19 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Organization"][];
+        };
+        PaginatedProjectExpenseList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["ProjectExpense"][];
         };
         PaginatedProjectList: {
             /**
@@ -5492,6 +5678,11 @@ export interface components {
             client_uuid?: string | null;
             lines?: components["schemas"]["DispositionLineRequest"][];
         };
+        PatchedExpenseCategoryRequest: {
+            name?: string;
+            code?: string;
+            is_active?: boolean;
+        };
         PatchedGateInRequest: {
             source_type?: components["schemas"]["SourceTypeEnum"];
             supplier_name?: string;
@@ -5633,6 +5824,19 @@ export interface components {
             currency?: string;
             notification_channels?: unknown;
             notification_matrix?: unknown;
+        };
+        PatchedProjectExpenseRequest: {
+            project?: number;
+            job?: number | null;
+            category?: number;
+            /**
+             * Format: decimal
+             * @description Excluding VAT (D24).
+             */
+            amount?: string;
+            /** Format: date */
+            incurred_on?: string;
+            description?: string;
         };
         PatchedProjectRequest: {
             client?: number;
@@ -5818,6 +6022,53 @@ export interface components {
             readonly closed_with_unreconciled: boolean;
             close_reason?: string;
         };
+        ProjectExpense: {
+            readonly id: number;
+            project: number;
+            readonly project_reference: string;
+            job?: number | null;
+            category: number;
+            readonly category_name: string;
+            /**
+             * Format: decimal
+             * @description Excluding VAT (D24).
+             */
+            amount: string;
+            /** Format: date */
+            incurred_on: string;
+            description?: string;
+            readonly recorded_by: number;
+            readonly recorded_by_name: string;
+            readonly status: components["schemas"]["ProjectExpenseStatusEnum"];
+            readonly decided_by: number | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            readonly decision_reason: string;
+            readonly reverses: number | null;
+            readonly is_reversal: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ProjectExpenseRequest: {
+            project: number;
+            job?: number | null;
+            category: number;
+            /**
+             * Format: decimal
+             * @description Excluding VAT (D24).
+             */
+            amount: string;
+            /** Format: date */
+            incurred_on: string;
+            description?: string;
+        };
+        /**
+         * @description * `SUBMITTED` - Waiting on the project manager
+         *     * `APPROVED` - Approved — counts against the project
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        ProjectExpenseStatusEnum: "SUBMITTED" | "APPROVED" | "REJECTED";
         ProjectRequest: {
             client: number;
             reference: string;
@@ -6056,6 +6307,9 @@ export interface components {
             still_open: {
                 [key: string]: unknown;
             }[];
+        };
+        ReverseExpenseRequest: {
+            reason: string;
         };
         /**
          * @description Drop fields the requesting user is not permitted to see.
@@ -8786,6 +9040,159 @@ export interface operations {
             };
         };
     };
+    expense_categories_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedExpenseCategoryList"];
+                };
+            };
+        };
+    };
+    expense_categories_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseCategoryRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExpenseCategoryRequest"];
+                "multipart/form-data": components["schemas"]["ExpenseCategoryRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+        };
+    };
+    expense_categories_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this expense category. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+        };
+    };
+    expense_categories_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this expense category. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseCategoryRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExpenseCategoryRequest"];
+                "multipart/form-data": components["schemas"]["ExpenseCategoryRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+        };
+    };
+    expense_categories_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this expense category. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    expense_categories_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this expense category. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedExpenseCategoryRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedExpenseCategoryRequest"];
+                "multipart/form-data": components["schemas"]["PatchedExpenseCategoryRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+        };
+    };
     gate_ins_list: {
         parameters: {
             query?: {
@@ -10625,6 +11032,193 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionCatalogue"][];
+                };
+            };
+        };
+    };
+    project_expenses_list: {
+        parameters: {
+            query?: {
+                category?: number;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                job?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `SUBMITTED` - Waiting on the project manager
+                 *     * `APPROVED` - Approved — counts against the project
+                 *     * `REJECTED` - Rejected
+                 */
+                status?: "APPROVED" | "REJECTED" | "SUBMITTED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProjectExpenseList"];
+                };
+            };
+        };
+    };
+    project_expenses_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectExpenseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectExpenseRequest"];
+                "multipart/form-data": components["schemas"]["ProjectExpenseRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectExpense"];
+                };
+            };
+        };
+    };
+    project_expenses_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project expense. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectExpense"];
+                };
+            };
+        };
+    };
+    project_expenses_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project expense. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectExpenseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectExpenseRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectExpenseRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectExpense"];
+                };
+            };
+        };
+    };
+    project_expenses_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project expense. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideExpenseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DecideExpenseRequest"];
+                "multipart/form-data": components["schemas"]["DecideExpenseRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectExpense"];
+                };
+            };
+        };
+    };
+    project_expenses_reverse_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project expense. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseExpenseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReverseExpenseRequest"];
+                "multipart/form-data": components["schemas"]["ReverseExpenseRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectExpense"];
+                };
+            };
+        };
+    };
+    project_expenses_pending_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectExpense"];
                 };
             };
         };

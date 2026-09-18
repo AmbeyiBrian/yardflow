@@ -79,6 +79,7 @@ LOCAL_APPS = [
     "custody",
     "disposition",
     "notifications",
+    "commercials",
     "reporting",
     "sync",
     "platform_admin",

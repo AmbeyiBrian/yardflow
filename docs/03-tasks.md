@@ -982,7 +982,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* stock moves on the storekeeper's confirmation while the PM's acceptance is still
   pending — the ledger must not wait.
 
-- [ ] **T10.15 `[B]` Expenses**
+- [x] **T10.15 `[B]` Expenses**
   Refs: §4.14 · O16, D29
   `ExpenseCategory` seeded; `ProjectExpense` recorded by anyone, approved by the PM, append-only
   after approval with correction by reversing entry, unevidenced entries flagged.

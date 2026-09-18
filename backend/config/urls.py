@@ -47,6 +47,7 @@ from catalogue.views import (
     ItemCategoryViewSet,
     ItemTypeViewSet,
 )
+from commercials.views import ExpenseCategoryViewSet, ProjectExpenseViewSet
 from core.attachment_api import AttachmentTargetsView, AttachmentViewSet
 from core.organization_api import OrganizationProfileView
 from core.views import attachment_download
@@ -203,6 +204,10 @@ router.register(
     "project-variations", ProjectVariationViewSet, basename="project-variation"
 )
 router.register("subcontractors", SubcontractorViewSet, basename="subcontractor")
+router.register(
+    "expense-categories", ExpenseCategoryViewSet, basename="expense-category"
+)
+router.register("project-expenses", ProjectExpenseViewSet, basename="project-expense")
 router.register("locations", LocationViewSet, basename="location")
 router.register("stock-nodes", StockNodeViewSet, basename="stock-node")
 
