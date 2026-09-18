@@ -61,6 +61,8 @@ class Event:
     # T7.5: a queued export is finished. In-app only — it is a link, and a link
     # is useless in an SMS.
     REPORT_EXPORT_READY = "report.export_ready"
+    # O7: an expensive release on a project, told to the owner after the fact.
+    HIGH_VALUE_PROJECT_RELEASE = "project.high_value_release"
 
 
 @dataclass(frozen=True)
@@ -167,6 +169,18 @@ DEFAULT_MATRIX: tuple[EventSpec, ...] = (
         "Disposal approved",
         (Recipient.REQUESTER, Recipient.STOREKEEPERS),
         (Channel.IN_APP,),
+    ),
+    EventSpec(
+        Event.HIGH_VALUE_PROJECT_RELEASE,
+        "Expensive material approved on a project",
+        # The manager already knows — they just approved it. This is for the
+        # people who would otherwise never see it: with criticality routing off
+        # for project material (D22) and self-approval permitted (O6), this
+        # notification and the report behind it are the only things standing
+        # between one signature and nobody noticing.
+        (Recipient.OWNER,),
+        (Channel.IN_APP,),
+        carries_a_control=True,
     ),
     EventSpec(
         Event.DISPOSAL_COMPLETED,

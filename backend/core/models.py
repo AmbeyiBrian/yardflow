@@ -175,6 +175,20 @@ class OrganizationSettings(models.Model):
     # F5: unanswered approvals escalate to the configured fallback.
     approval_escalation_hours = models.PositiveIntegerField(default=24)
 
+    # O7: single-signature approval on project material (D22) should not also be
+    # unwatched. Above this, the owner is told after the fact — it blocks
+    # nothing, because the point is visibility, not a second gate.
+    project_release_notify_above = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Tell the owner when project material above this value is approved, "
+            "excluding VAT. Empty means never."
+        ),
+    )
+
     # --- Documents and retention -----------------------------------------
     # M4: posted documents are immutable. Corrections are reversals, not edits.
     allow_document_amendment = models.BooleanField(default=False)

@@ -956,7 +956,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a pass naming a job at a different site is refused, and a pass with no job behaves
   exactly as it does today.
 
-- [ ] **T10.11 `[B]` High-value release notification**
+- [x] **T10.11 `[B]` High-value release notification**
   Refs: §9, §4.14 · O7
   Tenant threshold setting; owner and admin notified after a project release above it.
   *Done when:* a release above the threshold notifies and one below does not, and **neither is

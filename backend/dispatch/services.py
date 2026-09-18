@@ -10,8 +10,9 @@ anything not approved or expired. That refusal is the product.
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
 from django.utils import timezone
@@ -46,6 +47,8 @@ from dispatch.models import (
 from locations.nodes import node_for_client, node_for_location, node_for_user
 from stock.models import MovementType
 from stock.services import MovementRequest, post_movement
+
+logger = logging.getLogger(__name__)
 
 
 class GateOutNotReady(DomainError):
@@ -241,6 +244,77 @@ def _summary(messages: list[str]) -> str:
     return f"{len(messages)} lines ask for more than is in stock. " + messages[0]
 
 
+def _notify_if_expensive(gate_out, *, approved_by) -> None:
+    """Tell the owner when something expensive leaves on a project (O7).
+
+    After the fact, and blocking nothing: the material moves and the message
+    follows. The point is that single-signature approval on project material
+    (D22) should not also be unwatched — not to add a second gate, which O6
+    deliberately did not ask for.
+
+    Failures here must never reach the approval. `emit` schedules on commit for
+    exactly that reason (§9.1, L3), and the value calculation is wrapped because
+    a missing price is not grounds for refusing an approval that already
+    happened.
+    """
+    from approvals.engine import project_of
+
+    project = project_of(gate_out)
+    if project is None:
+        return
+
+    threshold = gate_out.organization.settings.project_release_notify_above
+    if threshold is None:
+        return
+
+    try:
+        value = _requested_value(gate_out)
+    except Exception:  # pragma: no cover - defensive; see the docstring
+        logger.exception("could not value gate-out %s for O7", gate_out.pk)
+        return
+
+    if value is None or value < threshold:
+        return
+
+    _emit(
+        gate_out,
+        "project.high_value_release",
+        payload={
+            "label": str(gate_out),
+            "number": gate_out.number,
+            "project": str(project),
+            "value": str(value),
+            "approved_by": approved_by.full_name or str(approved_by),
+            "self_approved": gate_out.requested_by_id == approved_by.pk,
+        },
+    )
+
+
+def _requested_value(gate_out) -> Decimal | None:
+    """What this pass is worth, at the catalogue prices it would move at (O7).
+
+    Uses the item types' current unit costs rather than the ledger's captured
+    ones, because nothing has moved yet — the movements that carry a captured
+    valuation (O11) are written at release, not at approval.
+
+    Returns None when no line carries a price at all, so an unvalued pass is
+    never reported as a cheap one.
+    """
+    total = Decimal("0")
+    priced = False
+    for line in gate_out.lines.select_related("item_type"):
+        unit_cost = line.item_type.unit_cost
+        if unit_cost is None:
+            continue
+        priced = True
+        total += unit_cost * Decimal(str(line.requested_qty))
+    if not priced:
+        return None
+    # Quantities carry three decimal places (§3.2) and money carries two, so the
+    # product needs rounding back or the figure reads as 1800.00000.
+    return total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def _expiry_for(gate_out: GateOut):
     """Q3: an approved pass expires if not released within the window."""
     hours = gate_out.organization.settings.gate_pass_expiry_hours or 24
@@ -315,6 +389,7 @@ def approve_gate_out(
         gate_out.expires_at = _expiry_for(gate_out)
         gate_out.save(update_fields=["status", "approved_at", "expires_at", "updated_at"])
         _emit(gate_out, "gate_out.approved")
+        _notify_if_expensive(gate_out, approved_by=actor)
     else:
         _emit(gate_out, "gate_out.awaiting_approval")
 
@@ -891,7 +966,7 @@ def escalate_overdue_approvals(organization_id) -> int:
 # --------------------------------------------------------------------------
 
 
-def _emit(gate_out, event: str) -> None:
+def _emit(gate_out, event: str, *, payload: dict | None = None) -> None:
     """Emit a notification event (L1–L3, §9.1).
 
     Dispatched on commit by the notification framework (T4.16), so **a failed
@@ -901,7 +976,7 @@ def _emit(gate_out, event: str) -> None:
         from notifications.events import emit
     except ImportError:  # pragma: no cover - before T4.16
         return
-    emit(event, gate_out)
+    emit(event, gate_out, payload=payload)
 
 
 def _ip(request):
