@@ -343,6 +343,9 @@ def _load_reports() -> None:
     global _LOADED
     if _LOADED:
         return
+    # Epic O's reports live with the costing engine they read (§1.2), so they
+    # are imported here too rather than re-exported through reporting/.
+    from commercials import reports as commercial_reports  # noqa: F401
     from reporting import reports  # noqa: F401
 
     _LOADED = True

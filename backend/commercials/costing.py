@@ -27,8 +27,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from network.models import Project
 
 ZERO = Decimal("0.00")
 
@@ -343,7 +347,7 @@ def from_snapshot(snapshot) -> ProjectCost:
 class ProjectPerformance:
     """Cost against what the project is worth (O12)."""
 
-    project: object
+    project: Project
     cost: ProjectCost
     contract_value: Decimal | None = None
     cost_budget: Decimal | None = None

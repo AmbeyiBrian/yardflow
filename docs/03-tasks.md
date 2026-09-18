@@ -1007,7 +1007,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* storekeeper, PM and owner responses are asserted **field by field**; a withheld
   figure is absent, and the PM's labour total is accompanied by nothing that divides into a rate.
 
-- [ ] **T10.19 `[B]` Project performance reports**
+- [x] **T10.19 `[B]` Project performance reports**
   Refs: §10 · O12
   Four report classes: project performance, projects ranked, self-approved releases, uncosted and
   overlapping labour.
