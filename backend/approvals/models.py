@@ -198,6 +198,12 @@ class ApprovalAction(TenantModel):
         ApprovalRequest, on_delete=models.PROTECT, related_name="actions"
     )
 
+    # O6: a project manager may approve material they raised themselves. It is
+    # recorded here rather than left for a report to work out by comparing
+    # `requested_by` against `actor` across two tables — the owner's view of it
+    # (O12) should not depend on a join nobody thought to write.
+    self_approved = models.BooleanField(default=False)
+
     # F5: recorded as "X on behalf of Y", never as Y. Attributing a delegated
     # approval to the principal would forge their signature on a decision they
     # never made.

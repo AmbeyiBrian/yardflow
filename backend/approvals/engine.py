@@ -252,11 +252,46 @@ def predicate_matches(conditions: dict, facts: ApprovalFacts) -> bool:
 
 @dataclass(frozen=True)
 class RequiredLevel:
-    """One level of approval a document needs."""
+    """One level of approval a document needs.
+
+    Addressed to a **role** by the criticality rules, or to a **person** by the
+    project branch (`O6`). Exactly one of the two is set, which is the same
+    invariant ``ApprovalRequest`` carries in the database.
+    """
 
     level: int
-    role: Role
-    rule: ApprovalRule
+    role: Role | None = None
+    rule: ApprovalRule | None = None
+    user: object | None = None
+
+    @property
+    def label(self) -> str:
+        """Who this level is waiting on, for a log line or a notification."""
+        if self.user is not None:
+            return getattr(self.user, "full_name", "") or str(self.user)
+        return self.role.name if self.role is not None else "nobody"
+
+
+class ProjectHasNoActiveManager(DomainError):
+    """A project's material cannot move because its manager cannot act (D28).
+
+    Deliberately an error rather than a fallback. Falling through to the
+    criticality rules would quietly restore a weaker control at the one moment
+    nobody is watching for it, and the storekeeper would never learn why the
+    approval they were waiting for could not arrive.
+    """
+
+
+def project_of(document):  # type: ignore[no-untyped-def]
+    """The project a document costs to, if any (`O5`, `O6`).
+
+    One place, so routing and costing can never disagree about which project a
+    movement belongs to.
+    """
+    attribution = getattr(document, "project_attribution", None)
+    if attribution is not None:
+        return attribution
+    return getattr(document, "project", None)
 
 
 def required_levels(document, *, facts: ApprovalFacts | None = None) -> list[RequiredLevel]:
@@ -265,6 +300,26 @@ def required_levels(document, *, facts: ApprovalFacts | None = None) -> list[Req
     Returns an empty list when nothing is required — §5.2's auto-approval case,
     which still writes an ``ApprovalAction`` so the trail has no gap.
     """
+    # O6, D22: project material routes to that project's manager, as the only
+    # level, and never reaches the criticality rules below.
+    #
+    # A branch rather than a rule row, deliberately. "The manager of whichever
+    # project this happens to be for" cannot be expressed in a table keyed on
+    # category and criticality without inventing a placeholder role that nobody
+    # holds — and that placeholder would then be grantable to anyone, undoing
+    # the very control it stood in for.
+    project = project_of(document)
+    if project is not None and project.manager_id is not None:
+        manager = project.manager
+        if not manager.is_active:
+            raise ProjectHasNoActiveManager(
+                f"{manager.full_name or manager} manages {project}, and their "
+                f"account is not active. Material for this project cannot move "
+                f"until an owner assigns a new manager (D28).",
+                details={"project": str(project), "manager": str(manager)},
+            )
+        return [RequiredLevel(level=1, user=manager)]
+
     facts = facts or collect_facts(document)
 
     rules = (
@@ -372,8 +427,13 @@ def create_requests(document, *, requested_by=None) -> list[ApprovalRequest]:
                 document_number=getattr(document, "number", "") or "",
                 level=required.level,
                 required_role=required.role,
+                required_user=required.user,
                 requested_by=requested_by,
-                due_at=due_at,
+                # D22: no escalation on a PM level. `due_at` left null is what
+                # the sweep skips on, so this needs no special case there — and
+                # an unanswered request waits, which is the accepted cost of
+                # single-signature control.
+                due_at=None if required.user is not None else due_at,
             )
         )
     return requests
@@ -429,6 +489,14 @@ def next_pending_request(document) -> ApprovalRequest | None:
     )
 
 
+def _is_requester(document, user) -> bool:
+    """Whether ``user`` raised ``document``."""
+    if document is None:
+        return False
+    requester_id = getattr(document, "requested_by_id", None)
+    return bool(requester_id) and requester_id == user.pk
+
+
 def can_approve(user, approval_request: ApprovalRequest, *, document=None) -> tuple[bool, str]:
     """Whether ``user`` may decide this request, and why not if they may not.
 
@@ -441,12 +509,22 @@ def can_approve(user, approval_request: ApprovalRequest, *, document=None) -> tu
     """
     from accounts.services import resolve_permissions
 
-    if document is not None:
-        requester_id = getattr(document, "requested_by_id", None)
-        if requester_id and requester_id == user.pk:
-            settings = approval_request.organization.settings
-            if not settings.allow_self_approval:
-                return False, "self"
+    # O6: a level addressed to a person is that person's to answer, and nobody
+    # else's. No delegation — a delegation lends a *role*, and lending someone's
+    # signature on a budget they are accountable for is not the same thing
+    # (D22). No blanket-permission override either, for the same reason.
+    if approval_request.required_user_id is not None:
+        if user.pk != approval_request.required_user_id:
+            return False, "not_the_manager"
+        # Self-approval is permitted here and recorded rather than blocked
+        # (O6). It is a deliberate exception, and R2 in the requirements is
+        # where the cost of it is written down.
+        return True, "self" if _is_requester(document, user) else ""
+
+    if document is not None and _is_requester(document, user):
+        settings = approval_request.organization.settings
+        if not settings.allow_self_approval:
+            return False, "self"
 
     holds_role = user.user_roles.filter(role_id=approval_request.required_role_id).exists()
     if holds_role:
@@ -525,6 +603,13 @@ def record_decision(
     if not allowed:
         if why == "self":
             raise SelfApprovalNotAllowed()
+        if why == "not_the_manager":
+            manager = approval_request.required_user
+            who = (manager.full_name or str(manager)) if manager else "the manager"
+            raise NotAnApprover(
+                f"This is for {who} to decide — they manage the project it is "
+                f"costed to (O6)."
+            )
         role = approval_request.required_role
         role_name = role.name if role is not None else "an approver"
         raise NotAnApprover(f"Deciding this needs the {role_name} role.")
@@ -544,6 +629,7 @@ def record_decision(
         delegation=delegation,
         decision=decision,
         reason=reason,
+        self_approved=why == "self",
         auth_method=auth_method or AuthMethod.PASSWORD,
         webauthn_credential=webauthn_credential,
         ip=ip,

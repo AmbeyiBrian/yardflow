@@ -117,7 +117,7 @@ def submit_gate_out(gate_out: GateOut, *, submitted_by=None, request=None) -> Ga
         create_requests(gate_out, requested_by=submitted_by or gate_out.requested_by)
         note = (
             f"Submitted for approval: {len(levels)} level(s), "
-            f"{', '.join(level.role.name for level in levels)}."
+            f"{', '.join(level.label for level in levels)}."
         )
 
     gate_out.save(

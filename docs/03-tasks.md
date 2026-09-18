@@ -940,7 +940,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   neither stays legal, for §5.2's auto-approval row. No routing change in this task.
   *Done when:* every existing approval test passes unchanged and a row with both is rejected.
 
-- [ ] **T10.9 `[B]` Project routing in the engine**
+- [x] **T10.9 `[B]` Project routing in the engine**
   Refs: §5.4 · O6, D22, D28
   `project_of(document)`, branching before `collect_facts`. `self_approved` recorded on the action;
   `due_at` left null so the escalation sweep skips it; `resolve_delegate()` not consulted; an
