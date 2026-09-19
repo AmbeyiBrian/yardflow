@@ -29,19 +29,9 @@ import {
   Stat,
   StatusBadge,
 } from '../../components/ui/data';
+import { MONEY_INPUT, Money } from '../../components/ui/money';
 import type { Client } from '../settings/types';
 import type { Project, ProjectPerformance, ProjectVariation } from './types';
-
-/** Money as it should read in a yard: grouped, two places, never a bare float. */
-function money(value?: string | null): string {
-  if (value === undefined || value === null || value === '') return '';
-  const parsed = Number(value);
-  if (Number.isNaN(parsed)) return value;
-  return parsed.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -86,7 +76,7 @@ export default function ProjectsPage() {
             {
               header: 'Value',
               // Absent for anyone without view_margin, and absent is not zero.
-              cell: (project) => money(project.current_contract_value),
+              cell: (project) => <Money value={project.current_contract_value} />,
               wideOnly: true,
             },
             { header: 'Status', cell: (project) => <StatusBadge status={project.status} /> },
@@ -215,7 +205,12 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
               hint="Excluding VAT."
               error={form.formState.errors.contract_value?.message}
             >
-              <Input id="pr-value" inputMode="decimal" {...form.register('contract_value')} />
+              <Input
+                id="pr-value"
+                inputMode="decimal"
+                className={MONEY_INPUT}
+                {...form.register('contract_value')}
+              />
             </Field>
 
             <Field
@@ -224,7 +219,12 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
               hint="Excluding VAT. What the manager may spend to deliver it."
               error={form.formState.errors.cost_budget?.message}
             >
-              <Input id="pr-budget" inputMode="decimal" {...form.register('cost_budget')} />
+              <Input
+                id="pr-budget"
+                inputMode="decimal"
+                className={MONEY_INPUT}
+                {...form.register('cost_budget')}
+              />
             </Field>
           </>
         ) : null}
@@ -273,7 +273,8 @@ export function ProjectDetailPage() {
 
       {figures?.is_over_budget ? (
         <Banner tone="warning">
-          This project is over its budget by {money(figures.budget_variance?.replace('-', ''))}.
+          This project is over its budget by{' '}
+          <Money value={figures.budget_variance?.replace('-', '')} />.
           Nothing is blocked — it is stated so the decision to keep spending is a
           decision somebody makes.
         </Banner>
@@ -287,30 +288,29 @@ export function ProjectDetailPage() {
           hint={figures?.progress_percent ? `${figures.progress_percent}%` : undefined}
         />
         {figures?.cost_to_date !== undefined ? (
-          <Stat label="Cost to date" value={money(figures.cost_to_date)} />
+          <Stat label="Cost to date" value={<Money value={figures.cost_to_date} />} />
         ) : null}
         {figures?.cost_budget !== undefined && figures.cost_budget !== null ? (
           <Stat
             label="Budget"
-            value={money(figures.cost_budget)}
+            value={<Money value={figures.cost_budget} />}
             tone={figures.is_over_budget ? 'bad' : 'neutral'}
           />
         ) : null}
         {figures?.exposure !== undefined ? (
           <Stat
             label="Still out"
-            value={money(figures.exposure)}
+            value={<Money value={figures.exposure} />}
             hint="Issued and not yet accounted for. Not a cost yet."
           />
         ) : null}
         {figures?.contract_value !== undefined && figures.contract_value !== null ? (
-          <Stat label="Contract value" value={money(figures.contract_value)} />
+          <Stat label="Contract value" value={<Money value={figures.contract_value} />} />
         ) : null}
         {figures?.margin !== undefined && figures.margin !== null ? (
           <Stat
             label="Margin"
-            value={money(figures.margin)}
-            tone={Number(figures.margin) < 0 ? 'bad' : 'good'}
+            value={<Money value={figures.margin} tone={Number(figures.margin) < 0 ? 'bad' : 'good'} />}
             hint={figures.margin_percent ? `${figures.margin_percent}% before overheads` : undefined}
           />
         ) : null}
@@ -318,11 +318,11 @@ export function ProjectDetailPage() {
 
       {figures?.material !== undefined ? (
         <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-          <Stat label="Material" value={money(figures.material)} />
-          <Stat label="Loss" value={money(figures.material_loss)} />
-          <Stat label="Subcontract" value={money(figures.subcontractor)} />
-          <Stat label="Labour" value={money(figures.labour)} />
-          <Stat label="Expenses" value={money(figures.expenses)} />
+          <Stat label="Material" value={<Money value={figures.material} />} />
+          <Stat label="Loss" value={<Money value={figures.material_loss} />} />
+          <Stat label="Subcontract" value={<Money value={figures.subcontractor} />} />
+          <Stat label="Labour" value={<Money value={figures.labour} />} />
+          <Stat label="Expenses" value={<Money value={figures.expenses} />} />
         </div>
       ) : null}
 
@@ -334,8 +334,8 @@ export function ProjectDetailPage() {
           empty={<EmptyState title="No variations." hint="Scope changes are recorded here." />}
           columns={[
             { header: 'Reference', cell: (variation) => variation.reference },
-            { header: 'Value', cell: (variation) => money(variation.value_delta) },
-            { header: 'Budget', cell: (variation) => money(variation.budget_delta), wideOnly: true },
+            { header: 'Value', cell: (variation) => <Money value={variation.value_delta} /> },
+            { header: 'Budget', cell: (variation) => <Money value={variation.budget_delta} />, wideOnly: true },
             { header: 'From', cell: (variation) => variation.effective_on, wideOnly: true },
             { header: 'Status', cell: (variation) => <StatusBadge status={variation.status} /> },
           ]}

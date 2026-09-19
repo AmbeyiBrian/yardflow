@@ -250,7 +250,12 @@ export function ReportPage() {
               // disagree about what a number looks like (M2).
               cell: (row: Record<string, string>) => row[column.key],
               wideOnly: column.wide_only,
-              className: column.numeric ? 'text-right whitespace-nowrap' : undefined,
+              // Tabular numerals so a column of figures lines up on the decimal
+              // point. In a proportional font `1` is narrower than `8`, and a
+              // report nobody can scan down is a report nobody reads.
+              className: column.numeric
+                ? 'text-right whitespace-nowrap tabular-nums'
+                : undefined,
             }))}
             empty={
               <EmptyState

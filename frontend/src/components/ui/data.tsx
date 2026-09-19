@@ -326,7 +326,10 @@ export function Stat({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">{label}</p>
-      <p className={cn('text-2xl font-semibold', tones[tone])}>{value}</p>
+      {/* A stat is a figure, so it gets figure treatment: tabular numerals,
+          which keep a row of tiles aligned instead of each one drifting by the
+          width of its own digits. */}
+      <p className={cn('text-2xl font-semibold tabular-nums', tones[tone])}>{value}</p>
       {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
     </div>
   );

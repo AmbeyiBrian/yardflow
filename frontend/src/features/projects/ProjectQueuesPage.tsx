@@ -10,24 +10,15 @@
  * both are a manager being asked to agree to a number rather than to a movement.
  */
 
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { errorMessage, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Card, Field, Spinner, Textarea } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet } from '../../components/ui/data';
+import { Money } from '../../components/ui/money';
 import type { ProjectExpense } from './types';
 
 type Tab = 'expenses' | 'closeouts';
-
-function money(value?: string | null): string {
-  if (value === undefined || value === null || value === '') return '';
-  const parsed = Number(value);
-  if (Number.isNaN(parsed)) return value;
-  return parsed.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 export default function ProjectQueuesPage() {
   const [tab, setTab] = useState<Tab>('expenses');
@@ -78,7 +69,7 @@ function ExpenseQueue() {
           columns={[
             { header: 'Project', cell: (expense) => expense.project_reference ?? '' },
             { header: 'What', cell: (expense) => expense.category_name ?? '' },
-            { header: 'Amount', cell: (expense) => money(expense.amount) },
+            { header: 'Amount', cell: (expense) => <Money value={expense.amount} /> },
             { header: 'When', cell: (expense) => expense.incurred_on, wideOnly: true },
             { header: 'Who', cell: (expense) => expense.recorded_by_name ?? '', wideOnly: true },
           ]}
@@ -152,7 +143,7 @@ function DecideExpenseSheet({
             <dl className="flex flex-col gap-1 text-sm">
               <Row label="Project" value={expense.project_reference ?? ''} />
               <Row label="Category" value={expense.category_name ?? ''} />
-              <Row label="Amount" value={money(expense.amount)} />
+              <Row label="Amount" value={<Money value={expense.amount} />} />
               <Row label="Incurred" value={expense.incurred_on} />
               <Row label="Recorded by" value={expense.recorded_by_name ?? ''} />
             </dl>
@@ -303,7 +294,7 @@ function AcceptCostSheet({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-3">
       <dt className="text-slate-500">{label}</dt>
