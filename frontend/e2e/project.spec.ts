@@ -95,6 +95,15 @@ test.describe('A purchase order, end to end', () => {
     await page.getByLabel('Contract value').fill('500000');
     await page.getByLabel('Cost budget').fill('300000');
 
+    // The tenant's currency is shown, and a bare 500000 is echoed as something
+    // a person can actually check. `40000000` in a box is not money.
+    // Scoped to the sheet: a project created by an earlier run can carry the
+    // same figure in the list behind it, and at phone width that copy is in the
+    // DOM but hidden.
+    await expect(
+      page.getByRole('dialog').getByText('KES 500,000.00').first(),
+    ).toBeVisible();
+
     await page.getByRole('button', { name: /^create$/i }).click();
 
     // DataList renders cards *and* a table with one hidden by CSS (§7.3), so

@@ -29,7 +29,7 @@ import {
   Stat,
   StatusBadge,
 } from '../../components/ui/data';
-import { MONEY_INPUT, Money } from '../../components/ui/money';
+import { Money, MoneyInput } from '../../components/ui/money';
 import { JobSheet } from './JobSheet';
 import type { Client } from '../settings/types';
 import type { Project, ProjectJob, ProjectPerformance, ProjectVariation } from './types';
@@ -206,12 +206,7 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
               hint="Excluding VAT."
               error={form.formState.errors.contract_value?.message}
             >
-              <Input
-                id="pr-value"
-                inputMode="decimal"
-                className={MONEY_INPUT}
-                {...form.register('contract_value')}
-              />
+              <MoneyInput id="pr-value" {...form.register('contract_value')} />
             </Field>
 
             <Field
@@ -220,12 +215,7 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
               hint="Excluding VAT. What the manager may spend to deliver it."
               error={form.formState.errors.cost_budget?.message}
             >
-              <Input
-                id="pr-budget"
-                inputMode="decimal"
-                className={MONEY_INPUT}
-                {...form.register('cost_budget')}
-              />
+              <MoneyInput id="pr-budget" {...form.register('cost_budget')} />
             </Field>
           </>
         ) : null}
@@ -535,12 +525,7 @@ function EditProjectSheet({
             hint="Excluding VAT. To change what was agreed, raise a variation — this is for correcting a mistake."
             error={form.formState.errors.contract_value?.message}
           >
-            <Input
-              id="pe-value"
-              inputMode="decimal"
-              className={MONEY_INPUT}
-              {...form.register('contract_value')}
-            />
+            <MoneyInput id="pe-value" {...form.register('contract_value')} />
           </Field>
         ) : null}
 
@@ -551,12 +536,7 @@ function EditProjectSheet({
             hint="Excluding VAT."
             error={form.formState.errors.cost_budget?.message}
           >
-            <Input
-              id="pe-budget"
-              inputMode="decimal"
-              className={MONEY_INPUT}
-              {...form.register('cost_budget')}
-            />
+            <MoneyInput id="pe-budget" {...form.register('cost_budget')} />
           </Field>
         ) : null}
 

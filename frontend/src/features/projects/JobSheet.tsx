@@ -18,7 +18,7 @@ import { useForm } from 'react-hook-form';
 import { applyFieldErrors, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
 import { Sheet } from '../../components/ui/data';
-import { MONEY_INPUT } from '../../components/ui/money';
+import { MoneyInput } from '../../components/ui/money';
 import type { Site } from '../settings/types';
 import type { Project, Subcontractor } from './types';
 
@@ -205,10 +205,8 @@ export function JobSheet({
               hint="Excluding VAT. Counts against the project when the job closes."
               error={form.formState.errors.agreed_price?.message}
             >
-              <Input
+              <MoneyInput
                 id="job-price"
-                inputMode="decimal"
-                className={MONEY_INPUT}
                 {...form.register('agreed_price', { required: 'What was agreed?' })}
               />
             </Field>

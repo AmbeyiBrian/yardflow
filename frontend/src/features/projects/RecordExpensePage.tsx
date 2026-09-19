@@ -19,7 +19,7 @@ import { applyFieldErrors, useAction, useList } from '../../api/hooks';
 import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
 import { PageHeader } from '../../components/ui/data';
-import { MONEY_INPUT } from '../../components/ui/money';
+import { MoneyInput } from '../../components/ui/money';
 import type { ExpenseCategory, Project, ProjectExpense } from './types';
 
 function today(): string {
@@ -125,10 +125,8 @@ export default function RecordExpensePage() {
               hint="Excluding VAT."
               error={form.formState.errors.amount?.message}
             >
-              <Input
+              <MoneyInput
                 id="ex-amount"
-                inputMode="decimal"
-                className={MONEY_INPUT}
                 {...form.register('amount', { required: 'How much was it?' })}
               />
             </Field>
