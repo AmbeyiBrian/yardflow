@@ -24,6 +24,9 @@ DEMO_USERS = [
     ("store@demo.local", "0700000003", "Sara Storekeeper", "Storekeeper"),
     ("approver@demo.local", "0700000004", "Alan Approver", "Approver"),
     ("tech@demo.local", "0700000005", "Tom Technician", "Technician"),
+    # O1: the seventh seeded role. Without someone holding it, every Epic O
+    # screen is unreachable in the demo tenant.
+    ("pm@demo.local", "0700000006", "Pippa Manager", "Project manager"),
 ]
 
 
@@ -94,6 +97,13 @@ class Command(BaseCommand):
                         organization=organization, user=user, role=roles[role_name]
                     )
 
+                # C5, C6: somewhere to send material. Here rather than in the
+                # provisioning seeders, because a real customer builds their own
+                # site register and demo data has no business in one.
+                from network.seeding import seed_demo_network
+
+                seed_demo_network(organization)
+
         base_domain = getattr(settings, "TENANT_BASE_DOMAIN", "localhost")
         self.stdout.write(self.style.SUCCESS(f"\nDemo tenant '{options['name']}' created.\n"))
         self.stdout.write(f"  Sign in at: http://{slug}.{base_domain}:5173")
@@ -152,16 +162,46 @@ class Command(BaseCommand):
 
         # Every table with an organization column, discovered from the models so
         # a new app cannot be forgotten here.
-        tables = [
-            model._meta.db_table
+        tenant_models = [
+            model
             for model in apps.get_models()
             if any(field.name == "organization" for field in model._meta.local_fields)
         ]
+        tables = [model._meta.db_table for model in tenant_models]
+
+        # ...**and the join tables hanging off them**, which have no
+        # organization column of their own and so never appeared in the list
+        # above. With FK enforcement switched off below, their rows simply
+        # outlived their parents: `network_workorder_sites` was carrying rows
+        # pointing at work orders deleted by an earlier reset, and nothing
+        # noticed until a migration tried to rebuild the constraint.
+        #
+        # Deleted first, because a join row is meaningless once either end is
+        # gone and the parent delete is what would orphan it.
+        def rows_for_this_tenant(table: str, model) -> str:
+            """A join table is scoped through the model that owns it."""
+            return (
+                f'DELETE FROM "{table}" WHERE {model._meta.model_name}_id IN '
+                f'(SELECT id FROM "{model._meta.db_table}" WHERE organization_id = %s)'
+            )
+
+        join_deletes = []
+        for model in tenant_models:
+            for field in model._meta.local_many_to_many:
+                through = field.remote_field.through
+                # `through` is only ever None on an unresolved lazy reference,
+                # which cannot happen once the app registry is ready.
+                if through is not None and through._meta.auto_created:
+                    join_deletes.append(
+                        rows_for_this_tenant(through._meta.db_table, model)
+                    )
 
         with psycopg.connect(owner_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute("SET session_replication_role = 'replica'")
                 try:
+                    for statement in join_deletes:
+                        cursor.execute(statement, [organization_id])
                     for table in tables:
                         cursor.execute(
                             f'DELETE FROM "{table}" WHERE organization_id = %s',

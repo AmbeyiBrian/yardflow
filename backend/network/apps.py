@@ -13,3 +13,4 @@ class NetworkConfig(AppConfig):
         from network.isolation import register as register_isolation_fixtures
 
         register_isolation_fixtures()
+

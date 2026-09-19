@@ -24,6 +24,7 @@ export const PEOPLE = {
   storekeeper: 'store@demo.local',
   approver: 'approver@demo.local',
   technician: 'tech@demo.local',
+  manager: 'pm@demo.local',
 } as const;
 
 export async function signIn(page: Page, identifier: string): Promise<void> {

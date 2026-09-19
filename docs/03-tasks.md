@@ -1038,7 +1038,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   receipt photo, reusing the attachment control.
   *Done when:* a technician records days and an expense on a phone without leaving the job.
 
-- [ ] **T10.24 `[T]` End-to-end project lifecycle**
+- [x] **T10.24 `[T]` End-to-end project lifecycle**
   Refs: §14
   Playwright on a mobile viewport: create a PO project, subcontract one job, issue material through
   PM approval, close out with days, record and approve an expense, close the project, read the

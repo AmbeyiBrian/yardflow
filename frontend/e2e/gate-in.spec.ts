@@ -337,7 +337,12 @@ test.describe('Correcting a draft', () => {
     await page.getByRole('button', { name: 'Save as draft' }).click();
 
     await expect(page).toHaveURL(/\/gate-in\/\d+$/, { timeout: 30_000 });
-    await expect(page.getByText('9.000').first()).toBeVisible();
+    // Cards and a table are both in the DOM with one hidden by CSS (§7.3), so
+    // `.first()` can resolve the hidden one — the same trap the gate-out spec
+    // already documents. Filter to what is actually on screen.
+    await expect(
+      page.getByText('9.000').filter({ visible: true }).first(),
+    ).toBeVisible();
 
     // And a draft made by mistake does not have to stay in the list.
     await page.getByRole('button', { name: 'Discard' }).click();
