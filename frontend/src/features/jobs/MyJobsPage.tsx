@@ -19,6 +19,7 @@ import { PERM } from '../../auth/permissions';
 import { useSession } from '../../auth/session';
 import { Banner, Button, Spinner } from '../../components/ui';
 import { EmptyState, PageHeader, StatusBadge } from '../../components/ui/data';
+import { SearchField } from '../../components/ui/SearchField';
 import { JobSheet } from '../projects/JobSheet';
 import type { Job } from './types';
 
@@ -28,12 +29,14 @@ export default function MyJobsPage() {
   // H1: raising a job had no screen at all until now, so the requirement named
   // an actor — the storekeeper — who could not carry it out.
   const [raising, setRaising] = useState(false);
+  const [search, setSearch] = useState('');
 
   // `open=true` rather than a status this screen picks: "still to be closed
   // out" is three statuses, and a client that named one of them silently hid
   // every job already awaiting closeout — which is the list a technician came
   // for. The server owns that definition (see JobViewSet.get_queryset).
   const jobsQuery = useList<Job>('jobs', {
+    search: search || undefined,
     assignee: seesEverything ? undefined : 'me',
     open: 'true',
     page_size: 50,
@@ -65,6 +68,13 @@ export default function MyJobsPage() {
             ) : null}
           </>
         }
+      />
+
+      <SearchField
+        value={search}
+        onChange={setSearch}
+        label="Search jobs"
+        placeholder="Job reference, site or description"
       />
 
       {error ? <Banner tone="error">{errorMessage(error)}</Banner> : null}

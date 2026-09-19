@@ -30,6 +30,7 @@ import {
   StatusBadge,
 } from '../../components/ui/data';
 import { Money, MoneyInput } from '../../components/ui/money';
+import { SearchField } from '../../components/ui/SearchField';
 import { JobSheet } from './JobSheet';
 import type { Client } from '../settings/types';
 import type { Project, ProjectJob, ProjectPerformance, ProjectVariation } from './types';
@@ -37,9 +38,13 @@ import type { Project, ProjectJob, ProjectPerformance, ProjectVariation } from '
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const { has } = useSession();
 
-  const projects = useList<Project>('projects', { page_size: 100 });
+  const projects = useList<Project>('projects', {
+    search: search || undefined,
+    page_size: 100,
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -51,6 +56,13 @@ export default function ProjectsPage() {
             <Button onClick={() => setSheetOpen(true)}>New project</Button>
           ) : null
         }
+      />
+
+      <SearchField
+        value={search}
+        onChange={setSearch}
+        label="Search projects"
+        placeholder="PO number, reference or title"
       />
 
       <ListState query={projects}>
@@ -66,9 +78,19 @@ export default function ProjectsPage() {
           }
           columns={[
             {
-              header: 'Reference',
+              // Two different facts, and the list used to show whichever
+              // existed: `reference` is ours and allocated, `po_number` is the
+              // client's and typed. Collapsing them meant a project could not
+              // be found by the one the person searching happened to know.
+              header: 'PO number',
               cell: (project) => (
-                <span className="font-medium">{project.po_number || project.reference}</span>
+                <span className="font-medium">{project.po_number || '—'}</span>
+              ),
+            },
+            {
+              header: 'Our ref',
+              cell: (project) => (
+                <span className="text-slate-500 tabular-nums">{project.reference}</span>
               ),
             },
             { header: 'Title', cell: (project) => project.title || project.description },

@@ -15,6 +15,7 @@ import { type ReactNode, useState } from 'react';
 import { errorMessage, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Card, Field, Spinner, Textarea } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet } from '../../components/ui/data';
+import { SearchField } from '../../components/ui/SearchField';
 import { Money } from '../../components/ui/money';
 import type { ProjectExpense } from './types';
 
@@ -54,12 +55,21 @@ export default function ProjectQueuesPage() {
 
 function ExpenseQueue() {
   const [deciding, setDeciding] = useState<ProjectExpense | null>(null);
+  const [search, setSearch] = useState('');
   const expenses = useList<ProjectExpense>('project-expenses/pending', {
+    search: search || undefined,
     page_size: 100,
   });
 
   return (
     <>
+      <SearchField
+        value={search}
+        onChange={setSearch}
+        label="Search expenses"
+        placeholder="What it was for"
+      />
+
       <ListState query={expenses}>
         <DataList<ProjectExpense>
           rows={expenses.data?.results ?? []}

@@ -122,3 +122,28 @@ class TestProjectStatus:
 
         project.refresh_from_db()
         assert project.status == ProjectStatus.CANCELLED
+
+
+@pytest.mark.django_db
+class TestFindingAProject:
+    """A person searches with the reference they happen to know (§6).
+
+    Usually the client's PO number, which is the one on the paperwork in front
+    of them — and which the search did not cover until the list started showing
+    it alongside ours.
+    """
+
+    def test_it_is_found_by_the_po_number(self, tenant):
+        from network.views import ProjectViewSet
+
+        assert "po_number" in ProjectViewSet.search_fields
+
+    def test_and_by_our_own_reference(self, tenant):
+        from network.views import ProjectViewSet
+
+        assert "reference" in ProjectViewSet.search_fields
+
+    def test_and_by_title(self, tenant):
+        from network.views import ProjectViewSet
+
+        assert "title" in ProjectViewSet.search_fields

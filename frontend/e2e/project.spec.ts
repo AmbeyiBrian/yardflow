@@ -107,17 +107,26 @@ test.describe('A purchase order, end to end', () => {
 
     await page.getByRole('button', { name: /^create$/i }).click();
 
+    // Found the way a person would: by the reference on their paperwork. This
+    // also covers what the list shows — `po_number` is the client's and typed,
+    // `reference` is ours and allocated, and the list used to show whichever
+    // existed, so a project could not be found by the one you happened to know.
+    //
+    // Searching rather than scanning: the demo tenant accumulates projects, and
+    // a test that waits for a row somewhere in a long list is timing how fast
+    // the list renders rather than whether the project exists.
+    await page.getByLabel('Search projects').fill(poNumber);
+
     // DataList renders cards *and* a table with one hidden by CSS (§7.3), so
-    // `.first()` can pick the hidden one. Filtering to what is visible is what
-    // makes this assertion work at either width — the same pattern the gate-out
-    // spec settled on.
+    // `.first()` can pick the hidden one.
     await expect(
       page.getByText(poNumber).filter({ visible: true }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible({ timeout: 20_000 });
 
     const projects = await (
       await request.get(`${api}/api/v1/projects?page_size=100`, { headers })
     ).json();
+
     const created = projects.results.find(
       (row: { po_number: string }) => row.po_number === poNumber,
     );

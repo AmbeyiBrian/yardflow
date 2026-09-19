@@ -31,6 +31,7 @@ import {
   Textarea,
 } from '../../components/ui';
 import { EmptyState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
+import { SearchField } from '../../components/ui/SearchField';
 import type { Disposal, DisposalMethod, QuarantineItem } from './types';
 
 const METHODS: { value: DisposalMethod; label: string }[] = [
@@ -45,7 +46,11 @@ export default function DisposalsPage() {
   const { has } = useSession();
   const mayApprove = has(PERM.DISPOSAL_APPROVE);
 
-  const disposals = useList<Disposal>('disposals', { page_size: 50 });
+  const [search, setSearch] = useState('');
+  const disposals = useList<Disposal>('disposals', {
+    search: search || undefined,
+    page_size: 50,
+  });
   const [raising, setRaising] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<Disposal | null>(null);
@@ -84,6 +89,13 @@ export default function DisposalsPage() {
         title="Disposals"
         subtitle="Material leaving the books for good. Every one is approved and certificated."
         actions={<Button onClick={() => setRaising(true)}>Raise a disposal</Button>}
+      />
+
+      <SearchField
+        value={search}
+        onChange={setSearch}
+        label="Search disposals"
+        placeholder="Number, handler or note"
       />
 
       {banner ? <Banner tone="error">{banner}</Banner> : null}

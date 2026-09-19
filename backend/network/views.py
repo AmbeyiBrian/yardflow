@@ -421,7 +421,11 @@ class ProjectViewSet(TenantScopedViewSet):
         "reopen": PERM.PROJECT_VIEW_MARGIN,
     }
     filterset_fields = ["client", "status"]
-    search_fields = ["reference", "description"]
+    # Both references, and the title. The list shows all three, so a person
+    # searching for the one they happen to know — usually the client's PO
+    # number, because that is what is on the paperwork in front of them — has
+    # to be able to find it.
+    search_fields = ["reference", "po_number", "title", "description"]
     ordering_fields = ["opened_at", "reference"]
 
     @action(detail=True, methods=["get"])
