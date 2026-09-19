@@ -11,6 +11,7 @@
  * the site name leads and the job reference follows.
  */
 
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { errorMessage, useList } from '../../api/hooks';
@@ -18,11 +19,15 @@ import { PERM } from '../../auth/permissions';
 import { useSession } from '../../auth/session';
 import { Banner, Button, Spinner } from '../../components/ui';
 import { EmptyState, PageHeader, StatusBadge } from '../../components/ui/data';
+import { JobSheet } from '../projects/JobSheet';
 import type { Job } from './types';
 
 export default function MyJobsPage() {
   const { has } = useSession();
   const seesEverything = has(PERM.REPORT_VIEW_ALL);
+  // H1: raising a job had no screen at all until now, so the requirement named
+  // an actor — the storekeeper — who could not carry it out.
+  const [raising, setRaising] = useState(false);
 
   // `open=true` rather than a status this screen picks: "still to be closed
   // out" is three statuses, and a client that named one of them silently hid
@@ -48,12 +53,17 @@ export default function MyJobsPage() {
             : 'What is assigned to you and still open.'
         }
         actions={
-          <Link
-            to="/jobs/custody"
-            className="flex min-h-[44px] items-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-800"
-          >
-            What I'm carrying
-          </Link>
+          <>
+            <Link
+              to="/jobs/custody"
+              className="flex min-h-[44px] items-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-800"
+            >
+              What I'm carrying
+            </Link>
+            {has(PERM.JOB_MANAGE) ? (
+              <Button onClick={() => setRaising(true)}>New job</Button>
+            ) : null}
+          </>
         }
       />
 
@@ -97,6 +107,13 @@ export default function MyJobsPage() {
       <Button variant="ghost" onClick={() => void jobsQuery.refetch()}>
         Refresh
       </Button>
+
+      <JobSheet
+        open={raising}
+        onClose={() => setRaising(false)}
+        onCreated={() => jobsQuery.refetch()}
+      />
+
     </div>
   );
 }

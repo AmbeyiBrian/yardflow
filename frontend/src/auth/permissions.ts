@@ -21,6 +21,7 @@ export const PERM = {
   STOCK_ADJUST: 'stock.adjust',
   CUSTODY_TRANSFER: 'custody.transfer',
 
+  JOB_MANAGE: 'job.manage',
   JOB_CLOSEOUT: 'job.closeout',
   JOB_CLOSE_WITH_VARIANCE: 'job.close_with_variance',
 

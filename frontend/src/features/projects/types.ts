@@ -122,3 +122,19 @@ export interface ProjectExpense {
   is_reversal?: boolean;
   created_at?: string;
 }
+
+
+/** A job as the project screens read it (H1, O3). */
+export interface ProjectJob {
+  id: number;
+  reference: string;
+  site: number;
+  site_ref?: string;
+  assignee: number;
+  assignee_name?: string;
+  status: string;
+  delivery_mode: 'IN_HOUSE' | 'SUBCONTRACTED';
+  subcontractor: number | null;
+  subcontractor_name?: string;
+  agreed_price: string | null;
+}

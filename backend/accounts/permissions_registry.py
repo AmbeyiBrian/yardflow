@@ -50,6 +50,11 @@ class PERM:
     CUSTODY_TRANSFER = "custody.transfer"
 
     # Jobs
+    #: H1: "as an admin or storekeeper, I want to assign a site or job to a
+    #: named person". Creating and assigning a job is a different act from
+    #: closing one out, and the roles that do each are different — a storekeeper
+    #: raises the work, a technician finishes it.
+    JOB_MANAGE = "job.manage"
     JOB_CLOSEOUT = "job.closeout"
     JOB_CLOSE_WITH_VARIANCE = "job.close_with_variance"
 
@@ -112,6 +117,13 @@ ALL_PERMISSIONS: tuple[PermissionSpec, ...] = (
         "Transfer custody between people",
         "Stock",
         "Requires acknowledgement by the receiver.",
+    ),
+    PermissionSpec(
+        PERM.JOB_MANAGE,
+        "Raise a job and assign it",
+        "Jobs",
+        "Held by admins, storekeepers and project managers. Separate from "
+        "closing one out, which is the technician's (H1).",
     ),
     PermissionSpec(
         PERM.JOB_CLOSEOUT,
@@ -234,6 +246,7 @@ DEFAULT_ROLES: dict[str, tuple[str, ...]] = {
         PERM.CATALOGUE_MANAGE,
         PERM.SETTINGS_MANAGE,
         PERM.REPORT_VIEW_ALL,
+        PERM.JOB_MANAGE,
         # O14: owner *and* admin see everything commercial, rates included.
         PERM.PROJECT_VIEW_COST,
         PERM.PROJECT_VIEW_MARGIN,
@@ -246,6 +259,8 @@ DEFAULT_ROLES: dict[str, tuple[str, ...]] = {
         PERM.PROJECT_VIEW_COST,
         PERM.GATE_OUT_REQUEST,
         PERM.REPORT_VIEW_ALL,
+        # A manager allocating a PO across sites is raising jobs (O3).
+        PERM.JOB_MANAGE,
     ),
     "Storekeeper": (
         PERM.GATE_IN_POST,
@@ -256,6 +271,9 @@ DEFAULT_ROLES: dict[str, tuple[str, ...]] = {
         PERM.STOCK_ADJUST,
         PERM.CUSTODY_TRANSFER,
         PERM.REPORT_VIEW_ALL,
+        # H1 names the storekeeper explicitly: they are the one who knows work
+        # is coming before anybody else does.
+        PERM.JOB_MANAGE,
     ),
     "Approver": (
         PERM.GATE_OUT_APPROVE,

@@ -30,8 +30,9 @@ import {
   StatusBadge,
 } from '../../components/ui/data';
 import { MONEY_INPUT, Money } from '../../components/ui/money';
+import { JobSheet } from './JobSheet';
 import type { Client } from '../settings/types';
-import type { Project, ProjectPerformance, ProjectVariation } from './types';
+import type { Project, ProjectJob, ProjectPerformance, ProjectVariation } from './types';
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -235,10 +236,14 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { has } = useSession();
   const project = useDetail<Project>('projects', id);
   const performance = useResource<ProjectPerformance>(`projects/${id}/performance`);
   const variations = useList<ProjectVariation>('project-variations', { project: id });
+  const jobs = useList<ProjectJob>('jobs', { project: id, page_size: 100 });
   const [closing, setClosing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [addingJob, setAddingJob] = useState(false);
 
   if (project.isLoading) return <Spinner />;
   if (!project.data) return <Banner tone="error">That project could not be loaded.</Banner>;
@@ -253,7 +258,19 @@ export function ProjectDetailPage() {
         subtitle={record.title || record.client_name}
         actions={
           record.status === 'OPEN' ? (
-            <Button onClick={() => setClosing(true)}>Close project</Button>
+            <>
+              {has(PERM.CATALOGUE_MANAGE) ? (
+                <Button variant="ghost" onClick={() => setEditing(true)}>
+                  Edit
+                </Button>
+              ) : null}
+              {has(PERM.JOB_MANAGE) ? (
+                <Button variant="ghost" onClick={() => setAddingJob(true)}>
+                  Add a job
+                </Button>
+              ) : null}
+              <Button onClick={() => setClosing(true)}>Close project</Button>
+            </>
           ) : (
             <StatusBadge status={record.status} />
           )
@@ -327,6 +344,39 @@ export function ProjectDetailPage() {
       ) : null}
 
       <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-slate-900">Jobs</h2>
+        <DataList<ProjectJob>
+          rows={jobs.data?.results ?? []}
+          rowKey={(job) => job.id}
+          empty={
+            <EmptyState
+              title="No jobs yet."
+              hint="A project with no jobs has nothing to cost."
+            />
+          }
+          columns={[
+            { header: 'Reference', cell: (job) => job.reference || `Job ${job.id}` },
+            { header: 'Site', cell: (job) => job.site_ref ?? '' },
+            { header: 'Assignee', cell: (job) => job.assignee_name ?? '', wideOnly: true },
+            {
+              header: 'Delivered by',
+              cell: (job) =>
+                job.delivery_mode === 'SUBCONTRACTED'
+                  ? (job.subcontractor_name ?? 'A subcontractor')
+                  : 'Our crew',
+            },
+            {
+              header: 'Price',
+              // Only a subcontracted job has one; in-house cost comes from days.
+              cell: (job) => <Money value={job.agreed_price} />,
+              wideOnly: true,
+            },
+            { header: 'Status', cell: (job) => <StatusBadge status={job.status} /> },
+          ]}
+        />
+      </section>
+
+      <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-900">Variations</h2>
         <DataList<ProjectVariation>
           rows={variations.data?.results ?? []}
@@ -342,6 +392,27 @@ export function ProjectDetailPage() {
         />
       </section>
 
+      <EditProjectSheet
+        open={editing}
+        project={record}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          project.refetch();
+          performance.refetch();
+        }}
+      />
+
+      <JobSheet
+        open={addingJob}
+        project={record}
+        onClose={() => setAddingJob(false)}
+        onCreated={() => {
+          jobs.refetch();
+          performance.refetch();
+        }}
+      />
+
       <CloseSheet
         open={closing}
         project={record}
@@ -354,6 +425,155 @@ export function ProjectDetailPage() {
         }}
       />
     </div>
+  );
+}
+
+function EditProjectSheet({
+  open,
+  project,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  project: Project;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const people = useList<{ id: number; full_name: string }>('users', { page_size: 200 });
+  const update = useAction<Record<string, unknown>>({
+    resource: 'projects',
+    method: 'patch',
+    path: () => String(project.id),
+    invalidates: ['projects'],
+  });
+
+  const form = useForm({
+    values: {
+      title: project.title ?? '',
+      description: project.description ?? '',
+      manager: project.manager ? String(project.manager) : '',
+      contract_value: project.contract_value ?? '',
+      cost_budget: project.cost_budget ?? '',
+      starts_on: project.starts_on ?? '',
+      target_completion_on: project.target_completion_on ?? '',
+    },
+  });
+
+  return (
+    <Sheet
+      open={open}
+      title="Edit project"
+      onClose={onClose}
+      footer={
+        <Button
+          className="w-full"
+          disabled={update.isPending}
+          onClick={form.handleSubmit(async (values) => {
+            try {
+              await update.mutateAsync({
+                ...values,
+                manager: values.manager ? Number(values.manager) : null,
+                contract_value: values.contract_value || null,
+                cost_budget: values.cost_budget || null,
+                starts_on: values.starts_on || null,
+                target_completion_on: values.target_completion_on || null,
+              });
+              onSaved();
+            } catch (error) {
+              applyFieldErrors(error, form.setError);
+            }
+          })}
+        >
+          {update.isPending ? <Spinner /> : 'Save'}
+        </Button>
+      }
+    >
+      <form className="flex flex-col gap-3">
+        {/*
+          The PO number is not editable. It is what identifies the project
+          (D21), and changing it would silently re-point every figure already
+          counted against it at a different purchase order.
+        */}
+        <p className="text-sm text-slate-600">
+          PO <span className="font-medium">{project.po_number || '—'}</span> ·
+          reference <span className="font-medium">{project.reference}</span>
+        </p>
+
+        <Field label="Title" htmlFor="pe-title">
+          <Input id="pe-title" {...form.register('title')} />
+        </Field>
+
+        <Field label="Description" htmlFor="pe-description">
+          <Textarea id="pe-description" {...form.register('description')} />
+        </Field>
+
+        <Field
+          label="Project manager"
+          htmlFor="pe-manager"
+          hint="Material for this project can only move once its manager can act."
+          error={form.formState.errors.manager?.message}
+        >
+          <Select id="pe-manager" {...form.register('manager')}>
+            <option value="">Nobody yet</option>
+            {(people.data?.results ?? []).map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.full_name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {/*
+          Editable by choice. D21 says the original award is never rewritten and
+          scope changes are variations — this is the correction path for a value
+          keyed in wrong, and the change is recorded in the audit trail.
+        */}
+        {project.contract_value !== undefined ? (
+          <Field
+            label="Contract value"
+            htmlFor="pe-value"
+            hint="Excluding VAT. To change what was agreed, raise a variation — this is for correcting a mistake."
+            error={form.formState.errors.contract_value?.message}
+          >
+            <Input
+              id="pe-value"
+              inputMode="decimal"
+              className={MONEY_INPUT}
+              {...form.register('contract_value')}
+            />
+          </Field>
+        ) : null}
+
+        {project.cost_budget !== undefined ? (
+          <Field
+            label="Cost budget"
+            htmlFor="pe-budget"
+            hint="Excluding VAT."
+            error={form.formState.errors.cost_budget?.message}
+          >
+            <Input
+              id="pe-budget"
+              inputMode="decimal"
+              className={MONEY_INPUT}
+              {...form.register('cost_budget')}
+            />
+          </Field>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Starts" htmlFor="pe-starts">
+            <Input id="pe-starts" type="date" {...form.register('starts_on')} />
+          </Field>
+          <Field label="Target" htmlFor="pe-target">
+            <Input
+              id="pe-target"
+              type="date"
+              {...form.register('target_completion_on')}
+            />
+          </Field>
+        </div>
+      </form>
+    </Sheet>
   );
 }
 

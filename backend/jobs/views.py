@@ -307,9 +307,15 @@ class JobViewSet(TenantScopedViewSet):
     ordering_fields = ["created_at", "reference", "status"]
 
     required_permissions = {
-        "create": PERM.JOB_CLOSEOUT,
-        "update": PERM.JOB_CLOSEOUT,
-        "partial_update": PERM.JOB_CLOSEOUT,
+        # H1: raising a job is the admin's or storekeeper's, not the
+        # technician's. It used to require job.closeout, which a storekeeper
+        # does not hold — so the requirement could not actually be carried out.
+        "create": PERM.JOB_MANAGE,
+        # Editing a job — its assignee, its delivery mode, its agreed price —
+        # is the same act as raising one.
+        "update": PERM.JOB_MANAGE,
+        "partial_update": PERM.JOB_MANAGE,
+        # Closing stays with whoever reports the work finished (H5).
         "close": PERM.JOB_CLOSEOUT,
     }
 

@@ -102,7 +102,7 @@ These were settled during discovery and are not open for re-litigation in design
 | D18 | No data migration. Starting clean. |
 | D19 | No third-party integrations in v1, but the design must not preclude them. |
 | D20 | **The work-order layer becomes the project layer** (amends D14). One grouping, not two: a project without a PO number is the old optional work order. |
-| D21 | **One PO is one project.** Scope changes are variations that amend it; the original award is never edited. |
+| D21 | **One PO is one project.** Scope changes are variations that amend it. The original award is not *changed* by a variation — but an admin may **correct** a mistyped `contract_value` directly, recorded in the audit trail. Correcting a typing error and re-agreeing a price are different acts, and only the second is a variation. |
 | D22 | **Project material routes to the project manager as the only approval level** (amends D4 for that material). No delegation, no escalation — it waits. Criticality routing continues to govern everything else. |
 | D23 | **Project cost is derived from the ledger, never typed.** Material costs when installed, consumed or unaccounted for; material issued and still outstanding is exposure, not cost. |
 | D24 | **Every figure is VAT-exclusive.** No invoices or payables in v1. Project cost is material, subcontractor price, own labour and recorded direct expenses. |
@@ -682,6 +682,10 @@ what it became are both visible.
 
 **O3.** As a PM, I want each job on my project marked as in-house or subcontracted, so that its cost
 is known.
+- Raising a job needs `job.manage`, held by admins, storekeepers and project managers. It is a
+  different act from closing one out, which is the technician's (`H1`). Creating a job previously
+  required `job.closeout` — so the storekeeper H1 names could not do it, and a technician could hand
+  themselves work. Neither was noticed because no screen called the endpoint.
 - A job belongs to **at most one** project.
 - Every job on a project carries a **delivery mode**: `IN_HOUSE` or `SUBCONTRACTED`.
 - A subcontracted job names the **subcontractor** and the **agreed price** for that job.

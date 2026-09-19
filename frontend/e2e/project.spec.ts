@@ -24,6 +24,9 @@ const tenant = { Host: host };
 /** Carried between the steps of the flow. */
 let poNumber = '';
 let projectId = 0;
+// Unique per run, like the PO number: a job reference is unique per tenant, so
+// a re-run against a tenant that was not reseeded would collide with itself.
+let jobReference = '';
 
 async function authed(request: Parameters<typeof asOwner>[0], who: string) {
   const login = await request.post(`${api}/api/v1/auth/login`, {
@@ -109,6 +112,64 @@ test.describe('A purchase order, end to end', () => {
       (row: { po_number: string }) => row.po_number === poNumber,
     ).id;
     expect(projectId).toBeGreaterThan(0);
+  });
+
+  test('an owner edits it, and a job is raised under it', async ({ page, request }) => {
+    // Both screens were missing until now: the create sheet only created, and
+    // no screen anywhere called POST /jobs — so H1 named an actor who could
+    // not carry it out.
+    const headers = await asOwner(request);
+
+    await signIn(page, PEOPLE.owner);
+    await open(page, `/projects/${projectId}`);
+
+    await page.getByRole('button', { name: /^edit$/i }).click();
+    await page.getByLabel('Title').fill('E2E rollout, corrected');
+    await page.getByRole('button', { name: /^save$/i }).click();
+
+    await expect(page.getByText('E2E rollout, corrected').first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    jobReference = `JOB-E2E-${Date.now().toString().slice(-6)}`;
+    await page.getByRole('button', { name: /add a job/i }).click();
+    await page.getByLabel('Reference').fill(jobReference);
+    await page.getByLabel('Site').selectOption({ index: 1 });
+    await page.getByLabel('Who is responsible').selectOption({ label: 'Tom Technician' });
+    await page.getByRole('button', { name: /raise it/i }).click();
+
+    await expect(
+      page.getByText(jobReference).filter({ visible: true }).first(),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // And the job really is under this project, not merely on its screen.
+    const jobs = await (
+      await request.get(`${api}/api/v1/jobs?project=${projectId}`, { headers })
+    ).json();
+    expect(
+      jobs.results.some((row: { reference: string }) => row.reference === jobReference),
+    ).toBe(true);
+  });
+
+  test('a technician cannot raise a job', async ({ request }) => {
+    // H1: raising work and finishing it are different acts. This used to be
+    // allowed, while the storekeeper H1 actually names was locked out.
+    const headers = await authed(request, PEOPLE.technician);
+    const sites = await (
+      await request.get(`${api}/api/v1/sites?page_size=5`, { headers })
+    ).json();
+
+    const response = await request.post(`${api}/api/v1/jobs`, {
+      headers,
+      data: {
+        reference: `JOB-E2E-NOPE-${Date.now().toString().slice(-6)}`,
+        client: sites.results[0].client,
+        site: sites.results[0].id,
+        assignee: sites.results[0].id,
+      },
+    });
+
+    expect(response.status()).toBe(403);
   });
 
   test('a PO with no manager is refused', async ({ request }) => {

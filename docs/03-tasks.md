@@ -1045,6 +1045,30 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   performance report.
   *Done when:* it runs in CI against a seeded tenant.
 
+- [x] **T10.25 `[F]` Money reads like money**
+  Refs: §7.3
+  Tabular numerals on every figure — displays, inputs, stat tiles and numeric report columns — and
+  money inputs right-aligned. One `Money` component in place of the formatter copied into three
+  screens.
+  *Done when:* a column of figures lines up on the decimal point, and a withheld figure renders as
+  nothing rather than as a dash or a zero.
+
+- [x] **T10.26 `[F]` Edit a project**
+  Refs: §7.4 · O1, D21
+  Title, description, manager, budget, dates — and `contract_value`, which is the correction path
+  for a value keyed in wrong. The PO number stays fixed: it identifies the project, and changing it
+  would re-point every figure already counted against it.
+  *Done when:* an owner corrects a project and the figures follow, with the change in the audit
+  trail.
+
+- [x] **T10.27 `[B/F]` Raise a job**
+  Refs: §4.9, §7.4 · H1, O3
+  `job.manage` for admins, storekeepers and project managers, separate from `job.closeout`. A job
+  sheet on the project detail with the project fixed, and the same sheet on the jobs list for work
+  with no PO behind it.
+  *Done when:* a storekeeper can raise a job and a technician cannot — H1's actor could not carry
+  out H1 before this, because creating a job required the closeout permission.
+
 ---
 
 ## Milestones

@@ -387,7 +387,9 @@ export function AppRoutes() {
             <Route
               path="jobs"
               element={
-                <RequirePermission anyOf={[PERM.JOB_CLOSEOUT, PERM.REPORT_VIEW_ALL]}>
+                <RequirePermission
+                  anyOf={[PERM.JOB_CLOSEOUT, PERM.JOB_MANAGE, PERM.REPORT_VIEW_ALL]}
+                >
                   <MyJobsPage />
                 </RequirePermission>
               }
