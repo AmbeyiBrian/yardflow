@@ -26,6 +26,7 @@
 
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { downloadFile } from '../../api/client';
 import { errorMessage, useList, useResource } from '../../api/hooks';
@@ -104,6 +105,7 @@ export function ReportPage() {
   const definition = (catalogue.data?.reports ?? []).find(
     (report) => report.slug === slug,
   );
+  useCrumb(definition?.title);
 
   const missingRequired = (definition?.filters ?? []).filter(
     (filter) => filter.required && !applied[filter.key],

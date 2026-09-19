@@ -16,6 +16,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { api } from '../../api/client';
 import { errorMessage, useAction, useList, useResource } from '../../api/hooks';
@@ -210,6 +211,8 @@ function LowStockCard() {
 
 export function SerialHistoryPage() {
   const { serialNumber } = useParams();
+  // A serial is its own name, so there is nothing to wait for.
+  useCrumb(serialNumber);
   const history = useResource<{ unit: SerialUnit; movements: Movement[] }>(
     `stock/serials/${encodeURIComponent(serialNumber ?? '')}/history`,
   );
@@ -273,6 +276,7 @@ export function SerialHistoryPage() {
 
 export function DrumHistoryPage() {
   const { drumNumber } = useParams();
+  useCrumb(drumNumber);
   const history = useResource<{ reel: Reel; movements: Movement[] }>(
     `stock/drums/${encodeURIComponent(drumNumber ?? '')}/history`,
   );
@@ -645,6 +649,7 @@ function NewCountSheet({ open, onClose }: { open: boolean; onClose: () => void }
 export function CountDetailPage() {
   const { id } = useParams();
   const count = useResource<StockCount>(`stock-counts/${id}`);
+  useCrumb(count.data?.number);
   const [banner, setBanner] = useState<string | null>(null);
   const [line, setLine] = useState({ item_type: '', counted_quantity: '', reason: '' });
 

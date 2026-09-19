@@ -18,6 +18,7 @@
 
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { openDocument } from '../../api/client';
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
@@ -143,6 +144,8 @@ export function GateOutDetailPage() {
   const { id } = useParams();
   const { hasAny, user } = useSession();
   const pass = useDetail<GateOut>('gate-outs', id);
+  // P3: the crumb reads as the pass, not as its row number.
+  useCrumb(pass.data?.number);
   const [banner, setBanner] = useState<string | null>(null);
   const [reasonSheet, setReasonSheet] = useState<'reject' | 'cancel' | 'close' | null>(null);
   const [reason, setReason] = useState('');

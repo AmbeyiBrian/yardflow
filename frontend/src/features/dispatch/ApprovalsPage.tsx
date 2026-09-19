@@ -20,6 +20,9 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
+import { PERM } from '../../auth/permissions';
+import { useCrumb } from '../../components/ui/breadcrumbs';
+import { CloseoutQueue, ExpenseQueue } from '../projects/ProjectQueuesPage';
 import { biometricsAvailable, signApproval } from '../../auth/webauthn';
 import { useSession } from '../../auth/session';
 import {
@@ -61,7 +64,72 @@ function decisionLine(action: {
   return `${verb} by ${who}${action.reason ? ` — ${action.reason}` : ''}`;
 }
 
+type Tab = 'material' | 'expenses' | 'closeouts';
+
+/**
+ * Every decision waiting on one person, in one place.
+ *
+ * The project queues were briefly a screen of their own, which left a manager
+ * two lists to check for the same act. What separates them is only whether the
+ * thing agreed to is a movement or a number — a fact about the record, not
+ * about the decision — so they are tabs here instead.
+ */
 export default function ApprovalsPage() {
+  const { has } = useSession();
+
+  // Only the tabs this person can act on. A manager who approves expenses but
+  // releases no material should not be shown an empty material queue and left
+  // wondering whether it is empty or forbidden.
+  const tabs: { key: Tab; label: string }[] = [
+    ...(has(PERM.GATE_OUT_APPROVE) || has(PERM.DISPOSAL_APPROVE)
+      ? [{ key: 'material' as Tab, label: 'Material' }]
+      : []),
+    ...(has(PERM.PROJECT_VIEW_COST)
+      ? [
+          { key: 'expenses' as Tab, label: 'Expenses' },
+          { key: 'closeouts' as Tab, label: 'Closeout costs' },
+        ]
+      : []),
+  ];
+
+  const [tab, setTab] = useState<Tab>(tabs[0]?.key ?? 'material');
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Approvals"
+        subtitle="What is waiting on a decision, and everything already decided."
+      />
+
+      {/* One tab is no choice, so do not draw a strip for it. */}
+      {tabs.length > 1 ? (
+        <div className="flex gap-1 overflow-x-auto">
+          {tabs.map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              onClick={() => setTab(entry.key)}
+              className={[
+                'min-h-[44px] rounded-lg px-3 text-sm font-medium whitespace-nowrap',
+                tab === entry.key
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-700 hover:bg-slate-100',
+              ].join(' ')}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === 'expenses' ? <ExpenseQueue /> : null}
+      {tab === 'closeouts' ? <CloseoutQueue /> : null}
+      {tab === 'material' ? <MaterialQueue /> : null}
+    </div>
+  );
+}
+
+function MaterialQueue() {
   const [scope, setScope] = useState<'pending' | 'all'>('pending');
   const pending = useList<ApprovalRequest>(
     scope === 'pending' ? 'approvals/pending' : 'approvals',
@@ -70,18 +138,14 @@ export default function ApprovalsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader
-        title="Approvals"
-        subtitle="What is waiting on a decision, and everything already decided."
-        actions={
-          <Button
-            variant="secondary"
-            onClick={() => setScope(scope === 'pending' ? 'all' : 'pending')}
-          >
-            {scope === 'pending' ? 'Show all' : 'Show only waiting'}
-          </Button>
-        }
-      />
+      <div className="flex justify-end">
+        <Button
+          variant="secondary"
+          onClick={() => setScope(scope === 'pending' ? 'all' : 'pending')}
+        >
+          {scope === 'pending' ? 'Show all' : 'Show only waiting'}
+        </Button>
+      </div>
 
       {pending.isError ? <Banner tone="error">{errorMessage(pending.error)}</Banner> : null}
 
@@ -319,6 +383,7 @@ function ApprovalCard({ request }: { request: ApprovalRequest }) {
 export function ApprovalDetailPage() {
   const { id } = useParams();
   const request = useDetail<ApprovalRequest>('approvals', id);
+  useCrumb(request.data?.document_number);
 
   if (request.isLoading) return <Spinner className="text-slate-400" />;
   if (request.isError) return <Banner tone="error">{errorMessage(request.error)}</Banner>;

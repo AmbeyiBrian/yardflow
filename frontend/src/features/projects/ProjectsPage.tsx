@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { applyFieldErrors, useAction, useDetail, useList, useResource } from '../../api/hooks';
 import { PERM } from '../../auth/permissions';
@@ -242,6 +243,7 @@ export function ProjectDetailPage() {
   const performance = useResource<ProjectPerformance>(`projects/${id}/performance`);
   const variations = useList<ProjectVariation>('project-variations', { project: id });
   const jobs = useList<ProjectJob>('jobs', { project: id, page_size: 100 });
+  useCrumb(project.data?.reference);
   const [closing, setClosing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addingJob, setAddingJob] = useState(false);

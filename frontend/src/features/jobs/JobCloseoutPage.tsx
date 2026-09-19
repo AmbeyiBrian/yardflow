@@ -31,6 +31,7 @@
 
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { errorMessage, useAction, useDetail, useList, useResource } from '../../api/hooks';
 import { useSession } from '../../auth/session';
@@ -88,6 +89,7 @@ export default function JobCloseoutPage() {
   const { user } = useSession();
 
   const job = useDetail<Job>('jobs', id);
+  useCrumb(job.data?.reference);
   const reconciliation = useResource<Reconciliation>(
     `jobs/${id}/reconciliation`,
     undefined,

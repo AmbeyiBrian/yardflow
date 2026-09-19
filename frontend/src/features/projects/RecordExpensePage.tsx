@@ -15,7 +15,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { applyFieldErrors, useAction, useList } from '../../api/hooks';
+import { applyFieldErrors, useAction, useDetail, useList } from '../../api/hooks';
+import { useCrumb } from '../../components/ui/breadcrumbs';
 import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
 import { PageHeader } from '../../components/ui/data';
@@ -60,9 +61,14 @@ export default function RecordExpensePage() {
   // picked. Watched rather than read once, so changing the project changes the
   // jobs on offer.
   const chosenProject = form.watch('project');
-  const arrivedFrom = fixedProject
-    ? (projects.data?.results ?? []).find((project) => String(project.id) === fixedProject)
-    : undefined;
+  // Fetched by id rather than picked out of the list above: that list is the
+  // OPEN ones, so a project that has since closed would never be found in it
+  // and the name would stay a placeholder for good.
+  const arrivedFrom = useDetail<Project>('projects', fixedProject || undefined);
+
+  // The trail puts this form under that project, and this screen is the only
+  // one in a position to say what the project is called.
+  useCrumb(arrivedFrom.data?.reference, '/projects/:id');
   const jobs = useList<ProjectJob>(
     'jobs',
     { project: chosenProject, page_size: 100 },
@@ -126,9 +132,9 @@ export default function RecordExpensePage() {
                 <>
                   <input type="hidden" {...form.register('project')} />
                   <p className="text-sm font-medium text-slate-900">
-                    {arrivedFrom
-                      ? `${arrivedFrom.po_number || arrivedFrom.reference} ${
-                          arrivedFrom.title ?? ''
+                    {arrivedFrom.data
+                      ? `${arrivedFrom.data.po_number || arrivedFrom.data.reference} ${
+                          arrivedFrom.data.title ?? ''
                         }`.trim()
                       : '…'}
                   </p>

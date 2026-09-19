@@ -17,6 +17,7 @@ import { OfflineBanner } from '../offline/OfflineBanner';
 import { cn } from './ui/cn';
 import { LogoMark, Wordmark } from './Logo';
 import { Banner, Button } from './ui';
+import { Breadcrumbs, CrumbProvider } from './ui/breadcrumbs';
 import { PERM, type Permission } from '../auth/permissions';
 import { useSession } from '../auth/session';
 
@@ -45,9 +46,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: <GlyphTruck />,
   },
   {
+    // Everything waiting on one person: gate passes, disposals, and — since
+    // O16 — project expenses and closeout costs. A manager who approves only
+    // the last two still needs the entry, hence `project.view_cost` here.
     to: '/approvals',
     label: 'Approvals',
-    anyOf: [PERM.GATE_OUT_APPROVE, PERM.DISPOSAL_APPROVE],
+    anyOf: [PERM.GATE_OUT_APPROVE, PERM.DISPOSAL_APPROVE, PERM.PROJECT_VIEW_COST],
     icon: <GlyphCheck />,
   },
   { to: '/stock', label: 'Stock', icon: <GlyphBoxes /> },
@@ -58,15 +62,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Projects',
     anyOf: [PERM.PROJECT_VIEW_COST, PERM.CATALOGUE_MANAGE],
     icon: <GlyphClipboard />,
-  },
-  {
-    // O16: the manager's own queue — an expense or a closeout cost waiting on
-    // them. It had a route and no entry, so the only way to learn something was
-    // waiting was to be told.
-    to: '/my-projects',
-    label: 'Waiting on you',
-    anyOf: [PERM.PROJECT_VIEW_COST],
-    icon: <GlyphCheck />,
   },
   {
     to: '/jobs',
@@ -132,7 +127,20 @@ function roleSummary(roles: { name: string }[] | undefined): string {
   return `${roles[0].name} and ${roles.length - 1} more`;
 }
 
+/**
+ * Split in two only so the provider can sit above the shell without indenting
+ * the whole of it: the crumb labels are published by the screens inside the
+ * outlet, so the store has to be above them.
+ */
 export function AppShell() {
+  return (
+    <CrumbProvider>
+      <AppShellInner />
+    </CrumbProvider>
+  );
+}
+
+function AppShellInner() {
   const { user, logout, hasAny, isSuspended } = useSession();
 
   const visible = NAV_ITEMS.filter((item) => !item.anyOf || hasAny(...item.anyOf));
@@ -224,6 +232,13 @@ export function AppShell() {
         ) : null}
 
         <main className="min-w-0 flex-1 px-4 py-4 md:px-6 md:py-6">
+          {/*
+            P2: one trail for every screen, derived from the URL. Putting it in
+            `PageHeader` instead would mean twenty-six screens each stating
+            their own ancestry, and the first renamed route leaving behind a
+            crumb that lies about where you are.
+          */}
+          <Breadcrumbs />
           <Outlet />
         </main>
 

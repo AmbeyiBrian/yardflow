@@ -80,7 +80,6 @@ const ProjectsPage = lazyRoute(() => import('../features/projects/ProjectsPage')
 const ProjectDetailPage = lazyRoute(() =>
   import('../features/projects/ProjectsPage').then((m) => ({ default: m.ProjectDetailPage })),
 );
-const ProjectQueuesPage = lazyRoute(() => import('../features/projects/ProjectQueuesPage'));
 const RecordExpensePage = lazyRoute(() => import('../features/projects/RecordExpensePage'));
 
 const GateOutRequestPage = lazyRoute(() => import('../features/dispatch/GateOutRequestPage'));
@@ -275,14 +274,12 @@ export function AppRoutes() {
                 </RequirePermission>
               }
             />
-            <Route
-              path="my-projects"
-              element={
-                <RequirePermission anyOf={[PERM.PROJECT_VIEW_COST]}>
-                  <ProjectQueuesPage />
-                </RequirePermission>
-              }
-            />
+            {/*
+              The project queues are tabs on Approvals now, not a screen. Kept
+              as a redirect rather than deleted: the link was in the sidebar and
+              may be in somebody's bookmarks or in a notification already sent.
+            */}
+            <Route path="my-projects" element={<Navigate to="/approvals" replace />} />
             <Route
               path="projects/:id"
               element={
@@ -335,7 +332,15 @@ export function AppRoutes() {
             <Route
               path="approvals"
               element={
-                <RequirePermission anyOf={[PERM.GATE_OUT_APPROVE, PERM.DISPOSAL_APPROVE]}>
+                <RequirePermission
+                  anyOf={[
+                    PERM.GATE_OUT_APPROVE,
+                    PERM.DISPOSAL_APPROVE,
+                    // O16: a project manager approves expenses and closeout
+                    // costs here without releasing any material.
+                    PERM.PROJECT_VIEW_COST,
+                  ]}
+                >
                   <ApprovalsPage />
                 </RequirePermission>
               }

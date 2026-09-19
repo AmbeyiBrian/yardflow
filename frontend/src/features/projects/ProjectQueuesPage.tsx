@@ -1,59 +1,28 @@
 /**
- * T10.22 — what a project manager has waiting on them (design §7.4; O8, O16).
+ * T10.22 — the two project decisions that are not gate passes (design §7.4; O8, O16).
  *
- * Material approvals already live on the Approvals screen (T4.22) and stay
- * there: a gate pass is a gate pass, and splitting them by why they were routed
- * would mean a manager checking two lists for the same kind of decision.
+ * These are **tabs on the Approvals screen**, not a screen of their own. They
+ * were a screen of their own for exactly one day, and it was wrong: approving an
+ * expense and approving a gate pass are the same act to the person doing them —
+ * agreeing to something before it counts — and splitting them meant a manager
+ * checking two lists and trusting neither.
  *
- * What is new is the two decisions that are **not** gate passes — accepting what
- * a closeout cost, and approving an expense — and those belong together, because
- * both are a manager being asked to agree to a number rather than to a movement.
+ * What is genuinely different about these two is only that the thing agreed to
+ * is a **number** rather than a movement, which is a fact about the record and
+ * not about the decision. So they are tabs, and the queue lives with every
+ * other queue.
  */
 
 import { type ReactNode, useState } from 'react';
 
 import { errorMessage, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Card, Field, Spinner, Textarea } from '../../components/ui';
-import { DataList, EmptyState, ListState, PageHeader, Sheet } from '../../components/ui/data';
+import { DataList, EmptyState, ListState, Sheet } from '../../components/ui/data';
 import { SearchField } from '../../components/ui/SearchField';
 import { Money } from '../../components/ui/money';
 import type { ProjectExpense } from './types';
 
-type Tab = 'expenses' | 'closeouts';
-
-export default function ProjectQueuesPage() {
-  const [tab, setTab] = useState<Tab>('expenses');
-
-  return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title="Waiting on you"
-        subtitle="Costs landing on projects you manage."
-      />
-
-      <div className="flex gap-2">
-        {(
-          [
-            ['expenses', 'Expenses'],
-            ['closeouts', 'Closeouts'],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
-          <Button
-            key={key}
-            variant={tab === key ? 'primary' : 'ghost'}
-            onClick={() => setTab(key)}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
-
-      {tab === 'expenses' ? <ExpenseQueue /> : <CloseoutQueue />}
-    </div>
-  );
-}
-
-function ExpenseQueue() {
+export function ExpenseQueue() {
   const [deciding, setDeciding] = useState<ProjectExpense | null>(null);
   const [search, setSearch] = useState('');
   const expenses = useList<ProjectExpense>('project-expenses/pending', {
@@ -192,7 +161,7 @@ interface Closeout {
   cost_acceptance: string;
 }
 
-function CloseoutQueue() {
+export function CloseoutQueue() {
   const [deciding, setDeciding] = useState<Closeout | null>(null);
   const closeouts = useList<Closeout>('job-closeouts', {
     cost_acceptance: 'PENDING',

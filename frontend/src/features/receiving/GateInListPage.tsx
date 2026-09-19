@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
 import { PhotoCapture } from '../../components/PhotoCapture';
@@ -73,6 +74,7 @@ export function GateInDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const gateIn = useDetail<GateIn>('gate-ins', id);
+  useCrumb(gateIn.data?.number);
   const [voidSheet, setVoidSheet] = useState(false);
   const [discardSheet, setDiscardSheet] = useState(false);
   const [reason, setReason] = useState('');

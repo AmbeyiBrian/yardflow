@@ -1112,6 +1112,28 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* an expense can be recorded from the project screen against one of its jobs without
   anybody typing a URL.
 
+- [x] **T10.32 `[F]` One queue, not two**
+  Refs: §7.4 · O8, O16
+  T10.31 gave the project queues a sidebar entry, and that made the duplication visible: approving
+  an expense and approving a gate pass are the same act to the person doing them, and two entries
+  meant two lists to check and neither to trust. They are tabs on Approvals now — Material,
+  Expenses, Closeout costs — each shown only to somebody who can act on it. `/my-projects` redirects
+  rather than 404s, because the link had been in the sidebar.
+  *Done when:* a project manager sees every decision waiting on them on one screen, and the old
+  address still resolves.
+
+- [x] **P1–P6 `[F]` Breadcrumbs**
+  Refs: §7.6 · Epic P
+  A trail derived from the URL in one place, not passed by twenty-six screens. Parents are declared
+  rather than chopped off the end of the path, because `/expenses/new` has no `/expenses` above it
+  and `/jobs/custody` is not a job. A detail screen names its own crumb through `useCrumb`, so
+  `/projects/42` reads as the reference and never as `42`; until the record arrives the crumb holds
+  a placeholder. Top-level screens show nothing, the last crumb is not a link, and a crumb pointing
+  somewhere the person cannot go is plain text.
+  On a phone it collapses to one link to the level above — a full trail does not fit at 360px, and
+  the crumb people use there is the one that goes back.
+  *Done when:* a detail screen states where it sits and the crumb gets you there, on both widths.
+
 ---
 
 ## Milestones
