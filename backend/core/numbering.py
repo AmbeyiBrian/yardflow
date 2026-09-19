@@ -40,11 +40,21 @@ class DocumentType(models.TextChoices):
     DISPOSAL = "DISPOSAL", "Disposal"
     CLIENT_RETURN = "CLIENT_RETURN", "Client return waybill"
     CUSTODY_TRANSFER = "CUSTODY_TRANSFER", "Custody transfer"
+    # Epic O. A project and a job are *created*, not posted — there is no draft
+    # to abandon, so numbering them on creation burns nothing.
+    PROJECT = "PROJECT", "Project"
+    JOB = "JOB", "Job"
 
 
-#: Human-facing prefixes. Changing one of these after a tenant is live would
-#: make two documents look like different types, so they are fixed.
-DOCUMENT_PREFIXES: dict[str, str] = {
+#: The prefix a tenant starts with. **No longer fixed:** a tenant may change it
+#: in Settings, and `DocumentSequence.prefix` is then what counts.
+#:
+#: The original reasoning — that changing a prefix mid-life makes two documents
+#: look like different types — is still true, and is now handled by telling the
+#: person doing it rather than by refusing. A contractor who numbered gate
+#: passes "GP" for ten years on paper has a better claim on their own scheme
+#: than we do.
+DEFAULT_PREFIXES: dict[str, str] = {
     DocumentType.GATE_IN: "GRN",
     DocumentType.GATE_OUT: "GP",
     DocumentType.STOCK_COUNT: "SC",
@@ -53,9 +63,16 @@ DOCUMENT_PREFIXES: dict[str, str] = {
     DocumentType.DISPOSAL: "DS",
     DocumentType.CLIENT_RETURN: "CR",
     DocumentType.CUSTODY_TRANSFER: "CT",
+    DocumentType.PROJECT: "PRJ",
+    DocumentType.JOB: "JOB",
 }
 
-NUMBER_WIDTH = 6
+#: Kept as an alias: the name is used in tests and reads better at call sites
+#: that only want the starting point.
+DOCUMENT_PREFIXES = DEFAULT_PREFIXES
+
+DEFAULT_NUMBER_WIDTH = 6
+NUMBER_WIDTH = DEFAULT_NUMBER_WIDTH
 
 
 class DocumentSequence(TenantModel):
@@ -63,6 +80,24 @@ class DocumentSequence(TenantModel):
 
     document_type = models.CharField(max_length=30, choices=DocumentType.choices)
     next_number = models.PositiveIntegerField(default=1)
+
+    # Configurable per tenant. Empty prefix means "use the default for this
+    # type", so a row created before this existed keeps behaving as it did.
+    prefix = models.CharField(
+        max_length=10,
+        blank=True,
+        help_text="Leave empty to use the default for this document type.",
+    )
+    width = models.PositiveSmallIntegerField(
+        default=DEFAULT_NUMBER_WIDTH,
+        help_text="How many digits the number is padded to.",
+    )
+
+    #: The highest number this series has ever issued. Kept so the counter can
+    #: be moved **forward** — to match a sequence a tenant already ran on paper
+    #: — without being moved back onto numbers already given out. A duplicate
+    #: document number is the one thing M6 cannot survive.
+    highest_issued = models.PositiveIntegerField(default=0)
 
     class Meta:
         constraints = [
@@ -76,9 +111,18 @@ class DocumentSequence(TenantModel):
         return f"{self.document_type}: next {self.next_number}"
 
 
-def format_number(document_type: str, number: int) -> str:
-    """Render an allocated number, e.g. ``GP-000042``."""
-    return f"{DOCUMENT_PREFIXES[document_type]}-{number:0{NUMBER_WIDTH}d}"
+def format_number(
+    document_type: str, number: int, *, prefix: str = "", width: int = 0
+) -> str:
+    """Render an allocated number, e.g. ``GP-000042``.
+
+    ``prefix`` and ``width`` come from the tenant's series when there is one;
+    without them the type's defaults apply, which is what keeps every existing
+    call and every historical number reading the same.
+    """
+    resolved_prefix = prefix or DEFAULT_PREFIXES[document_type]
+    resolved_width = width or DEFAULT_NUMBER_WIDTH
+    return f"{resolved_prefix}-{number:0{resolved_width}d}"
 
 
 def allocate_number(document_type: str, *, organization_id=None) -> str:
@@ -92,7 +136,7 @@ def allocate_number(document_type: str, *, organization_id=None) -> str:
     lock is held to the end of the caller's transaction, a rollback returns the
     number — which is what keeps the sequence gap-free.
     """
-    if document_type not in DOCUMENT_PREFIXES:
+    if document_type not in DEFAULT_PREFIXES:
         raise ValueError(f"Unknown document type '{document_type}'.")
 
     organization_id = organization_id or require_current_organization_id()
@@ -128,9 +172,12 @@ def allocate_number(document_type: str, *, organization_id=None) -> str:
 
     number = sequence.next_number
     sequence.next_number = number + 1
-    sequence.save(update_fields=["next_number"])
+    sequence.highest_issued = max(sequence.highest_issued, number)
+    sequence.save(update_fields=["next_number", "highest_issued"])
 
-    return format_number(document_type, number)
+    return format_number(
+        document_type, number, prefix=sequence.prefix, width=sequence.width
+    )
 
 
 def peek_next_number(document_type: str, *, organization_id=None) -> str:
@@ -143,4 +190,11 @@ def peek_next_number(document_type: str, *, organization_id=None) -> str:
     sequence = DocumentSequence.objects.filter(
         organization_id=organization_id, document_type=document_type
     ).first()
-    return format_number(document_type, sequence.next_number if sequence else 1)
+    if sequence is None:
+        return format_number(document_type, 1)
+    return format_number(
+        document_type,
+        sequence.next_number,
+        prefix=sequence.prefix,
+        width=sequence.width,
+    )

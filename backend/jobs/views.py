@@ -78,7 +78,9 @@ class JobSerializer(serializers.ModelSerializer):
             "created_at",
         )
         # H5: closing goes through the guard, so none of its record is writable.
+        # M6: the reference is allocated from the tenant's JOB series.
         read_only_fields = (
+            "reference",
             "status",
             "closed_at",
             "closed_by",

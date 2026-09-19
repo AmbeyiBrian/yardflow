@@ -38,6 +38,7 @@ const SettingsPage = lazyRoute(() => import('../features/settings/SettingsPage')
 // A4: the company's own details and logo, which print on every document.
 const OrganizationPage = lazyRoute(() => import('../features/settings/OrganizationPage'));
 const ApprovalRulesPage = lazyRoute(() => import('../features/settings/ApprovalRulesPage'));
+const NumberSeriesPage = lazyRoute(() => import('../features/settings/NumberSeriesPage'));
 // T8.10: everyone's own pane — enrolling the phone in their hand (B5).
 const SecurityPage = lazyRoute(() => import('../features/settings/SecurityPage'));
 // L2: who hears what. Readable by everyone, editable behind `settings.manage`.
@@ -539,6 +540,14 @@ export function AppRoutes() {
                 element={
                   <RequirePermission anyOf={[PERM.SETTINGS_MANAGE]}>
                     <SettingsPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="numbering"
+                element={
+                  <RequirePermission anyOf={[PERM.SETTINGS_MANAGE]}>
+                    <NumberSeriesPage />
                   </RequirePermission>
                 }
               />

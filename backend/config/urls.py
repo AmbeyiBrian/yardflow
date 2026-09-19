@@ -49,6 +49,7 @@ from catalogue.views import (
 )
 from commercials.views import ExpenseCategoryViewSet, ProjectExpenseViewSet
 from core.attachment_api import AttachmentTargetsView, AttachmentViewSet
+from core.number_series_api import NumberSeriesView
 from core.organization_api import OrganizationProfileView
 from core.views import attachment_download
 from custody.views import (
@@ -262,6 +263,8 @@ v1_patterns = [
     path("permissions", PermissionCatalogueView.as_view(), name="permission-catalogue"),
     # C8: one settings object per tenant, so a singleton rather than a collection.
     path("settings", OrganizationSettingsView.as_view(), name="organization-settings"),
+    # M6: how each document type is numbered, and what the next one will be.
+    path("number-series", NumberSeriesView.as_view(), name="number-series"),
     # A4: the company's own details and logo, managed by the company.
     path(
         "organization",

@@ -224,6 +224,10 @@ class Project(TenantModel, TimeStampedModel):
     """
 
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="projects")
+    #: Allocated from the tenant's PROJECT series when the project is created
+    #: (M6, §4.13). Not typed and not editable: a reference somebody chooses is
+    #: a reference somebody can collide with, and the client's own name for the
+    #: work already has a field — `po_number`.
     reference = models.CharField(max_length=100)
     description = models.CharField(max_length=500, blank=True)
     sites = models.ManyToManyField(Site, related_name="projects", blank=True)
@@ -322,6 +326,43 @@ class Project(TenantModel, TimeStampedModel):
             ),
         ]
         ordering = ("-opened_at",)
+
+    def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        """Allocate a reference on first save (M6).
+
+        At creation rather than at some later posting step, because a project
+        has no draft state to abandon — the gap M6 guards against cannot open
+        here.
+        """
+        if self.reference:
+            return super().save(*args, **kwargs)
+
+        from django.db import transaction
+
+        from core.numbering import DocumentType, allocate_number
+        from core.tenancy import tenant_of
+
+        # One transaction around both: `allocate_number` insists on being inside
+        # the caller's, so that a failed save returns the number rather than
+        # leaving a gap (M6). Opening it here means a plain
+        # `Project.objects.create()` from a shell or a command works without the
+        # caller having to know that.
+        #
+        # And the tenant is re-activated **inside** that transaction, because
+        # §2.2 publishes the database setting only when one is already open. A
+        # caller who activated the tenant outside a transaction has the Python
+        # context but not the Postgres one, and the sequence row would be
+        # refused by row-level security with an error naming neither.
+        # Only re-activate when this row already knows its tenant. A model
+        # that does not yet — `TenantModel.save` fills it from the ambient
+        # context — would otherwise have that context *cleared* by passing None,
+        # and the allocation below would fail with "no organization in context"
+        # surfacing to the caller as a bare 404.
+        with transaction.atomic(), tenant_of(self.organization_id):
+            self.reference = allocate_number(
+                DocumentType.PROJECT, organization_id=self.organization_id or None
+            )
+            return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.po_number or self.reference

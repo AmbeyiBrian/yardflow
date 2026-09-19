@@ -280,3 +280,20 @@ def activate_organization(organization_id: uuid.UUID | None) -> Token:
     token = set_current_organization_id(organization_id)
     set_database_organization(organization_id)
     return token
+
+
+@contextmanager
+def tenant_of(organization_id) -> Iterator[None]:
+    """Activate ``organization_id`` if there is one, otherwise leave things be.
+
+    For a model saving itself: a row that already knows its tenant should
+    publish it — §2.2 only publishes inside a transaction, and a ``save`` that
+    opens its own needs the setting re-established within it. A row that does
+    *not* yet know its tenant is about to be given one from the ambient context,
+    and clearing that context by activating ``None`` would strand it.
+    """
+    if organization_id is None:
+        yield
+        return
+    with tenant_context(organization_id):
+        yield

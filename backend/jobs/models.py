@@ -202,7 +202,27 @@ class Job(TenantModel, TimeStampedModel):
 
     def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         self._check_delivery_is_still_changeable()
-        result = super().save(*args, **kwargs)
+        if not self.reference:
+            # Allocated on creation (M6, §4.13). A job has no draft to abandon,
+            # so numbering it here opens no gap. The atomic block is what lets
+            # a bare `Job.objects.create()` work: allocation has to share a
+            # transaction with the row it numbers.
+            from django.db import transaction
+
+            from core.numbering import DocumentType, allocate_number
+            from core.tenancy import tenant_of
+
+            # The tenant is re-activated inside the transaction: §2.2 publishes
+            # the database setting only when one is already open, so a caller
+            # who activated it outside one would be refused by row-level
+            # security here, with an error naming neither.
+            with transaction.atomic(), tenant_of(self.organization_id):
+                self.reference = allocate_number(
+                    DocumentType.JOB, organization_id=self.organization_id or None
+                )
+                result = super().save(*args, **kwargs)
+        else:
+            result = super().save(*args, **kwargs)
         self._loaded_delivery = tuple(
             getattr(self, name) for name in self._DELIVERY_FIELDS
         )

@@ -2025,6 +2025,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/number-series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/number-series`` — every document type and how it is numbered. */
+        get: operations["number_series_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description ``/api/v1/number-series`` — every document type and how it is numbered. */
+        patch: operations["number_series_partial_update"];
+        trace?: never;
+    };
     "/api/v1/organization": {
         parameters: {
             query?: never;
@@ -4674,7 +4692,7 @@ export interface components {
         };
         Job: {
             readonly id: number;
-            reference?: string;
+            readonly reference: string;
             client: number;
             readonly client_name: string;
             site: number;
@@ -4827,7 +4845,6 @@ export interface components {
             is_reconciled: boolean;
         };
         JobRequest: {
-            reference?: string;
             client: number;
             site: number;
             project?: number | null;
@@ -5029,6 +5046,15 @@ export interface components {
             events: {
                 [key: string]: unknown;
             }[];
+        };
+        NumberSeries: {
+            readonly document_type: string;
+            readonly label: string;
+            prefix: string;
+            width: number;
+            next_number: number;
+            readonly highest_issued: number;
+            readonly example: string;
         };
         OfflineBundle: {
             /** Format: date-time */
@@ -5805,7 +5831,6 @@ export interface components {
             labour?: components["schemas"]["JobLabourRequest"][];
         };
         PatchedJobRequest: {
-            reference?: string;
             client?: number;
             site?: number;
             project?: number | null;
@@ -5826,6 +5851,11 @@ export interface components {
             type?: components["schemas"]["LocationTypeEnum"];
             vehicle_reg?: string;
             is_active?: boolean;
+        };
+        PatchedNumberSeriesRequest: {
+            prefix?: string;
+            width?: number;
+            next_number?: number;
         };
         PatchedOrganizationProfileRequest: {
             name?: string;
@@ -5895,7 +5925,6 @@ export interface components {
          */
         PatchedProjectRequest: {
             client?: number;
-            reference?: string;
             /** @description The client's purchase order number. One PO is one project (D21). */
             po_number?: string;
             title?: string;
@@ -6052,7 +6081,7 @@ export interface components {
             readonly id: number;
             client: number;
             readonly client_name: string;
-            reference: string;
+            readonly reference: string;
             /** @description The client's purchase order number. One PO is one project (D21). */
             po_number?: string;
             title?: string;
@@ -6151,7 +6180,6 @@ export interface components {
          */
         ProjectRequest: {
             client: number;
-            reference: string;
             /** @description The client's purchase order number. One PO is one project (D21). */
             po_number?: string;
             title?: string;
@@ -11012,6 +11040,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnreadCount"];
+                };
+            };
+        };
+    };
+    number_series_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NumberSeries"][];
+                };
+            };
+        };
+    };
+    number_series_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedNumberSeriesRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedNumberSeriesRequest"];
+                "multipart/form-data": components["schemas"]["PatchedNumberSeriesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NumberSeries"];
                 };
             };
         };

@@ -84,7 +84,8 @@ test.describe('A purchase order, end to end', () => {
 
     await page.getByRole('button', { name: /new project/i }).click();
     await page.getByLabel('Client').selectOption({ index: 1 });
-    await page.getByLabel('Our reference').fill(`WO-${poNumber}`);
+    // M6: no reference field any more — the tenant's PROJECT series numbers it.
+    await expect(page.getByLabel('Our reference')).toHaveCount(0);
     await page.getByLabel('PO number').fill(poNumber);
     await page.getByLabel('Title').fill('E2E rollout');
 
@@ -117,10 +118,13 @@ test.describe('A purchase order, end to end', () => {
     const projects = await (
       await request.get(`${api}/api/v1/projects?page_size=100`, { headers })
     ).json();
-    projectId = projects.results.find(
+    const created = projects.results.find(
       (row: { po_number: string }) => row.po_number === poNumber,
-    ).id;
+    );
+    projectId = created.id;
     expect(projectId).toBeGreaterThan(0);
+    // Allocated from the series, not typed — PRJ-000001 and counting.
+    expect(created.reference).toMatch(/^[A-Z]+-\d+$/);
   });
 
   test('an owner edits it, and a job is raised under it', async ({ page, request }) => {
@@ -140,24 +144,44 @@ test.describe('A purchase order, end to end', () => {
       timeout: 15_000,
     });
 
-    jobReference = `JOB-E2E-${Date.now().toString().slice(-6)}`;
+    // Tiles abbreviate: nine zeros defeat the scanning a tile is for. The
+    // exact figure stays on the title attribute, and the tables stay exact.
+    await expect(page.getByText('KES 500K').first()).toBeVisible();
+
     await page.getByRole('button', { name: /add a job/i }).click();
-    await page.getByLabel('Reference').fill(jobReference);
+    // M6: the job numbers itself too.
+    await expect(page.getByLabel('Reference')).toHaveCount(0);
     await page.getByLabel('Site').selectOption({ index: 1 });
     await page.getByLabel('Who is responsible').selectOption({ label: 'Tom Technician' });
     await page.getByRole('button', { name: /raise it/i }).click();
 
-    await expect(
-      page.getByText(jobReference).filter({ visible: true }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    // The job is under this project, and carries a number nobody typed.
+    //
+    // Polled rather than read once: the click returns as soon as the request is
+    // in flight, and asserting straight afterwards raced the POST — which
+    // failed as "no jobs" and looked like the project link was broken.
+    await expect
+      .poll(
+        async () => {
+          const response = await request.get(
+            `${api}/api/v1/jobs?project=${projectId}`,
+            { headers },
+          );
+          return (await response.json()).results.length;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(1);
 
-    // And the job really is under this project, not merely on its screen.
     const jobs = await (
       await request.get(`${api}/api/v1/jobs?project=${projectId}`, { headers })
     ).json();
-    expect(
-      jobs.results.some((row: { reference: string }) => row.reference === jobReference),
-    ).toBe(true);
+    jobReference = jobs.results[0].reference;
+    expect(jobReference).toMatch(/^[A-Z]+-\d+$/);
+
+    await expect(
+      page.getByText(jobReference).filter({ visible: true }).first(),
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   test('a technician cannot raise a job', async ({ request }) => {
@@ -171,7 +195,6 @@ test.describe('A purchase order, end to end', () => {
     const response = await request.post(`${api}/api/v1/jobs`, {
       headers,
       data: {
-        reference: `JOB-E2E-NOPE-${Date.now().toString().slice(-6)}`,
         client: sites.results[0].client,
         site: sites.results[0].id,
         assignee: sites.results[0].id,

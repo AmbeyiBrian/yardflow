@@ -98,7 +98,6 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
   const form = useForm({
     defaultValues: {
       client: '',
-      reference: '',
       po_number: '',
       title: '',
       manager: '',
@@ -147,17 +146,6 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
               </option>
             ))}
           </Select>
-        </Field>
-
-        <Field
-          label="Our reference"
-          htmlFor="pr-reference"
-          error={form.formState.errors.reference?.message}
-        >
-          <Input
-            id="pr-reference"
-            {...form.register('reference', { required: 'Give it a reference.' })}
-          />
         </Field>
 
         <Field
@@ -295,29 +283,29 @@ export function ProjectDetailPage() {
           hint={figures?.progress_percent ? `${figures.progress_percent}%` : undefined}
         />
         {figures?.cost_to_date !== undefined ? (
-          <Stat label="Cost to date" value={<Money value={figures.cost_to_date} />} />
+          <Stat label="Cost to date" value={<Money value={figures.cost_to_date} compact />} />
         ) : null}
         {figures?.cost_budget !== undefined && figures.cost_budget !== null ? (
           <Stat
             label="Budget"
-            value={<Money value={figures.cost_budget} />}
+            value={<Money value={figures.cost_budget} compact />}
             tone={figures.is_over_budget ? 'bad' : 'neutral'}
           />
         ) : null}
         {figures?.exposure !== undefined ? (
           <Stat
             label="Still out"
-            value={<Money value={figures.exposure} />}
+            value={<Money value={figures.exposure} compact />}
             hint="Issued and not yet accounted for. Not a cost yet."
           />
         ) : null}
         {figures?.contract_value !== undefined && figures.contract_value !== null ? (
-          <Stat label="Contract value" value={<Money value={figures.contract_value} />} />
+          <Stat label="Contract value" value={<Money value={figures.contract_value} compact />} />
         ) : null}
         {figures?.margin !== undefined && figures.margin !== null ? (
           <Stat
             label="Margin"
-            value={<Money value={figures.margin} tone={Number(figures.margin) < 0 ? 'bad' : 'good'} />}
+            value={<Money value={figures.margin} compact tone={Number(figures.margin) < 0 ? 'bad' : 'good'} />}
             hint={figures.margin_percent ? `${figures.margin_percent}% before overheads` : undefined}
           />
         ) : null}
@@ -325,11 +313,11 @@ export function ProjectDetailPage() {
 
       {figures?.material !== undefined ? (
         <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-          <Stat label="Material" value={<Money value={figures.material} />} />
-          <Stat label="Loss" value={<Money value={figures.material_loss} />} />
-          <Stat label="Subcontract" value={<Money value={figures.subcontractor} />} />
-          <Stat label="Labour" value={<Money value={figures.labour} />} />
-          <Stat label="Expenses" value={<Money value={figures.expenses} />} />
+          <Stat label="Material" value={<Money value={figures.material} compact />} />
+          <Stat label="Loss" value={<Money value={figures.material_loss} compact />} />
+          <Stat label="Subcontract" value={<Money value={figures.subcontractor} compact />} />
+          <Stat label="Labour" value={<Money value={figures.labour} compact />} />
+          <Stat label="Expenses" value={<Money value={figures.expenses} compact />} />
         </div>
       ) : null}
 

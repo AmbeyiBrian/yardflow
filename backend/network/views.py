@@ -126,7 +126,15 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
             "closed_with_unreconciled",
             "close_reason",
         )
-        read_only_fields = ("status", "opened_at", "closed_at", "closed_with_unreconciled")
+        # M6: the reference is allocated from the tenant's PROJECT series, not
+        # typed. The client's own name for the work is `po_number`.
+        read_only_fields = (
+            "reference",
+            "status",
+            "opened_at",
+            "closed_at",
+            "closed_with_unreconciled",
+        )
 
     def get_site_count(self, project: Project) -> int:
         return project.sites.count()

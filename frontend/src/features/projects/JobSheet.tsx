@@ -12,18 +12,16 @@
  * be rolled up by party.
  */
 
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { applyFieldErrors, useAction, useList } from '../../api/hooks';
-import { Banner, Button, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
+import { Banner, Button, Field, Select, Spinner, Textarea } from '../../components/ui';
 import { Sheet } from '../../components/ui/data';
 import { MoneyInput } from '../../components/ui/money';
 import type { Site } from '../settings/types';
 import type { Project, Subcontractor } from './types';
 
 interface JobForm {
-  reference: string;
   site: string;
   assignee: string;
   description: string;
@@ -58,7 +56,6 @@ export function JobSheet({
 
   const form = useForm<JobForm & { project: string }>({
     defaultValues: {
-      reference: '',
       site: '',
       assignee: '',
       description: '',
@@ -68,10 +65,6 @@ export function JobSheet({
       agreed_price: '',
     },
   });
-
-  useEffect(() => {
-    if (project) form.setValue('project', String(project.id));
-  }, [project, form]);
 
   const subcontracted = form.watch('delivery_mode') === 'SUBCONTRACTED';
   const chosenSite = sites.data?.results.find(
@@ -90,14 +83,18 @@ export function JobSheet({
           onClick={form.handleSubmit(async (values) => {
             try {
               await create.mutateAsync({
-                reference: values.reference,
+                // M6: the reference comes from the tenant's JOB series.
                 site: Number(values.site),
                 // The client follows from the site — asking twice would let
                 // the two disagree.
                 client: chosenSite?.client,
                 assignee: Number(values.assignee),
                 description: values.description,
-                project: values.project ? Number(values.project) : null,
+                // Taken from the prop when the sheet was opened from a
+                // project, rather than from a form field that is not rendered
+                // in that case — `setValue` into an unrendered field is a
+                // dependency on library behaviour this does not need.
+                project: project ? project.id : values.project ? Number(values.project) : null,
                 delivery_mode: values.delivery_mode,
                 subcontractor: subcontracted ? Number(values.subcontractor) : null,
                 agreed_price: subcontracted ? values.agreed_price : null,
@@ -115,10 +112,6 @@ export function JobSheet({
       }
     >
       <form className="flex flex-col gap-3">
-        <Field label="Reference" htmlFor="job-reference" error={form.formState.errors.reference?.message}>
-          <Input id="job-reference" {...form.register('reference')} />
-        </Field>
-
         <Field label="Site" htmlFor="job-site" error={form.formState.errors.site?.message}>
           <Select id="job-site" {...form.register('site', { required: 'Which site?' })}>
             <option value="">Choose…</option>

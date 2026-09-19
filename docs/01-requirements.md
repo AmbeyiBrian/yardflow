@@ -111,6 +111,7 @@ These were settled during discovery and are not open for re-litigation in design
 | D27 | **Rates and prices are captured onto the record when it posts** — unit cost onto the movement, day rate onto the labour entry. Repricing anything never rewrites a closed project. |
 | D28 | **A project whose PM is inactive is unblocked only by reassigning the PM.** There is no fallback approver anywhere in the project approval path. |
 | D29 | **Direct expenses are recorded by whoever incurs them and approved by the PM** before they reach project cost. They are the only cost line with no ledger movement and no contract behind it — just a receipt. |
+| D37 | **Number series are tenant-configurable** (amends M6's fixed prefixes). Prefix, padding and the next number are set in Settings. The counter may move **forward** — to meet a sequence already run on paper — but never back onto numbers already issued, because a duplicate document number is the one thing M6 cannot survive. Documents keep the number they were given. |
 | D30 | **Notifications ship on SMS and email.** WhatsApp sits behind the existing channel adapter and is switched on once the Business sender is approved — nothing waits on Meta. |
 | D31 | **The technician submits the closeout; the storekeeper may submit on their behalf.** One endpoint, with `submitted_by` and `on_behalf_of` recording which, so who really does it is answerable from the data after a month of use. |
 | D32 | **An approved gate pass expires if not released.** Configurable per tenant, 24 hours by default. An approval is a decision about a particular load on a particular day. |
@@ -668,6 +669,10 @@ place where its scope, its budget and its performance live.
   catch it.
 - A project with no PO number is permitted — it is the legacy work-order case — and then contract
   value, budget and PM are optional. A project **with** a PO number requires all three.
+- **The reference is allocated, not typed** (`M6`). It comes from the tenant's PROJECT series, as a
+  gate pass comes from the GATE_OUT one. A reference somebody chooses is a reference somebody can
+  collide with, and the client's own name for the work already has a field. The same applies to a
+  job's reference (`H1`).
 - Status: open, closed, cancelled. A closed or cancelled project accepts no new gate-outs.
 
 **O2.** As an owner, I want scope changes recorded as variations, so that the original award and

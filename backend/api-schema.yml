@@ -5085,6 +5085,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/UnreadCount'
           description: ''
+  /api/v1/number-series:
+    get:
+      operationId: number_series_list
+      description: '``/api/v1/number-series`` — every document type and how it is
+        numbered.'
+      tags:
+      - number-series
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NumberSeries'
+          description: ''
+    patch:
+      operationId: number_series_partial_update
+      description: '``/api/v1/number-series`` — every document type and how it is
+        numbered.'
+      tags:
+      - number-series
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNumberSeriesRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNumberSeriesRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNumberSeriesRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberSeries'
+          description: ''
   /api/v1/organization:
     get:
       operationId: organization_retrieve
@@ -11170,7 +11214,7 @@ components:
           readOnly: true
         reference:
           type: string
-          maxLength: 100
+          readOnly: true
         client:
           type: integer
         client_name:
@@ -11248,6 +11292,7 @@ components:
       - created_at
       - id
       - is_closed
+      - reference
       - site
       - site_name
       - site_ref
@@ -11545,9 +11590,6 @@ components:
     JobRequest:
       type: object
       properties:
-        reference:
-          type: string
-          maxLength: 100
         client:
           type: integer
         site:
@@ -11994,6 +12036,39 @@ components:
             additionalProperties: {}
       required:
       - events
+    NumberSeries:
+      type: object
+      properties:
+        document_type:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        prefix:
+          type: string
+          maxLength: 10
+        width:
+          type: integer
+          maximum: 12
+          minimum: 1
+        next_number:
+          type: integer
+          minimum: 1
+        highest_issued:
+          type: integer
+          readOnly: true
+        example:
+          type: string
+          readOnly: true
+      required:
+      - document_type
+      - example
+      - highest_issued
+      - label
+      - next_number
+      - prefix
+      - width
     OfflineBundle:
       type: object
       properties:
@@ -13336,9 +13411,6 @@ components:
     PatchedJobRequest:
       type: object
       properties:
-        reference:
-          type: string
-          maxLength: 100
         client:
           type: integer
         site:
@@ -13383,6 +13455,19 @@ components:
           maxLength: 30
         is_active:
           type: boolean
+    PatchedNumberSeriesRequest:
+      type: object
+      properties:
+        prefix:
+          type: string
+          maxLength: 10
+        width:
+          type: integer
+          maximum: 12
+          minimum: 1
+        next_number:
+          type: integer
+          minimum: 1
     PatchedOrganizationProfileRequest:
       type: object
       properties:
@@ -13528,10 +13613,6 @@ components:
       properties:
         client:
           type: integer
-        reference:
-          type: string
-          minLength: 1
-          maxLength: 100
         po_number:
           type: string
           description: The client's purchase order number. One PO is one project (D21).
@@ -13824,7 +13905,7 @@ components:
           readOnly: true
         reference:
           type: string
-          maxLength: 100
+          readOnly: true
         po_number:
           type: string
           description: The client's purchase order number. One PO is one project (D21).
@@ -14049,10 +14130,6 @@ components:
       properties:
         client:
           type: integer
-        reference:
-          type: string
-          minLength: 1
-          maxLength: 100
         po_number:
           type: string
           description: The client's purchase order number. One PO is one project (D21).
@@ -14097,7 +14174,6 @@ components:
           maxLength: 500
       required:
       - client
-      - reference
     ProjectStatusEnum:
       enum:
       - OPEN

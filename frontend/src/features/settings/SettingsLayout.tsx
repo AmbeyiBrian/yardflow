@@ -25,6 +25,8 @@ const PANES: { to: string; label: string; anyOf: Permission[] }[] = [
   // One tab called "Rules" covering only the second was read as the first.
   { to: 'approvals', label: 'Approvals', anyOf: [PERM.SETTINGS_MANAGE] },
   { to: 'rules', label: 'Rules', anyOf: [PERM.SETTINGS_MANAGE] },
+  // M6: what each document type is called and what the next one will be.
+  { to: 'numbering', label: 'Numbering', anyOf: [PERM.SETTINGS_MANAGE] },
   // Readable by any member — a notification nobody expected reads as spam, so
   // seeing what you will be told is open. Editing is gated in the pane itself.
   { to: 'notifications', label: 'Notifications', anyOf: [] },

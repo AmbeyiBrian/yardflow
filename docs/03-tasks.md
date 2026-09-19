@@ -1069,6 +1069,15 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a storekeeper can raise a job and a technician cannot — H1's actor could not carry
   out H1 before this, because creating a job required the closeout permission.
 
+- [x] **T10.28 `[B/F]` Number series**
+  Refs: §4.13, §7.4 · M6, D37, O1, H1
+  `DocumentSequence` gains a prefix, a width and the highest number it has issued; PROJECT and JOB
+  join the document types; project and job references are allocated on creation and are read-only.
+  Settings → Numbering lists every type with a live example.
+  *Done when:* a tenant can set their own prefix and carry on from a sequence they already ran, the
+  counter refuses to move back onto numbers already issued, and a project created through the API
+  comes back numbered without anybody typing one.
+
 ---
 
 ## Milestones

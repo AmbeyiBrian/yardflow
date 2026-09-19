@@ -48,35 +48,37 @@ export function useCurrency(): string {
 export function formatMoney(
   value?: string | number | null,
   currency?: string,
+  options: { compact?: boolean } = {},
 ): string | null {
   if (value === undefined || value === null || value === '') return null;
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return String(value);
 
-  if (!currency) {
-    return parsed.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  }
+  // `compact` is Intl's own, so "40M" in English becomes whatever the reader's
+  // locale says instead of a suffix hand-written in one language.
+  // `minimumFractionDigits: 0` matters: currency style otherwise forces the
+  // currency's own two places back on, and a tile reading "KES 0.0" or
+  // "KES 999.0" is the noise this was meant to remove.
+  const shape: Intl.NumberFormatOptions = options.compact
+    ? { notation: 'compact', minimumFractionDigits: 0, maximumFractionDigits: 1 }
+    : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+
+  if (!currency) return parsed.toLocaleString(undefined, shape);
 
   try {
     return parsed.toLocaleString(undefined, {
+      ...shape,
       style: 'currency',
       currency,
       currencyDisplay: 'code',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
     });
   } catch {
     // An unknown or mistyped code must not blank the figure — the number is
     // the part that matters, and a missing symbol is the lesser problem.
-    return `${currency} ${parsed.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+    return `${currency} ${parsed.toLocaleString(undefined, shape)}`;
   }
 }
+
 
 /**
  * A money figure.
@@ -90,6 +92,7 @@ export function Money({
   placeholder = '',
   tone,
   withCurrency = true,
+  compact = false,
 }: {
   value?: string | number | null;
   className?: string;
@@ -97,16 +100,30 @@ export function Money({
   /** `bad` for a negative margin or an overrun — the one figure worth colour. */
   tone?: 'neutral' | 'good' | 'bad';
   withCurrency?: boolean;
+  /**
+   * `KES 40M` instead of `KES 40,000,000.00`.
+   *
+   * For **summary tiles only**. A tile is for scanning and nine zeros defeat
+   * that; a table is for checking, and a figure somebody might tie back to an
+   * invoice has to stay exact. The full figure is on the element's title either
+   * way, so nothing is actually lost.
+   */
+  compact?: boolean;
 }) {
   const currency = useCurrency();
-  const text = formatMoney(value, withCurrency ? currency : undefined);
+  const resolvedCurrency = withCurrency ? currency : undefined;
+  const text = formatMoney(value, resolvedCurrency, { compact });
   if (text === null) return <>{placeholder}</>;
 
   const negative = Number(value) < 0;
   const resolved = tone ?? (negative ? 'bad' : 'neutral');
+  const exact = formatMoney(value, resolvedCurrency) ?? undefined;
 
   return (
     <span
+      // The exact figure, for the person who needs it and the one who doubts
+      // the rounding.
+      title={compact ? exact : undefined}
       className={cn(
         TABULAR,
         'whitespace-nowrap',
@@ -119,6 +136,7 @@ export function Money({
     </span>
   );
 }
+
 
 /**
  * An input that takes money.
