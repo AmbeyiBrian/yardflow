@@ -1064,8 +1064,8 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
 **M4 is the point of no return in value terms.** If the schedule compresses, trade scope from
 phases 5–8, never from 1–4.
 
-**Milestones M1–M8 are complete.** The yard is fully accounted for; what phase 10 adds is the
-commercial layer over it.
+**Milestones M1–M10 are complete.** The yard is fully accounted for, and phase 10 has put the
+commercial layer over it: a PO has a manager, a budget and a margin.
 
 Still outstanding beyond phase 10: phase 9's deployment work (§12.1), and the two things only
 Silvertech can supply — the Ujumbe SMS account for the SMS channel, and an approved WhatsApp sender
