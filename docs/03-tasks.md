@@ -1099,6 +1099,19 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a contractor can be added and immediately chosen on a job, and the job comes back
   attributed to them.
 
+- [x] **T10.31 `[F]` Doors onto the commercial screens**
+  Refs: §7.4 · O12, O16
+  T10.22 and T10.23 built the manager's queue and the expense form, wired their routes, and linked
+  to neither — so both were reachable only by typing a URL, and a manager had no way to learn an
+  expense was waiting on them. "Waiting on you" joins the sidebar; "Record an expense" joins the
+  project's own header and carries the project with it.
+  The form now offers the `job` the model has always accepted, optional because a permit belongs to
+  the project and a recovery truck to one job — forcing a choice would put the cost somewhere
+  untrue rather than leave it unallocated. A refusal that names no field (a closed project) now
+  reaches a banner instead of nowhere.
+  *Done when:* an expense can be recorded from the project screen against one of its jobs without
+  anybody typing a URL.
+
 ---
 
 ## Milestones

@@ -60,6 +60,15 @@ const NAV_ITEMS: NavItem[] = [
     icon: <GlyphClipboard />,
   },
   {
+    // O16: the manager's own queue — an expense or a closeout cost waiting on
+    // them. It had a route and no entry, so the only way to learn something was
+    // waiting was to be told.
+    to: '/my-projects',
+    label: 'Waiting on you',
+    anyOf: [PERM.PROJECT_VIEW_COST],
+    icon: <GlyphCheck />,
+  },
+  {
     to: '/jobs',
     label: 'Jobs',
     anyOf: [PERM.JOB_CLOSEOUT, PERM.REPORT_VIEW_ALL],

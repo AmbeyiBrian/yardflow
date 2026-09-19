@@ -248,6 +248,55 @@ test.describe('A purchase order, end to end', () => {
       .toBe(1);
   });
 
+  test('an expense is recorded from the project, against one of its jobs', async ({
+    page,
+    request,
+  }) => {
+    // O16 built this screen and nothing linked to it, so an expense could only
+    // be recorded by somebody who knew the URL — and the form never offered the
+    // `job` the model has always accepted, so every expense landed on the
+    // project as a whole. This walks the route a person actually takes.
+    const headers = await asOwner(request);
+    const categories = await (
+      await request.get(`${api}/api/v1/expense-categories?page_size=20`, { headers })
+    ).json();
+    test.skip(!categories.results.length, 'no seeded expense categories');
+
+    const note = `E2E crane hire ${Date.now().toString().slice(-6)}`;
+
+    await signIn(page, PEOPLE.owner);
+    await open(page, `/projects/${projectId}`);
+    await page.getByRole('button', { name: /record an expense/i }).click();
+
+    // The project came with us and is shown rather than asked for, so there is
+    // no select to pick the wrong one from.
+    await expect(page.getByLabel('Project')).toHaveCount(0);
+    await expect(page.getByText(poNumber).filter({ visible: true }).first()).toBeVisible();
+
+    // The job select is the new part: it offers this project's jobs only.
+    await page.getByLabel('Against a job').selectOption({ index: 1 });
+    await page.getByLabel('What kind').selectOption({ index: 1 });
+    await page.getByLabel('Amount').fill('12000');
+    await page.getByLabel('What for').fill(note);
+    await page.getByRole('button', { name: /record it/i }).click();
+
+    await expect(page.getByText(/reaches the project/i)).toBeVisible({ timeout: 20_000 });
+
+    const expenses = await (
+      await request.get(`${api}/api/v1/project-expenses?project=${projectId}`, {
+        headers,
+      })
+    ).json();
+    const recorded = expenses.results.find(
+      (row: { description: string }) => row.description === note,
+    );
+    expect(recorded, 'the expense should exist').toBeTruthy();
+    // Attributed to a job, not just to the project — the point of the change.
+    expect(recorded.job).toBeTruthy();
+    // Submitted, not counted: it reaches the cost when the manager agrees.
+    expect(recorded.status).toBe('SUBMITTED');
+  });
+
   test('a technician cannot raise a job', async ({ request }) => {
     // H1: raising work and finishing it are different acts. This used to be
     // allowed, while the storekeeper H1 actually names was locked out.

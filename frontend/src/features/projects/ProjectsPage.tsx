@@ -236,6 +236,7 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { has } = useSession();
   const project = useDetail<Project>('projects', id);
   const performance = useResource<ProjectPerformance>(`projects/${id}/performance`);
@@ -267,6 +268,21 @@ export function ProjectDetailPage() {
               {has(PERM.JOB_MANAGE) ? (
                 <Button variant="ghost" onClick={() => setAddingJob(true)}>
                   Add a job
+                </Button>
+              ) : null}
+              {/*
+                O16: the same three permissions the route itself accepts. The
+                screen existed and nothing linked to it, so an expense could
+                only be recorded by somebody who knew the URL.
+              */}
+              {has(PERM.GATE_OUT_REQUEST) ||
+              has(PERM.JOB_CLOSEOUT) ||
+              has(PERM.PROJECT_VIEW_COST) ? (
+                <Button
+                  variant="ghost"
+                  onClick={() => navigate(`/expenses/new?project=${record.id}`)}
+                >
+                  Record an expense
                 </Button>
               ) : null}
               <Button onClick={() => setClosing(true)}>Close project</Button>
