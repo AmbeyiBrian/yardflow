@@ -551,7 +551,12 @@ class ExceptionsView(APIView):
                     "Restrict to one kind: variance, release_variance, custody, sync."
                 ),
                 required=False,
-            )
+            ),
+            OpenApiParameter(
+                "search",
+                description="Match a reference or the summary of the exception.",
+                required=False,
+            ),
         ],
         responses={
             200: inline_serializer(
@@ -575,6 +580,18 @@ class ExceptionsView(APIView):
             items.extend(_overdue_custody(request.user.organization_id))
         if kind in ("", "sync"):
             items.extend(_sync_conflicts(request.user.organization_id))
+
+        # M1: the register is assembled in Python from four different sources,
+        # so it is searched the same way. A person hunting one serial through a
+        # hundred open exceptions should not have to read them all.
+        search = (request.query_params.get("search") or "").strip().lower()
+        if search:
+            items = [
+                entry
+                for entry in items
+                if search in str(entry.get("reference", "")).lower()
+                or search in str(entry.get("summary", "")).lower()
+            ]
 
         items.sort(key=lambda entry: entry["raised_at"] or "", reverse=True)
         return Response({"count": len(items), "items": items})

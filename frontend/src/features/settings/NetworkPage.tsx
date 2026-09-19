@@ -18,14 +18,19 @@ import { useSearchParams } from 'react-router-dom';
 import { applyFieldErrors, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
+import { SearchField } from '../../components/ui/SearchField';
+import type { Subcontractor } from '../projects/types';
 import type { Client, Location, Site, Project } from './types';
 
-type Tab = 'sites' | 'clients' | 'projects' | 'locations';
+type Tab = 'sites' | 'clients' | 'projects' | 'subcontractors' | 'locations';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'sites', label: 'Sites' },
   { key: 'clients', label: 'Clients' },
   { key: 'projects', label: 'Projects' },
+  // O4: the register had an API and no screen, so a job could be marked
+  // subcontracted only if somebody had already made a contractor another way.
+  { key: 'subcontractors', label: 'Subcontractors' },
   { key: 'locations', label: 'Locations' },
 ];
 
@@ -59,6 +64,7 @@ export default function NetworkPage() {
       {tab === 'sites' ? <SitesTab /> : null}
       {tab === 'clients' ? <ClientsTab /> : null}
       {tab === 'projects' ? <ProjectsTab /> : null}
+      {tab === 'subcontractors' ? <SubcontractorsTab /> : null}
       {tab === 'locations' ? <LocationsTab /> : null}
     </div>
   );
@@ -447,6 +453,134 @@ function ClientSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
 /* -------------------------------------------------------------------------- */
 /* Projects                                                                */
 /* -------------------------------------------------------------------------- */
+
+function SubcontractorsTab() {
+  const [sheet, setSheet] = useState(false);
+  const [search, setSearch] = useState('');
+  const contractors = useList<Subcontractor>('subcontractors', {
+    search: search || undefined,
+    page_size: 100,
+  });
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SearchField
+          value={search}
+          onChange={setSearch}
+          label="Search subcontractors"
+          placeholder="Name, code or contact"
+        />
+        <Button onClick={() => setSheet(true)}>New subcontractor</Button>
+      </div>
+
+      <p className="text-sm text-slate-600">
+        Third parties who deliver jobs. Distinct from a supplier, who sells
+        goods: a subcontractor is paid an agreed price per job, and their cost
+        has to roll up by party.
+      </p>
+
+      {contractors.isLoading ? (
+        <Spinner className="text-slate-400" />
+      ) : (
+        <DataList
+          rows={contractors.data?.results ?? []}
+          rowKey={(row) => row.id}
+          empty={
+            <EmptyState
+              title="No subcontractors yet."
+              hint="A job cannot be marked subcontracted until one exists."
+            />
+          }
+          columns={[
+            { header: 'Name', cell: (row) => row.name },
+            { header: 'Code', cell: (row) => row.code || '—' },
+            { header: 'Contact', cell: (row) => row.contact_name || '—' },
+            { header: 'Phone', cell: (row) => row.contact_phone || '—', wideOnly: true },
+            {
+              header: 'Active',
+              cell: (row) => (row.is_active ? 'yes' : 'no'),
+              wideOnly: true,
+            },
+          ]}
+        />
+      )}
+
+      <SubcontractorSheet open={sheet} onClose={() => setSheet(false)} />
+    </div>
+  );
+}
+
+function SubcontractorSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const form = useForm({
+    defaultValues: {
+      name: '',
+      code: '',
+      contact_name: '',
+      contact_email: '',
+      contact_phone: '',
+      notes: '',
+    },
+  });
+  const [banner, setBanner] = useState<string | null>(null);
+  const create = useAction<Record<string, unknown>>({ resource: 'subcontractors' });
+
+  const submit = form.handleSubmit(async (values) => {
+    setBanner(null);
+    try {
+      await create.mutateAsync({ ...values });
+      form.reset();
+      onClose();
+    } catch (error) {
+      setBanner(applyFieldErrors(error, form.setError));
+    }
+  });
+
+  return (
+    <Sheet
+      open={open}
+      title="New subcontractor"
+      onClose={onClose}
+      footer={
+        <Button block loading={create.isPending} onClick={submit}>
+          Add them
+        </Button>
+      }
+    >
+      <form className="flex flex-col gap-3" onSubmit={submit}>
+        {banner ? <Banner tone="error">{banner}</Banner> : null}
+
+        <Field label="Name" htmlFor="sc-name" error={form.formState.errors.name?.message}>
+          <Input
+            id="sc-name"
+            {...form.register('name', { required: 'What are they called?' })}
+          />
+        </Field>
+
+        <Field label="Code" htmlFor="sc-code" hint="Optional, for your own filing.">
+          <Input id="sc-code" {...form.register('code')} />
+        </Field>
+
+        <Field label="Contact" htmlFor="sc-contact">
+          <Input id="sc-contact" {...form.register('contact_name')} />
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Phone" htmlFor="sc-phone">
+            <Input id="sc-phone" inputMode="tel" {...form.register('contact_phone')} />
+          </Field>
+          <Field label="Email" htmlFor="sc-email">
+            <Input id="sc-email" type="email" {...form.register('contact_email')} />
+          </Field>
+        </div>
+
+        <Field label="Notes" htmlFor="sc-notes">
+          <Textarea id="sc-notes" {...form.register('notes')} />
+        </Field>
+      </form>
+    </Sheet>
+  );
+}
 
 function ProjectsTab() {
   const [sheet, setSheet] = useState(false);

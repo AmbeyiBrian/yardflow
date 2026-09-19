@@ -35,6 +35,7 @@ import {
   Textarea,
 } from '../../components/ui';
 import { EmptyState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
+import { SearchField } from '../../components/ui/SearchField';
 import type {
   Disposition,
   DispositionDecision,
@@ -76,7 +77,11 @@ interface LocationRow {
 }
 
 export default function QuarantinePage() {
-  const quarantine = useResource<{ count: number; items: QuarantineItem[] }>('quarantine');
+  const [search, setSearch] = useState('');
+  const quarantine = useResource<{ count: number; items: QuarantineItem[] }>(
+    'quarantine',
+    search ? { search } : undefined,
+  );
   const [deciding, setDeciding] = useState<QuarantineItem | null>(null);
 
   const items = quarantine.data?.items ?? [];
@@ -96,6 +101,13 @@ export default function QuarantinePage() {
             Decisions
           </Link>
         }
+      />
+
+      <SearchField
+        value={search}
+        onChange={setSearch}
+        label="Search quarantine"
+        placeholder="Item, client or bay"
       />
 
       {quarantine.isError ? (

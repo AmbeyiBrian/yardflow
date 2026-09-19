@@ -34,6 +34,7 @@ import {
   Textarea,
 } from '../../components/ui';
 import { EmptyState, PageHeader, Sheet, Stat } from '../../components/ui/data';
+import { SearchField } from '../../components/ui/SearchField';
 import type { ExceptionEntry } from '../dispatch/types';
 
 const KINDS: { value: string; label: string }[] = [
@@ -51,10 +52,11 @@ const KIND_LABELS: Record<string, string> = {
 
 export default function ExceptionsPage() {
   const [kind, setKind] = useState('');
-  const register = useResource<{ count: number; items: ExceptionEntry[] }>(
-    'exceptions',
-    kind ? { kind } : undefined,
-  );
+  const [search, setSearch] = useState('');
+  const register = useResource<{ count: number; items: ExceptionEntry[] }>('exceptions', {
+    ...(kind ? { kind } : {}),
+    ...(search ? { search } : {}),
+  });
   const [resolving, setResolving] = useState<ExceptionEntry | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
 
@@ -99,6 +101,13 @@ export default function ExceptionsPage() {
             ))}
           </div>
         }
+      />
+
+      <SearchField
+        value={search}
+        onChange={setSearch}
+        label="Search exceptions"
+        placeholder="Reference or reason"
       />
 
       {banner ? <Banner tone="error">{banner}</Banner> : null}

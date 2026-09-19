@@ -30,6 +30,7 @@ import {
   Sheet,
   Stat,
 } from '../../components/ui/data';
+import { SearchField } from '../../components/ui/SearchField';
 import type {
   CustodyBalance,
   CustodyExpectation,
@@ -38,7 +39,11 @@ import type {
 } from './types';
 
 export default function CustodyOverviewPage() {
-  const overdue = useResource<OverdueReport>('custody/overdue');
+  const [search, setSearch] = useState('');
+  const overdue = useResource<OverdueReport>(
+    'custody/overdue',
+    search ? { search } : undefined,
+  );
   // Everyone's custody: PERSON-node balances across the tenant (§4.10).
   const holdings = useList<CustodyBalance>('stock/custody', { page_size: 200 });
   const [openHolder, setOpenHolder] = useState<{ id: number; name: string } | null>(null);
@@ -70,6 +75,13 @@ export default function CustodyOverviewPage() {
             Reconciliation
           </Link>
         }
+      />
+
+      <SearchField
+        value={search}
+        onChange={setSearch}
+        label="Search custody"
+        placeholder="Person or item"
       />
 
       {overdue.isError ? <Banner tone="error">{errorMessage(overdue.error)}</Banner> : null}

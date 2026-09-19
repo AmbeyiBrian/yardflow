@@ -1861,6 +1861,12 @@ paths:
 
         Both groupings, because they answer different questions: "who keeps doing
         this?" and "what do we keep losing?".
+      parameters:
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Match a person or an item across both groupings.
       tags:
       - custody
       security:
@@ -2720,6 +2726,11 @@ paths:
         schema:
           type: string
         description: 'Restrict to one kind: variance, release_variance, custody, sync.'
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Match a reference or the summary of the exception.
       tags:
       - exceptions
       security:
@@ -6107,6 +6118,10 @@ paths:
           type: string
       - in: query
         name: location
+        schema:
+          type: string
+      - in: query
+        name: search
         schema:
           type: string
       tags:

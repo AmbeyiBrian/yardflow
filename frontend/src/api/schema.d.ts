@@ -8448,7 +8448,10 @@ export interface operations {
     };
     custody_overdue_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Match a person or an item across both groupings. */
+                search?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9131,6 +9134,8 @@ export interface operations {
             query?: {
                 /** @description Restrict to one kind: variance, release_variance, custody, sync. */
                 kind?: string;
+                /** @description Match a reference or the summary of the exception. */
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -11877,6 +11882,7 @@ export interface operations {
             query?: {
                 client?: string;
                 location?: string;
+                search?: string;
             };
             header?: never;
             path?: never;

@@ -1078,6 +1078,27 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   counter refuses to move back onto numbers already issued, and a project created through the API
   comes back numbered without anybody typing one.
 
+- [x] **T10.29 `[B/F]` Search on every register**
+  Refs: §7.3 · O1
+  `SearchField` in one place, debounced, with a clear button. Wired into projects, jobs, expenses,
+  disposals, quarantine, exceptions and overdue custody. Project search covers `po_number` and
+  `title`, not just the reference somebody may not have in front of them. The three bespoke
+  registers are assembled in Python rather than queried, so each filters in its own terms:
+  quarantine on the queryset, exceptions over the assembled entries, overdue custody over the
+  **grouped** rows — grouping first and filtering after would leave totals that did not add up to
+  the rows underneath them.
+  *Done when:* every list screen can be narrowed by typing, and the counts a register reports match
+  the rows it returns.
+
+- [x] **T10.30 `[F]` The subcontractor register**
+  Refs: §7.4 · O4
+  T10.4 built `/api/v1/subcontractors` and the job sheet read from it, but no screen created one —
+  so "delivered by a subcontractor" was a select with nothing in it and the subcontracting half of
+  Epic O was unreachable from the UI. A fourth tab under Settings → Network, searchable, alongside
+  Clients, Sites and Projects. The job sheet now says where to add one instead of dead-ending.
+  *Done when:* a contractor can be added and immediately chosen on a job, and the job comes back
+  attributed to them.
+
 ---
 
 ## Milestones

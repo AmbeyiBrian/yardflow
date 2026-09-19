@@ -240,6 +240,13 @@ class OverdueCustodyView(APIView):
     permission_classes = [IsAuthenticated, OrganizationIsActive]
 
     @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "search",
+                description="Match a person or an item across both groupings.",
+                required=False,
+            )
+        ],
         responses={
             200: inline_serializer(
                 "OverdueCustody",
@@ -249,20 +256,45 @@ class OverdueCustodyView(APIView):
                     "total": serializers.IntegerField(),
                 },
             )
-        }
+        },
     )
     def get(self, request):  # type: ignore[no-untyped-def]
         report = overdue_report(request.user.organization_id)
+
+        # I3: the question this answers is "who has my kit". Searched over the
+        # grouped rows, because that is what the report *is* — grouping first
+        # and filtering after would leave totals that do not add up to the rows
+        # underneath them.
+        search = (request.query_params.get("search") or "").strip().lower()
+
+        def matches(row: dict) -> bool:
+            if not search:
+                return True
+            # Only the text on the row. Comparing against the counts would let
+            # a search for "3" match a person holding three items, which is not
+            # what anybody typing into a search box means.
+            return any(
+                search in value.lower()
+                for value in row.values()
+                if isinstance(value, str)
+            )
+
+        by_person = [
+            {**row, "quantity": str(row["quantity"])}
+            for row in report["by_person"]
+            if matches(row)
+        ]
+        by_item = [
+            {**row, "quantity": str(row["quantity"])}
+            for row in report["by_item"]
+            if matches(row)
+        ]
+
         return Response(
             {
                 "as_at": report["as_at"],
                 "total": report["total"],
-                "by_person": [
-                    {**row, "quantity": str(row["quantity"])}
-                    for row in report["by_person"]
-                ],
-                "by_item": [
-                    {**row, "quantity": str(row["quantity"])} for row in report["by_item"]
-                ],
+                "by_person": by_person,
+                "by_item": by_item,
             }
         )

@@ -193,6 +193,61 @@ test.describe('A purchase order, end to end', () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
+  test('a subcontractor is put on the register, and a job goes to them', async ({
+    page,
+    request,
+  }) => {
+    // O4 built the register and the job sheet read from it, but nothing created
+    // a contractor — so "delivered by a subcontractor" was a select with one
+    // option in it, and the whole subcontracting half of Epic O was unreachable
+    // from the UI. This walks the gap that closed: make one, then use it.
+    const headers = await asOwner(request);
+    const name = `E2E Riggers ${Date.now().toString().slice(-6)}`;
+
+    await signIn(page, PEOPLE.owner);
+    await open(page, '/settings/network?tab=subcontractors');
+
+    await page.getByRole('button', { name: /new subcontractor/i }).click();
+    const register = page.getByRole('dialog');
+    await register.getByLabel('Name').fill(name);
+    await register.getByLabel('Contact', { exact: true }).fill('Ruth Rigger');
+    await register.getByRole('button', { name: /add them/i }).click();
+
+    // Searched rather than scanned: the register only ever grows (no destroy),
+    // so a re-run against a live tenant would be reading page one of many.
+    await page.getByLabel('Search subcontractors').fill(name);
+    await expect(
+      page.getByText(name).filter({ visible: true }).first(),
+    ).toBeVisible({ timeout: 20_000 });
+
+    // And now the job sheet can actually offer them.
+    await open(page, `/projects/${projectId}`);
+    await page.getByRole('button', { name: /add a job/i }).click();
+
+    const sheet = page.getByRole('dialog');
+    await sheet.getByLabel('Site').selectOption({ index: 1 });
+    await sheet.getByLabel('Who is responsible').selectOption({ label: 'Tom Technician' });
+    await sheet.getByLabel('Who delivers it').selectOption('SUBCONTRACTED');
+    await sheet.getByLabel('Subcontractor').selectOption({ label: name });
+    await sheet.getByLabel('Agreed price').fill('75000');
+    await sheet.getByRole('button', { name: /raise it/i }).click();
+
+    // Polled: the click returns while the POST is still in flight.
+    await expect
+      .poll(
+        async () => {
+          const jobs = await (
+            await request.get(`${api}/api/v1/jobs?project=${projectId}`, { headers })
+          ).json();
+          return jobs.results.filter(
+            (row: { subcontractor_name?: string }) => row.subcontractor_name === name,
+          ).length;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(1);
+  });
+
   test('a technician cannot raise a job', async ({ request }) => {
     // H1: raising work and finishing it are different acts. This used to be
     // allowed, while the storekeeper H1 actually names was locked out.

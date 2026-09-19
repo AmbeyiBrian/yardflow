@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -587,6 +588,7 @@ class QuarantineView(APIView):
         parameters=[
             OpenApiParameter("location", required=False),
             OpenApiParameter("client", required=False),
+            OpenApiParameter("search", required=False),
         ],
         responses={
             200: inline_serializer(
@@ -619,6 +621,18 @@ class QuarantineView(APIView):
         client_id = request.query_params.get("client")
         if client_id:
             balances = balances.filter(owner_client_id=client_id)
+
+        # J2: a register nobody can find anything in becomes the graveyard the
+        # requirement exists to prevent. Searched in the query rather than over
+        # the rendered rows, so paging and counting stay honest.
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            balances = balances.filter(
+                Q(item_type__name__icontains=search)
+                | Q(item_type__code__icontains=search)
+                | Q(owner_client__name__icontains=search)
+                | Q(node__location__name__icontains=search)
+            )
 
         # When each item arrived in this quarantine, in one query rather than one
         # per row — the list is read on a phone, and N queries would show.

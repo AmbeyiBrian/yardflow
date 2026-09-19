@@ -178,6 +178,14 @@ export function JobSheet({
               label="Subcontractor"
               htmlFor="job-contractor"
               error={form.formState.errors.subcontractor?.message}
+              hint={
+                // A select whose only option is "Choose…" reads as a fault in
+                // the screen. The register is in settings, and somebody raising
+                // a job has no reason to know that.
+                !contractors.isLoading && !(contractors.data?.results ?? []).length
+                  ? 'None on the register yet — add one under Settings › Network › Subcontractors.'
+                  : undefined
+              }
             >
               <Select
                 id="job-contractor"
