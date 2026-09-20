@@ -38,12 +38,17 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 
 WORKDIR /app
 
-# Dependencies first, so a code change does not reinstall them. `--no-deps` is
-# deliberately absent: the pins in pyproject are what we want resolved.
+# Dependencies first, so a code change does not reinstall them.
+#
+# Read out of `pyproject.toml` rather than installed with `pip install .`:
+# setuptools needs the package directories to exist, and they are not copied
+# yet — which is the whole point of doing this before the source. Reading the
+# pins keeps them in one place, with no second requirements file to drift.
 COPY pyproject.toml ./
 RUN python -m pip install --upgrade pip \
-    && pip install . \
-    && pip uninstall --yes yardflow-backend
+    && python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" > /tmp/requirements.txt \
+    && pip install -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
 
 COPY . /app
 
