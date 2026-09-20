@@ -80,9 +80,16 @@ somebody runs a report.
 Attach a **static IP** — a Lightsail instance's default address changes when it
 is stopped, and the DNS records point at it.
 
-Open **80** and **443** in the Lightsail firewall. Nothing else. In particular
-Postgres is not published to the host at all: it is reachable only from the
-compose network.
+Open **80**, **443** and **22**. Postgres is not published to the host at all —
+it is reachable only from the compose network, so the box never exposes a
+database to the internet.
+
+SSH is open to the world rather than to one address because the CI runner that
+deploys has no fixed IP, and GitHub's published ranges are far too many for a
+Lightsail firewall to hold. That is acceptable **only because password
+authentication is off** on this image (`passwordauthentication no`,
+`pubkeyauthentication yes`) — brute force cannot succeed against a key. If
+password auth is ever enabled, this rule must be narrowed the same day.
 
 ### 2.2 Its dependencies
 
