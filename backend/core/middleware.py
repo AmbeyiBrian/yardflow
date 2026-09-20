@@ -16,7 +16,6 @@ from __future__ import annotations
 from django.conf import settings
 from django.db import transaction
 from django.http import Http404
-from django.utils.functional import SimpleLazyObject
 
 from core.models import Organization
 from core.tenancy import (
@@ -112,10 +111,12 @@ class TenantMiddleware:
         repeated by :class:`core.authentication.TenantJWTAuthentication` — which
         runs inside this transaction and so can still set the database setting.
         """
+        # `getattr` throughout: `request.user` is a `SimpleLazyObject`, and an
+        # unauthenticated request may carry no user attribute at all. Touching
+        # `is_authenticated` resolves the lazy object, which is what we want —
+        # but only once, and only through an access that cannot raise.
         user = getattr(request, "user", None)
-        if user is None or (isinstance(user, SimpleLazyObject) and not user.is_authenticated):
-            return organization
-        if not getattr(user, "is_authenticated", False):
+        if user is None or not getattr(user, "is_authenticated", False):
             return organization
 
         user_organization_id = getattr(user, "organization_id", None)
