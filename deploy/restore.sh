@@ -41,7 +41,7 @@ aws s3 cp "s3://${BACKUP_S3_BUCKET}/database/${key}" "$tmp"
 # The app is stopped first. Restoring under a running app would have it writing
 # into a schema being dropped and rebuilt underneath it.
 echo "Stopping the application (the database stays up)..."
-docker compose --env-file .env stop web worker beat
+docker compose --env-file .env stop web worker
 
 gunzip -c "$tmp" \
   | docker compose --env-file .env exec -T postgres \

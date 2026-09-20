@@ -38,6 +38,16 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Tuned for a small box. Postgres's defaults assume it owns the machine; here
+    # it shares 1 GB with the application it serves.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-128MB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-50}
+      - -c
+      - work_mem=4MB
     volumes:
       - postgres_data:/var/lib/postgresql/data
     # No published port. Postgres is reachable only from this compose network,
@@ -54,7 +64,19 @@ services:
     # `--save 60 1` keeps the queue across a restart. The tasks here are
     # notifications and nightly checks; losing a few on reboot is survivable,
     # losing them silently on every deploy is not.
-    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    command:
+      - redis-server
+      - --save
+      - "60"
+      - "1"
+      - --loglevel
+      - warning
+      # A cache that is allowed to grow without limit will take the memory the
+      # database needs, on a box where there is not much of either.
+      - --maxmemory
+      - "${REDIS_MAXMEMORY:-96mb}"
+      - --maxmemory-policy
+      - allkeys-lru
     volumes:
       - redis_data:/data
     healthcheck:
@@ -83,19 +105,28 @@ services:
 
   worker:
     <<: *app
-    # `--concurrency 2`: two vCPUs, and Postgres is on this box too. More
-    # workers would mean more connections and less memory for the database.
-    command: ["celery", "-A", "config", "worker", "--loglevel", "info", "--concurrency", "2"]
+    # The scheduler runs **inside** the worker (`-B`) rather than as its own
+    # container. A second Python process costs about 120 MB, which on a 1 GB box
+    # is the difference between comfortable and swapping.
+    #
+    # This is safe here and only here: §12.2 is one box with exactly one worker.
+    # Two workers with `-B` would each fire the schedule, and the nightly ledger
+    # verification would alert twice about a single drift. If this ever scales
+    # past one worker, beat goes back to being its own container.
+    #
+    # Concurrency follows the box: 1 on the small instance, 2 where there is room.
+    command:
+      - celery
+      - -A
+      - config
+      - worker
+      - --beat
+      - --loglevel
+      - info
+      - --concurrency
+      - "${CELERY_CONCURRENCY:-2}"
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
-
-  beat:
-    <<: *app
-    # One beat, always. Two would double every scheduled job — including the
-    # nightly ledger verification, which would then alert twice about one drift.
-    command: ["celery", "-A", "config", "beat", "--loglevel", "info"]
-    depends_on:
       redis: { condition: service_healthy }
 
   caddy:
