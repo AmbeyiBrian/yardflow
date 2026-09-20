@@ -32,6 +32,22 @@ DEBUG = False
 
 ALLOWED_HOSTS: list[str] = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 
+# Two endpoints that must answer over plain HTTP, even in production where
+# everything else is redirected to HTTPS (§12.2).
+#
+# `internal/tls-allowed` is asked by the reverse proxy *during a TLS handshake*,
+# before any certificate for that hostname exists — so it cannot itself be
+# reached over HTTPS. Caddy refuses to follow redirects on that call, so a
+# redirect here means no certificate is ever issued, for any hostname.
+#
+# `health` is probed inside the container network, where there is no TLS at all.
+#
+# Defined here rather than in `prod` so the test suite exercises the real list.
+SECURE_REDIRECT_EXEMPT = [
+    r"^internal/tls-allowed$",
+    r"^health$",
+]
+
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 ROOT_URLCONF = "config.urls"

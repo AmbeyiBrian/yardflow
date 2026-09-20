@@ -69,6 +69,43 @@ class TestWhatGetsACertificate:
 
 
 @pytest.mark.django_db
+class TestItAnswersOverPlainHttp:
+    """The failure that made every certificate impossible.
+
+    Caddy asks this question over HTTP on the container network, because it is
+    asked *during* a TLS handshake — there is no certificate for the hostname
+    yet, so there is nothing to ask over. Production redirects everything to
+    HTTPS, Caddy refuses to follow redirects on this call, and the result was
+    that no hostname could ever be issued a certificate: the gate protecting
+    certificate issuance was blocking all of it.
+    """
+
+    def test_it_is_not_redirected_to_https(self, client, tenant, settings):
+        settings.SECURE_SSL_REDIRECT = True
+
+        response = ask(client, "silvertech.yardflow.buniva.co.ke")
+
+        assert response.status_code == 200, (
+            "the proxy asks over plain HTTP and will not follow a redirect"
+        )
+
+    def test_the_health_probe_is_not_redirected_either(self, client, settings):
+        """Probed inside the container network, where there is no TLS."""
+        settings.SECURE_SSL_REDIRECT = True
+
+        assert client.get(reverse("health")).status_code == 200
+
+    def test_an_ordinary_endpoint_still_is(self, client, settings):
+        """The exemption is two paths, not a hole in the TLS policy."""
+        settings.SECURE_SSL_REDIRECT = True
+
+        response = client.get("/api/v1/projects")
+
+        assert response.status_code in (301, 302)
+        assert response["Location"].startswith("https://")
+
+
+@pytest.mark.django_db
 class TestItCostsNothingToAsk:
     def test_it_needs_no_session(self, client, tenant):
         """It is asked *during* the handshake, so there is no session to have.
