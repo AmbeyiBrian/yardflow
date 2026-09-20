@@ -211,7 +211,12 @@ export WEB_IMAGE=ghcr.io/ambeyibrian/yardflow-web:<good sha>
 
 ### 3.1 What CI needs from you, once
 
-Four repository secrets, under Settings → Secrets and variables → Actions:
+The deploy job is **skipped** until a repository *variable* `DEPLOY_ENABLED` is
+set to `true`. Until the box exists there is nothing to deploy to, and a
+pipeline that goes red because infrastructure has not been built yet teaches
+everybody to ignore a red pipeline.
+
+Then four repository secrets, under Settings → Secrets and variables → Actions:
 
 | Secret | What it is |
 |---|---|

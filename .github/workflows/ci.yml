@@ -235,6 +235,10 @@ jobs:
   deploy:
     name: Deploy to production
     needs: images
+    # Skipped, not failed, until the box exists and its secrets are set. A
+    # pipeline that goes red because infrastructure has not been built yet
+    # teaches everyone to ignore a red pipeline.
+    if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     # One at a time, and never cancelled halfway: a deploy interrupted between
     # `migrate` and `up` would leave the old containers against a new schema.
