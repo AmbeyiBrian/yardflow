@@ -40,6 +40,17 @@ say "Migrating"
 say "Starting everything"
 "${COMPOSE[@]}" up -d --remove-orphans
 
+# Every container, not just the web one. The first deployment reported success
+# while Caddy was in a crash loop, because only `web` was being watched — so the
+# site was entirely unreachable and the script said "Deployed."
+say "Checking nothing is restarting"
+sleep 15
+if "${COMPOSE[@]}" ps --format '{{.Service}} {{.Status}}' | grep -Ei 'restarting|exited'; then
+  echo "A container is not staying up. Logs:" >&2
+  "${COMPOSE[@]}" logs --tail 40 >&2
+  exit 1
+fi
+
 say "Waiting for the web container to report healthy"
 for _ in $(seq 1 45); do
   status=$("${COMPOSE[@]}" ps --format json web 2>/dev/null \

@@ -20,11 +20,12 @@
 	email {$ACME_EMAIL}
 
 	on_demand_tls {
+		# `ask` is the whole defence. Caddy used to offer `interval`/`burst`
+		# rate limiting here as a second line; it was removed, and leaving it
+		# in stops Caddy booting at all. So this endpoint has to be right: it
+		# is the only thing between a wildcard DNS record and a few thousand
+		# certificate requests for names nobody registered.
 		ask http://web:8000/internal/tls-allowed
-		# The default burst allows a flood of handshakes to become a flood of
-		# certificate requests even with `ask` in front of them.
-		interval 2m
-		burst 5
 	}
 }
 
