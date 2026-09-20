@@ -10,7 +10,7 @@ Conventions:
 
 from django.conf import settings
 from django.contrib import admin
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.urls import include, path
 from drf_spectacular.utils import extend_schema
 from drf_spectacular.views import (
@@ -134,11 +134,55 @@ class ScopedSchemaView(SpectacularAPIView):
 
 
 def health(request):
-    """Liveness probe for the ALB (§12.1).
+    """Liveness probe for the load balancer (§12.1).
 
     Deliberately touches no database, so a probe stays cheap and a database
     blip does not take healthy tasks out of service.
     """
+    return JsonResponse({"status": "ok"})
+
+
+def tls_allowed(request):
+    """Whether a hostname should be issued a certificate (§12.2).
+
+    Caddy asks this before obtaining a certificate on demand. Without the
+    question it would attempt one for **any** name pointed at the box, and the
+    DNS record is a wildcard — so a few thousand requests to random subdomains
+    would exhaust the certificate authority's rate limit for the domain and new
+    tenants would stop getting HTTPS.
+
+    Answers only for names that resolve to an organization that exists and is
+    active, plus the bare base domain, which serves the marketing redirect.
+
+    Unauthenticated by necessity: it is asked *during* the handshake, so there
+    is no session yet. It discloses nothing beyond whether a tenant slug is in
+    use, which the login page at that address discloses anyway.
+    """
+    from core.middleware import extract_subdomain
+
+    domain = (request.GET.get("domain") or "").strip().lower()
+    if not domain:
+        return HttpResponseForbidden("no domain")
+
+    base = getattr(settings, "TENANT_BASE_DOMAIN", "")
+    if domain == base:
+        return JsonResponse({"status": "ok"})
+
+    slug = extract_subdomain(domain, base)
+    if not slug:
+        return HttpResponseForbidden("not a tenant host")
+
+    # Organization is not itself tenant-scoped (§2.2) — it is the scope — so
+    # this is an ordinary query with no context set, which is what it has to be:
+    # the question is which tenant the *caller* is asking for.
+    from core.models import Organization
+
+    # Suspended counts. A2 keeps a suspended tenant able to log in and read, and
+    # refusing them a certificate would lock them out of the records they are
+    # still entitled to see.
+    if not Organization.objects.filter(slug=slug).exists():
+        return HttpResponseForbidden("unknown tenant")
+
     return JsonResponse({"status": "ok"})
 
 
@@ -349,6 +393,9 @@ v1_patterns = [
 
 urlpatterns = [
     path("health", health, name="health"),
+    # §12.2: asked by the reverse proxy during a TLS handshake, before any
+    # certificate for that name exists. Never called by the app itself.
+    path("internal/tls-allowed", tls_allowed, name="tls-allowed"),
     # N-7: attachments are never publicly readable. This is the local
     # counterpart of an S3 pre-signed GET, so the contract is the same in
     # development and production.

@@ -1,0 +1,122 @@
+# Production stack for a single Lightsail instance (design §12.2).
+#
+# This is the small deployment, not the one in §12.1. Everything runs on one
+# box: Postgres and Redis alongside the app rather than as managed services.
+# That is a deliberate trade — it costs about a tenth as much, and it means a
+# deploy has a few seconds of downtime and a box failure is an outage rather
+# than a failover. For one tenant that is the right trade; §12.1 remains the
+# target once there are tenants who would notice.
+#
+# What is *not* traded away is durability: the database is dumped off the box
+# every night (`backup.sh`), because rebuilding a machine is an afternoon and
+# losing the records is the business.
+#
+# **Nothing is built here.** Both images are built in CI and pulled. A 2 GB box
+# running Postgres cannot also run `npm ci` and a Docker build without the
+# kernel killing something, and the artifact that was tested should be the
+# artifact that runs.
+#
+#   ./deploy/deploy.sh          — the normal path
+#   docker compose --env-file .env ps
+#
+# Secrets come from `.env`, which is not in the repository (N-4).
+
+name: yardflow
+
+x-app: &app
+  image: ${BACKEND_IMAGE:-ghcr.io/ambeyibrian/yardflow-backend:latest}
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    DJANGO_SETTINGS_MODULE: config.settings.prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No published port. Postgres is reachable only from this compose network,
+    # so the box never exposes a database to the internet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # `--save 60 1` keeps the queue across a restart. The tasks here are
+    # notifications and nightly checks; losing a few on reboot is survivable,
+    # losing them silently on every deploy is not.
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    <<: *app
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      # The proxy probes over HTTP on the compose network, so the redirect to
+      # HTTPS every other request gets would turn a healthy container into a
+      # failing probe.
+      HEALTH_CHECK_HOST: web
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    <<: *app
+    # `--concurrency 2`: two vCPUs, and Postgres is on this box too. More
+    # workers would mean more connections and less memory for the database.
+    command: ["celery", "-A", "config", "worker", "--loglevel", "info", "--concurrency", "2"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  beat:
+    <<: *app
+    # One beat, always. Two would double every scheduled job — including the
+    # nightly ledger verification, which would then alert twice about one drift.
+    command: ["celery", "-A", "config", "beat", "--loglevel", "info"]
+    depends_on:
+      redis: { condition: service_healthy }
+
+  caddy:
+    image: ${WEB_IMAGE:-ghcr.io/ambeyibrian/yardflow-web:latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      TENANT_BASE_DOMAIN: ${TENANT_BASE_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      # Certificates and ACME account keys. Losing this volume means every
+      # certificate is requested again, which is how a rate limit gets hit.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

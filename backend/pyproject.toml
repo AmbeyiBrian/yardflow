@@ -68,6 +68,8 @@ packages = [
     "approvals",
     "jobs",
     "custody",
+    # Phase 10. Missing until the first container build tried to package it.
+    "commercials",
     "disposition",
     "notifications",
     "reporting",

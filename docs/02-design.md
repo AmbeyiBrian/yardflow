@@ -1266,6 +1266,56 @@ Health check endpoint returns 200 without touching the database, and its host is
 
 A documented restore drill is part of the definition of done for the infrastructure task (`N-5`).
 
+### 12.2 The small production (what is actually deployed first)
+
+§12.1 is the target. It is not what a first publish needs, and its cost is roughly twenty times
+this one's, so the system goes live on a **single Lightsail instance** running the whole stack
+under Docker Compose: Caddy, Django, Celery worker and beat, Postgres and Redis.
+
+The runbook is [`docs/04-deployment.md`](04-deployment.md). Three decisions are worth recording
+here, because each one is a trade somebody will otherwise have to re-derive.
+
+**One box, and the backup is what makes that acceptable.** Postgres runs beside the app rather than
+on RDS. That removes failover and point-in-time recovery, and it means a deploy has a few seconds
+of downtime. What it must not remove is durability, so the database is dumped to S3 nightly and
+`restore.sh` exists to be *run* — `N-5`'s drill is part of the definition of done, not a document.
+
+**Certificates are issued on demand, not from a wildcard.** A wildcard certificate needs a DNS-01
+challenge, which needs Route 53 credentials from the account that owns the parent domain sitting on
+a box in a different account. Per-hostname issuance over HTTP-01 needs nothing but the DNS records.
+But the DNS record *is* a wildcard — a tenant is a subdomain (§2.2) and the next tenant's name does
+not exist yet — so every name under the domain reaches the box, and ungated issuance would let a
+few thousand requests to invented subdomains exhaust the certificate authority's rate limit for the
+whole domain. `GET /internal/tls-allowed` is the gate: it answers yes only for a slug that belongs
+to an organization. It is unauthenticated because it is asked *during* the handshake, and it
+discloses only whether a slug is in use, which the login page at that address discloses anyway. A
+suspended tenant still passes, because `A2` leaves them able to log in and read.
+
+**The SPA and the API are one origin.** Caddy serves the built frontend and proxies `/api` to
+Django on the same hostname, so there is no CORS to configure, no preflight on every request, and
+the tenant's subdomain reaches Django in the Host header unchanged — which is the only reason the
+tenant resolves at all.
+
+**The images are built in CI, not on the box.** A 2 GB instance already running Postgres cannot also
+run `npm ci` and a Docker build without the kernel killing something, and the largest process is
+usually the database. So `main` builds both images, pushes them to GHCR, and the box pulls — which
+also means the artifact that was tested is the artifact that runs, rather than one built again on a
+different machine. Every build carries its commit as a tag as well as `latest`, so a rollback names
+a specific build. A rollback runs old code against a new schema, which is safe for an additive
+migration and not for a destructive one; the way back from the latter is a restore.
+
+Deployment is continuous: a push to `main` that passes the tests is on the box about two minutes
+later. Tests gate the images and the images gate the deploy, so a red build cannot reach production.
+The instance holds no standing registry credential — CI mints a token for the run and logs out
+afterwards.
+
+Migrations run in a one-off container **before** the services restart, so a failed migration leaves
+the previous version serving rather than a new version addressing a schema it does not understand.
+
+The first tenant is created with `manage.py provision_tenant`, which invites its owner to set a
+password and never generates one (`A1`). `seed_demo` is not used in production and refuses to run
+with `DEBUG` off: every account it makes shares a password that is written in this repository.
+
 ---
 
 ## 13. Error handling

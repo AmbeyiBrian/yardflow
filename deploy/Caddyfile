@@ -1,0 +1,92 @@
+# Reverse proxy and TLS (design §12.2).
+#
+# Three jobs: terminate TLS for every tenant subdomain, serve the built SPA, and
+# pass the API through to Django on the same origin.
+#
+# **Same origin is the point.** The SPA calls `/api/v1/...` relative, so serving
+# both from one hostname means there is no CORS to configure and no preflight on
+# every request. It also means the tenant's subdomain reaches Django unchanged
+# in the Host header, which is how the tenant is resolved at all (§2.2).
+#
+# **Certificates are issued on demand**, not from a wildcard. A wildcard would
+# need a DNS-01 challenge, which would need Route 53 credentials sitting on this
+# box. On-demand issues an ordinary per-hostname certificate over HTTP-01 — but
+# the DNS record is a wildcard, so *any* name reaches us, and without a gate
+# Caddy would try to obtain a certificate for each one until the certificate
+# authority rate-limited the whole domain. `ask` is that gate: Django is asked
+# whether the name belongs to a tenant before a certificate is attempted.
+
+{
+	email {$ACME_EMAIL}
+
+	on_demand_tls {
+		ask http://web:8000/internal/tls-allowed
+		# The default burst allows a flood of handshakes to become a flood of
+		# certificate requests even with `ask` in front of them.
+		interval 2m
+		burst 5
+	}
+}
+
+# Every tenant subdomain. `https://` with no host list means "on demand, for
+# whatever passes the ask".
+*.{$TENANT_BASE_DOMAIN} {
+	tls {
+		on_demand
+	}
+
+	encode zstd gzip
+
+	# The API, the attachment downloads, and the tenant's own logo. The Host
+	# header is forwarded unchanged — Caddy does this by default, and it is what
+	# tells Django which tenant is being asked for.
+	@backend path /api/* /admin-api/* /attachments/* /media/* /health /internal/*
+	handle @backend {
+		reverse_proxy web:8000
+	}
+
+	# Django's own admin and the static files it collected.
+	@django path /django-admin/* /static/*
+	handle @django {
+		reverse_proxy web:8000
+	}
+
+	# Everything else is the SPA. `try_files` sends unknown paths to index.html
+	# so a deep link like /projects/42 loads the app rather than a 404 — the app
+	# then reads the path itself.
+	handle {
+		root * /srv/www
+		try_files {path} /index.html
+		file_server
+
+		# Hashed asset filenames change whenever their contents do, so they can
+		# be cached hard. index.html and the service worker must not be, or a
+		# deploy would not reach anybody already running the old one.
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		@volatile path /index.html /sw.js /manifest.webmanifest
+		header @volatile Cache-Control "no-cache"
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# The bare domain. Nobody signs in here — there is no tenant in the hostname, so
+# Django could not resolve one (§2.2) — so say where to go rather than serving
+# a login form that cannot work.
+{$TENANT_BASE_DOMAIN} {
+	tls {
+		on_demand
+	}
+
+	handle /health {
+		respond "ok" 200
+	}
+
+	handle {
+		respond "YardFlow. Sign in at your organization's own address, for example https://silvertech.{$TENANT_BASE_DOMAIN}" 200
+	}
+}

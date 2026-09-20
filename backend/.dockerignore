@@ -1,0 +1,17 @@
+# Keep the build context small and free of anything that should not ship.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.sqlite3
+
+# Local uploads. Production keeps attachments in S3 (N-7).
+media/
+
+# Never: secrets belong in the environment, not in an image layer (N-4).
+.env
+.env.*
+*.pem
