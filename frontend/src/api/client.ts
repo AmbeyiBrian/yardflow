@@ -287,12 +287,24 @@ export async function openDocument(path: string): Promise<void> {
  */
 export async function downloadFile(
   path: string,
-  options: { method?: string; body?: unknown } = {},
+  options: {
+    method?: string;
+    body?: unknown;
+    /**
+     * Called with the response headers once a file is on its way. The export
+     * endpoint uses a header to say when it had to hand back HTML in place of
+     * the PDF that was asked for (§11), and the screen needs to see that to
+     * say so — a `.html` file arriving where a PDF was expected explains
+     * nothing on its own.
+     */
+    onHeaders?: (headers: Headers) => void;
+  } = {},
 ): Promise<Record<string, unknown> | null> {
   const response = await send(path, { method: options.method ?? 'POST', body: options.body });
   if (!response.ok) {
     throw await parseError(response);
   }
+  options.onHeaders?.(response.headers);
 
   const contentType = response.headers.get('Content-Type') ?? '';
   if (contentType.includes('application/json')) {

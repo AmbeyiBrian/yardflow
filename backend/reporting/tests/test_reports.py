@@ -543,6 +543,22 @@ class TestTheReportEndpoints:
         ).json()["access"]
         return client, token, result["organization"], owner
 
+
+    def test_a_queued_export_is_stored_with_its_real_type(self, tenant, stocked):
+        """`store_attachment` reads the type off the file, as for a browser
+        upload. A `ContentFile` has none, so a queued export was stored typed as
+        nothing and the download had to guess from the filename."""
+        from core.models import Attachment
+        from reporting.tasks import build_export
+
+        build_export(
+            organization_id=str(tenant.pk), slug="stock-on-hand", fmt="xlsx", filters={}
+        )
+
+        stored = Attachment.all_objects.filter(organization=tenant).latest("created_at")
+        assert stored.content_type.startswith("application/")
+        assert stored.filename.endswith(".xlsx")
+
     def test_the_catalogue_carries_columns_and_filters(self, signed_in):
         """T7.7 builds its filter panels from this, so a new report gets a UI."""
         http, token, _organization, _owner = signed_in
@@ -623,6 +639,54 @@ class TestTheReportEndpoints:
             "application/pdf",
             "text/html; charset=utf-8",
         )
+        # Whichever it was, the response must not lie about it. A real PDF
+        # carries no warning; a degraded one says so in a header the screen
+        # reads, so that "I asked for PDF and got HTML" is announced rather than
+        # discovered when the file will not open.
+        if response["Content-Type"].startswith("text/html"):
+            assert response["X-YardFlow-Degraded"] == "pdf-unavailable"
+        else:
+            assert "X-YardFlow-Degraded" not in response
+
+    def test_a_degraded_pdf_says_so(self, signed_in, monkeypatch):
+        """§11 lets the PDF fall back to HTML where the renderer is missing, so
+        a client can still be sent their position. What it must not do is fall
+        back silently: on a laptop without the native libraries every "PDF" was
+        an HTML file, and nothing on the screen said so."""
+        from reporting import exports
+
+        monkeypatch.setattr(
+            exports,
+            "to_pdf",
+            lambda report, params, organization=None: (
+                b"<html>fallback</html>",
+                "text/html; charset=utf-8",
+                f"{report.slug}.html",
+            ),
+        )
+        http, token, _organization, _owner = signed_in
+
+        response = http.post(
+            "/api/v1/reports/stock-on-hand/export",
+            {"format": "pdf"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        assert response.status_code == 200, response.content
+        assert response["Content-Type"].startswith("text/html")
+        assert response["X-YardFlow-Degraded"] == "pdf-unavailable"
+        assert response["Content-Disposition"].endswith('stock-on-hand.html"')
+
+    def test_the_catalogue_says_whether_pdf_is_possible(self, signed_in):
+        """The screen disables the PDF button on a server that cannot make one,
+        rather than offering a file it will not produce."""
+        http, token, _organization, _owner = signed_in
+
+        response = http.get("/api/v1/reports", HTTP_AUTHORIZATION=f"Bearer {token}")
+
+        assert response.status_code == 200
+        assert isinstance(response.json()["pdf_available"], bool)
 
     def test_an_unknown_format_is_refused(self, signed_in):
         http, token, _organization, _owner = signed_in

@@ -52,18 +52,28 @@ class ReportCatalogueView(APIView):
                 {
                     "count": serializers.IntegerField(),
                     "reports": serializers.ListField(child=serializers.DictField()),
+                    "pdf_available": serializers.BooleanField(),
                 },
             )
         }
     )
     def get(self, request):  # type: ignore[no-untyped-def]
+        from dispatch.documents import pdf_available
+
         held = resolve_permissions(request.user)
         reports = [
             report.as_dict()
             for report in all_reports()
             if held.has(report.required_permission)
         ]
-        return Response({"count": len(reports), "reports": reports})
+        # Whether this server can actually make a PDF. §11 lets a document
+        # degrade to HTML where the renderer's libraries are missing, so that a
+        # position can still be sent to a client — but a button offering "PDF"
+        # on a server that will hand back HTML is a promise the screen cannot
+        # keep. The screen reads this and says so up front instead.
+        return Response(
+            {"count": len(reports), "reports": reports, "pdf_available": pdf_available()}
+        )
 
 
 class ReportView(APIView):
@@ -185,6 +195,11 @@ class ReportExportView(APIView):
         # `attachment`: an export is a file somebody asked for, and a spreadsheet
         # rendered inline by the browser is not useful to anybody.
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        if fmt == "pdf" and content_type.startswith("text/html"):
+            # The renderer was unavailable and §11's fallback fired. The file is
+            # still useful, but the person asked for a PDF and is getting HTML —
+            # that has to be said, not discovered when the file will not open.
+            response["X-YardFlow-Degraded"] = "pdf-unavailable"
         return response
 
 

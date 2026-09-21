@@ -1134,6 +1134,17 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   the crumb people use there is the one that goes back.
   *Done when:* a detail screen states where it sits and the crumb gets you there, on both widths.
 
+- [x] **T10.33 `[B/F]` A PDF that cannot be made is not offered, and one that degrades says so**
+  Refs: §11, §7.4 · M2
+  §11 lets a document fall back to HTML where WeasyPrint's native libraries are missing, so a client
+  can still be sent their position. On a machine without them, every "PDF" export was an HTML file and
+  nothing said so — it looked like the export was broken. The catalogue now carries `pdf_available`;
+  the screen disables the PDF button on a server that cannot make one, and when the fallback fires
+  anyway the response says so in a header and the screen shows a warning. The queued export also
+  stores its real content type — a `ContentFile` carries none, so it was typed as nothing.
+  *Done when:* asking for a PDF never silently yields HTML: either the button is disabled with a
+  reason, or the HTML arrives with an explanation. Production renders real PDFs (verified end to end).
+
 ---
 
 ## Milestones

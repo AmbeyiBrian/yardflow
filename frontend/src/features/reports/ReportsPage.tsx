@@ -32,10 +32,10 @@ import { downloadFile } from '../../api/client';
 import { errorMessage, useList, useResource } from '../../api/hooks';
 import { Banner, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { DataList, EmptyState, PageHeader, Stat } from '../../components/ui/data';
-import type { Column, ReportCatalogueEntry, ReportResult } from './types';
+import type { Column, ReportCatalogue, ReportCatalogueEntry, ReportResult } from './types';
 
 export default function ReportsPage() {
-  const catalogue = useResource<{ count: number; reports: ReportCatalogueEntry[] }>(
+  const catalogue = useResource<ReportCatalogue>(
     'reports',
   );
 
@@ -96,15 +96,18 @@ export default function ReportsPage() {
 /** One report: its filter panel, its rows, and its two exports. */
 export function ReportPage() {
   const { slug } = useParams();
-  const catalogue = useResource<{ reports: ReportCatalogueEntry[] }>('reports');
+  const catalogue = useResource<ReportCatalogue>('reports');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [applied, setApplied] = useState<Record<string, string>>({});
   const [banner, setBanner] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
 
   const definition = (catalogue.data?.reports ?? []).find(
     (report) => report.slug === slug,
   );
+  // Unknown until the catalogue arrives; only an explicit `false` disables.
+  const pdfAvailable = catalogue.data?.pdf_available !== false;
   useCrumb(definition?.title);
 
   const missingRequired = (definition?.filters ?? []).filter(
@@ -126,10 +129,22 @@ export function ReportPage() {
 
   async function runExport(format: 'xlsx' | 'pdf') {
     setBanner(null);
+    setDegraded(null);
     setExporting(format);
     try {
       const queued = await downloadFile(`/reports/${slug}/export`, {
         body: { format, filters: applied },
+        onHeaders: (headers) => {
+          // §11: the server could not render a PDF and sent HTML instead. The
+          // file is still useful; arriving unannounced as `.html` where a PDF
+          // was asked for is what made it look broken.
+          if (headers.get('X-YardFlow-Degraded') === 'pdf-unavailable') {
+            setDegraded(
+              'This server cannot produce PDFs, so you were given the report as an HTML ' +
+                'file instead. It opens in any browser and prints to PDF from there.',
+            );
+          }
+        },
       });
       if (queued) {
         // T7.5: over the threshold it runs in a worker and the notification
@@ -177,6 +192,12 @@ export function ReportPage() {
             <Button
               variant="secondary"
               loading={exporting === 'pdf'}
+              disabled={!pdfAvailable}
+              title={
+                pdfAvailable
+                  ? undefined
+                  : 'This server cannot produce PDFs. Export to Excel, or print the screen.'
+              }
               onClick={() => void runExport('pdf')}
             >
               PDF
@@ -186,6 +207,7 @@ export function ReportPage() {
       />
 
       {banner ? <Banner tone="info">{banner}</Banner> : null}
+      {degraded ? <Banner tone="warning">{degraded}</Banner> : null}
       {result.isError ? <Banner tone="error">{errorMessage(result.error)}</Banner> : null}
 
       {definition.filters.length > 0 ? (

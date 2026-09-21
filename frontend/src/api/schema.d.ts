@@ -6374,6 +6374,7 @@ export interface components {
             reports: {
                 [key: string]: unknown;
             }[];
+            pdf_available: boolean;
         };
         ReportExportRequestRequest: {
             format: components["schemas"]["FormatEnum"];

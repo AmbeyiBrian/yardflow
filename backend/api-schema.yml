@@ -14576,8 +14576,11 @@ components:
           items:
             type: object
             additionalProperties: {}
+        pdf_available:
+          type: boolean
       required:
       - count
+      - pdf_available
       - reports
     ReportExportRequestRequest:
       type: object

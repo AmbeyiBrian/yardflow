@@ -29,6 +29,18 @@ export interface ReportFilter {
   help_text: string;
 }
 
+/** `GET /reports`: what may be run, and whether this server can make a PDF. */
+export interface ReportCatalogue {
+  count: number;
+  reports: ReportCatalogueEntry[];
+  /**
+   * False where the renderer's native libraries are missing (§11). The PDF
+   * button is disabled rather than offered, because a server that will hand
+   * back HTML should not promise a PDF.
+   */
+  pdf_available: boolean;
+}
+
 export interface ReportCatalogueEntry {
   slug: string;
   title: string;

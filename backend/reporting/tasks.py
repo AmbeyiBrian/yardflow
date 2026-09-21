@@ -53,15 +53,21 @@ def build_export(  # type: ignore[no-untyped-def]
     )
     report = get_report(slug)
 
-    content, _content_type, filename = render_export(
+    content, content_type, filename = render_export(
         slug, filters, fmt=fmt, organization=organization
     )
+
+    # `store_attachment` reads the type off the file object, as it does for a
+    # browser upload. A `ContentFile` has none, so the stored export was typed
+    # as nothing and the download had to guess from the name. Say what it is.
+    uploaded = ContentFile(content, name=filename)
+    uploaded.content_type = content_type  # type: ignore[attr-defined]
 
     attachment = store_attachment(
         # The report itself has no database row, so the export hangs off the
         # organization — the one record every tenant certainly has.
         target=organization,
-        uploaded_file=ContentFile(content, name=filename),
+        uploaded_file=uploaded,
         kind=AttachmentKind.DOCUMENT,
         uploaded_by=requester,
         organization=organization,
