@@ -281,7 +281,7 @@ jobs:
             export WEB_IMAGE="${WEB}"
             # `bash` explicitly: the executable bit is not something to depend
             # on. It was never recorded from a Windows checkout, and a
-            # \`git checkout\` of a changed script rewrote the box's copy without
+            # `git checkout` of a changed script rewrote the box's copy without
             # it -- the deploy died with "Permission denied" on its own script.
             bash ./deploy/deploy.sh
             docker logout ghcr.io
