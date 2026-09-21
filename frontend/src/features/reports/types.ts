@@ -47,6 +47,11 @@ export interface ReportCatalogueEntry {
   description: string;
   /** Which requirement it answers — shown so an auditor's question maps to one. */
   requirement: string;
+  /**
+   * The group it is listed under. The server fixes both the vocabulary and the
+   * order (`CATEGORIES` in the framework); the screen only arranges.
+   */
+  category: string;
   columns: Column[];
   filters: ReportFilter[];
   can_be_large: boolean;

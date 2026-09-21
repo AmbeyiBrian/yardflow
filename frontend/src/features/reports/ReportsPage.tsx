@@ -34,12 +34,37 @@ import { Banner, Button, Card, Field, Input, Select, Spinner } from '../../compo
 import { DataList, EmptyState, PageHeader, Stat } from '../../components/ui/data';
 import type { Column, ReportCatalogue, ReportCatalogueEntry, ReportResult } from './types';
 
+/** Mirrors `CATEGORIES` on the server. Order matters: Finance first. */
+const CATEGORY_ORDER = [
+  'Finance',
+  'Stock',
+  'Movements',
+  'Custody and control',
+  'Exceptions and disposal',
+];
+
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+}
+
 export default function ReportsPage() {
   const catalogue = useResource<ReportCatalogue>(
     'reports',
   );
 
   const reports = catalogue.data?.reports ?? [];
+
+  // Grouped, in the server's order. Sixteen cards in one grid was a dump: the
+  // person looking for "what is this yard worth" had to read past overdue
+  // returns to find it. The vocabulary and the order live on the server so a
+  // new report lands in the right place without a frontend change; anything
+  // the server sends that this build has not heard of goes last, not lost.
+  const groups = CATEGORY_ORDER.map((category) => ({
+    category,
+    reports: reports.filter((report) => report.category === category),
+  })).filter((group) => group.reports.length > 0);
+  const unknown = reports.filter((report) => !CATEGORY_ORDER.includes(report.category));
+  if (unknown.length) groups.push({ category: 'Other', reports: unknown });
 
   return (
     <div className="flex flex-col gap-4">
@@ -70,24 +95,36 @@ export default function ReportsPage() {
           hint="Reporting needs the report.view_all permission. An administrator can add it."
         />
       ) : (
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {reports.map((report) => (
-            <li key={report.slug}>
-              <Link to={`/reports/${report.slug}`} className="block h-full">
-                <Card className="flex h-full flex-col gap-1">
-                  <p className="text-sm font-semibold text-slate-900">{report.title}</p>
-                  <p className="text-sm text-slate-600">{report.description}</p>
-                  {/* The `requirement` field is still on the API for
-                      traceability, and deliberately not shown. It printed as
-                      "M1, F7" under each report — our references into the
-                      requirements document, meaningless to the person choosing
-                      a report, and they made the screen look unfinished. What
-                      the report answers is the description above. */}
-                </Card>
-              </Link>
-            </li>
+        <div className="flex flex-col gap-6">
+          {groups.map((group) => (
+            <section key={group.category} aria-labelledby={`reports-${slugify(group.category)}`}>
+              <h2
+                id={`reports-${slugify(group.category)}`}
+                className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase"
+              >
+                {group.category}
+              </h2>
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {group.reports.map((report) => (
+                  <li key={report.slug}>
+                    <Link to={`/reports/${report.slug}`} className="block h-full">
+                      <Card className="flex h-full flex-col gap-1">
+                        <p className="text-sm font-semibold text-slate-900">{report.title}</p>
+                        <p className="text-sm text-slate-600">{report.description}</p>
+                        {/* The `requirement` field is still on the API for
+                            traceability, and deliberately not shown. It printed
+                            as "M1, F7" under each report — our references into
+                            the requirements document, meaningless to the person
+                            choosing a report. What the report answers is the
+                            description above. */}
+                      </Card>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

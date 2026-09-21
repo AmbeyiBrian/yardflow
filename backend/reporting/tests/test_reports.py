@@ -843,3 +843,65 @@ class TestRetentionReview:
         assert all(
             entry["document_id"] != str(gate_out.pk) for entry in review_list(tenant)
         )
+
+
+@pytest.mark.django_db
+class TestStockValuation:
+    """O11: what the yard is worth, and honest about what it cannot price."""
+
+    def _run(self, raw):
+        report = get_report("stock-valuation")
+        return report.render(parse_params(report, raw))
+
+    def test_own_stock_is_valued_at_catalogue_cost_and_client_stock_is_not_ours(
+        self, tenant, stocked
+    ):
+        ours, _theirs, _client = stocked
+        ours.unit_cost = Decimal("150.00")
+        ours.save(update_fields=["unit_cost"])
+
+        result = self._run({})
+
+        # 120 clamps at 150 each. The four client RRUs sit in the same yard and
+        # do not appear: pricing them would inflate the figure by somebody
+        # else's assets.
+        assert [row["item"] for row in result["rows"]] == ["Report clamp"]
+        assert result["rows"][0]["value"] == "18,000.00"
+        assert result["rows"][0]["is_valued"] == "yes"
+        assert result["totals"]["value"] == "18,000.00"
+
+    def test_an_unpriced_item_is_listed_and_flagged_not_dropped(self, tenant, stocked):
+        ours, _theirs, _client = stocked
+        assert ours.unit_cost is None
+
+        result = self._run({})
+
+        (row,) = result["rows"]
+        assert row["on_hand"] == "120.000"
+        assert row["value"] == ""
+        assert row["is_valued"] == "no"
+        # And the total says zero rather than pretending the clamps are worthless
+        # by omission — the flag on the row is what carries the warning.
+        assert result["totals"]["value"] == "0.00"
+
+    def test_the_priced_only_filter(self, tenant, stocked):
+        assert self._run({"valued": "valued"})["rows"] == []
+
+
+@pytest.mark.django_db
+class TestCatalogueGroups:
+    def test_every_report_carries_a_known_category(self, tenant):
+        from reporting.framework import CATEGORIES
+
+        for report in all_reports():
+            assert report.as_dict()["category"] in CATEGORIES, report.slug
+
+    def test_the_finance_group_holds_the_commercial_reports(self, tenant):
+        finance = {r.slug for r in all_reports() if r.category == "Finance"}
+        assert {
+            "project-performance",
+            "expenses-ledger",
+            "subcontractor-spend",
+            "budget-by-month",
+            "stock-valuation",
+        } <= finance

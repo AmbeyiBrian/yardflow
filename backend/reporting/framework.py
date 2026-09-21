@@ -162,6 +162,11 @@ class Report:
     slug: str = ""
     title: str = ""
     description: str = ""
+    #: Where it sits on the report list. Sixteen reports in one flat grid was a
+    #: dump; a person looking for "what is this yard worth" should not have to
+    #: read past overdue returns to find it. One of `CATEGORIES`, which also
+    #: fixes the order the groups appear in.
+    category: str = "Stock"
     #: Which requirement this exists for, shown on the report list so somebody
     #: can tell at a glance which report answers an auditor's question.
     requirement: str = ""
@@ -217,6 +222,7 @@ class Report:
             "title": self.title,
             "description": self.description,
             "requirement": self.requirement,
+            "category": self.category,
             "columns": [column.as_dict() for column in self.columns],
             "filters": [filter_.as_dict() for filter_ in self.filters],
             "can_be_large": self.can_be_large,
@@ -289,6 +295,17 @@ class Report:
 # The registry
 # --------------------------------------------------------------------------
 
+#: The groups on the report list, in the order they are shown. Finance first:
+#: it is the newest set and the one an owner opens the screen for; the rest
+#: follow the flow of material through the yard.
+CATEGORIES: tuple[str, ...] = (
+    "Finance",
+    "Stock",
+    "Movements",
+    "Custody and control",
+    "Exceptions and disposal",
+)
+
 _REGISTRY: dict[str, Report] = {}
 
 
@@ -303,6 +320,11 @@ def register(report_class: type[Report]) -> type[Report]:
         raise ReportError(f"{report_class.__name__} needs a slug.")
     if not report_class.columns:
         raise ReportError(f"{report_class.__name__} needs columns.")
+    if report_class.category not in CATEGORIES:
+        raise ValueError(
+            f"{report_class.__name__}: category {report_class.category!r} is not one "
+            f"of {CATEGORIES}. A group that exists for one report is not a group."
+        )
     if report_class.slug in _REGISTRY:
         raise ReportError(
             f"Two reports both call themselves {report_class.slug!r}. A slug is "
@@ -346,7 +368,11 @@ def _load_reports() -> None:
     # Epic O's reports live with the costing engine they read (§1.2), so they
     # are imported here too rather than re-exported through reporting/.
     from commercials import reports as commercial_reports  # noqa: F401
-    from reporting import reports  # noqa: F401
+    from commercials import reports_finance  # noqa: F401
+    from reporting import (
+        reports,  # noqa: F401
+        reports_valuation,  # noqa: F401
+    )
 
     _LOADED = True
 

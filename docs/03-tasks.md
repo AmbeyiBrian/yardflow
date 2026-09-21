@@ -1158,6 +1158,22 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* a chunk answered with the shell reloads once and opens (E2E), and a missing asset on
   production is a 404 with no cache header.
 
+- [x] **T10.35 `[B/F]` Four finance reports, and a catalogue with groups**
+  Refs: §10, §7.4 · O4, O11, O12, O16
+  The performance reports said *what* a PO cost; nothing said where the money went, to whom, or
+  when. **Expenses ledger** opens the expense figure up one claim at a time — the only place a
+  rejection is visible. **Subcontractor spend** rolls cost up by party, which is what the register
+  was built for. **Budget variance by month** places each cost line in the month it became a cost
+  under the costing rules, so the months add up to cost to date and show *when* a project went over.
+  **Stock valuation** prices own stock at catalogue cost, excludes client stock as not ours to value,
+  and flags unpriced items rather than dropping them from the total.
+  Every report now carries a `category` from a server-fixed vocabulary — Finance, Stock, Movements,
+  Custody and control, Exceptions and disposal — and the catalogue is grouped under those headings
+  in that order. Registration refuses a category outside the list: a group that exists for one
+  report is not a group.
+  *Done when:* each finance report agrees with the costing module it sits beside (tested), and the
+  twenty reports appear on the catalogue under five headings rather than as one grid.
+
 ---
 
 ## Milestones

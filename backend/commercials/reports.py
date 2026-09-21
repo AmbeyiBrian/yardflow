@@ -60,6 +60,7 @@ class ProjectPerformanceReport(Report):
     """O12: one row per PO — what it is worth, what it has cost, what is left."""
 
     slug = "project-performance"
+    category = "Finance"
     title = "Project performance"
     description = (
         "Cost against contract value for every purchase order, split by cost "
@@ -131,6 +132,7 @@ class ProjectsRankedReport(Report):
     """O12: the same figures, worst first, so attention goes somewhere useful."""
 
     slug = "projects-ranked"
+    category = "Finance"
     title = "Projects by margin"
     description = (
         "Purchase orders ordered by margin, then by overrun and exposure. A "
@@ -196,6 +198,7 @@ class SelfApprovedReleasesReport(Report):
     """
 
     slug = "self-approved-releases"
+    category = "Finance"
     title = "Self-approved project releases"
     description = (
         "Gate passes raised and approved by the same person on a project they "
@@ -267,6 +270,7 @@ class LabourGapsReport(Report):
     """
 
     slug = "labour-gaps"
+    category = "Finance"
     title = "Uncosted and overlapping labour"
     description = (
         "Closed jobs with no days recorded, entries with no rate to cost them "

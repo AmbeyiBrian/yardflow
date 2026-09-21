@@ -60,6 +60,7 @@ class StockOnHandReport(Report):
     """M1: "stock on hand — current"."""
 
     slug = "stock-on-hand"
+    category = "Stock"
     title = "Stock on hand"
     description = "What is in the yard now and could be issued today."
     requirement = "M1"
@@ -109,6 +110,7 @@ class StockAsAtReport(Report):
     """
 
     slug = "stock-as-at"
+    category = "Stock"
     title = "Stock as at a date"
     description = "What the yard held on a past date, recomputed from the ledger."
     requirement = "M1"
@@ -163,6 +165,7 @@ class MovementHistoryReport(Report):
     """M1: "movement history by item, by serial, by drum"."""
 
     slug = "movement-history"
+    category = "Movements"
     title = "Movement history"
     description = "Every movement, filtered by item, serial number or drum."
     requirement = "M1"
@@ -241,6 +244,7 @@ class SerialHistoryReport(Report):
     """E2, M1: one unit's whole life, oldest first."""
 
     slug = "serial-history"
+    category = "Movements"
     title = "Serial history"
     description = "Everywhere one identified unit has been, in order."
     requirement = "M1, E2"
@@ -288,6 +292,7 @@ class ClientPositionReport(Report):
     """
 
     slug = "client-position"
+    category = "Stock"
     title = "Client-owned position"
     description = "Per client: held, in transit back to them, and acknowledged."
     requirement = "M1, K1, K3"
@@ -338,6 +343,7 @@ class OutstandingGateOutsReport(Report):
     """M1: "outstanding gate-outs" — approved and not yet fully released."""
 
     slug = "outstanding-gate-outs"
+    category = "Custody and control"
     title = "Outstanding gate passes"
     description = "Approved or part-released, and still waiting to leave."
     requirement = "M1, F7"
@@ -387,6 +393,7 @@ class OverdueCustodyReport(Report):
     """M1: "overdue returns and current custody" (I3, I4)."""
 
     slug = "overdue-custody"
+    category = "Custody and control"
     title = "Overdue returns and custody"
     description = "Who is holding what, and what is past its return date."
     requirement = "M1, I3, I4"
@@ -476,6 +483,7 @@ class ConsumptionReport(Report):
     """
 
     slug = "consumption"
+    category = "Movements"
     title = "Consumption per site or project"
     description = "Issued, installed, consumed, returned — and what is unexplained."
     requirement = "M1, H4"
@@ -529,6 +537,7 @@ class ExceptionsReport(Report):
     """M1: "variance and exceptions register"."""
 
     slug = "exceptions"
+    category = "Exceptions and disposal"
     title = "Variance and exceptions register"
     description = "Everything unresolved: variances, short releases, overdue custody."
     requirement = "M1, H3"
@@ -617,6 +626,7 @@ class RecoveriesReport(Report):
     """
 
     slug = "recoveries"
+    category = "Movements"
     title = "Recoveries by originating site"
     description = "What has come back off sites, grouped by where it came from."
     requirement = "M1, D5"
@@ -692,6 +702,7 @@ class DisposalsReport(Report):
     """M1: "disposals and write-offs" (J3)."""
 
     slug = "disposals"
+    category = "Exceptions and disposal"
     title = "Disposals and write-offs"
     description = "What has been destroyed or written off, how, and on whose authority."
     requirement = "M1, J3"
@@ -786,6 +797,7 @@ class InstalledBaseReport(Report):
     """
 
     slug = "installed-base"
+    category = "Stock"
     title = "Installed base"
     description = "What is installed at each site, from the ledger."
     requirement = "M1, H2"
