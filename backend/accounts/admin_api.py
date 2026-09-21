@@ -67,6 +67,33 @@ class UserInactive(DomainError):
     default_message = "This account is deactivated. Reactivate it first."
 
 
+def _describe(delivery) -> dict:  # type: ignore[no-untyped-def]
+    """The delivery outcome, in the shape both create and resend return.
+
+    `reached` is what the screen switches on; `channels` and `errors` are what
+    it shows. A partial delivery — texted but the email bounced — is a success
+    with something worth mentioning, and this is how it gets mentioned.
+    """
+    return {
+        "reached": delivery.reached,
+        "channels": delivery.channels,
+        "errors": delivery.errors,
+    }
+
+
+class InvitationUndeliverable(DomainError):
+    """Every channel the person has was tried and none got through (B1, L3).
+
+    A refused address is a fact about the address, not a fault in the server.
+    This used to surface as a 500 — SES refused an unverified recipient,
+    `send_mail` raised, and the administrator read "the server had a problem"
+    with nothing to act on. Now they read which address was refused and why.
+    """
+
+    code = "INVITATION_UNDELIVERABLE"
+    default_message = "The invitation could not be delivered."
+
+
 class RoleSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer):
     # O15: a rate is pay-adjacent data, and the main device here is a shared
     # yard phone. Withheld, not blanked — see core.field_permissions.
@@ -497,9 +524,31 @@ class UserViewSet(TenantScopedViewSet):
 
     def perform_create(self, serializer):  # type: ignore[no-untyped-def]
         """``User`` carries no ``created_by``, so the base class's stamp cannot
-        apply. The audit entry records who did it instead (M3)."""
+        apply. The audit entry records who did it instead (M3).
+
+        The invitation goes out here, at creation. It did not used to: the
+        account was made with no password and nothing was sent, so the person
+        heard nothing until an administrator noticed and pressed "Resend" — for
+        an invitation that had never been sent once. B1's flow starts with the
+        invitation; creating the account is not the end of it.
+
+        Delivery failing does not fail the creation. The account is real and
+        the administrator can resend; what they need is to be told.
+        """
+        from accounts.reset import send_password_reset
+
         user = serializer.save()
         self._audit(AuditAction.USER_CREATED, user, f"User {user} created.")
+        self._delivery = send_password_reset(
+            user, request=self.request, is_invitation=True
+        )
+
+    def create(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        response = super().create(request, *args, **kwargs)
+        delivery = getattr(self, "_delivery", None)
+        if delivery is not None:
+            response.data["invitation"] = _describe(delivery)
+        return response
 
     def perform_update(self, serializer):  # type: ignore[no-untyped-def]
         user = serializer.save()
@@ -561,8 +610,19 @@ class UserViewSet(TenantScopedViewSet):
         # `send_password_reset` records `PASSWORD_RESET_REQUESTED` itself, so
         # there is nothing to audit here — a second entry would only make the
         # trail say it happened twice.
-        send_password_reset(user, request=request, is_invitation=True)
-        return Response(UserSerializer(user, context={"request": request}).data)
+        delivery = send_password_reset(user, request=request, is_invitation=True)
+
+        if not delivery.reached:
+            # Nothing got through. Say why, per channel, so the administrator
+            # can fix the address or the configuration rather than retry blind.
+            raise InvitationUndeliverable(
+                " ".join(delivery.errors) or InvitationUndeliverable.default_message,
+                details={"errors": delivery.errors},
+            )
+
+        data = UserSerializer(user, context={"request": request}).data
+        data["invitation"] = _describe(delivery)
+        return Response(data)
 
     @action(detail=True, methods=["post"])
     def reactivate(self, request, pk=None):  # type: ignore[no-untyped-def]

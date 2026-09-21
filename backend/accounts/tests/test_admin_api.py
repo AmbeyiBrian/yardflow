@@ -451,6 +451,101 @@ class TestResendingAnInvitation:
         # Addressed to the tenant's own subdomain, whoever pressed the button.
         assert "silvertech.localhost" in mailoutbox[-1].body
 
+    def test_adding_someone_sends_the_invitation(self, signed_in, mailoutbox):
+        """B1 starts with the invitation. It used to be that creating an account
+        sent nothing at all, and the person heard nothing until somebody pressed
+        "Resend" on an invitation that had never gone out once."""
+        http, token, organization, _owner = signed_in
+        before = len(mailoutbox)
+
+        with tenant_context(organization):
+            from accounts.models import Role
+
+            role_id = Role.objects.get(name="Storekeeper").pk
+        response = http.post(
+            reverse("v1:user-list"),
+            {"email": "fresh@silvertech.co.ke", "full_name": "Fresh Person", "role_ids": [role_id]},
+            content_type="application/json",
+            **auth(token),
+        )
+
+        assert response.status_code == 201, response.content
+        assert len(mailoutbox) == before + 1
+        assert "fresh@silvertech.co.ke" in mailoutbox[-1].to
+        assert response.json()["invitation"] == {
+            "reached": True,
+            "channels": ["email"],
+            "errors": [],
+        }
+
+    def test_a_refused_address_is_explained_not_a_500(self, signed_in, monkeypatch):
+        """SES in its sandbox refuses unverified recipients. The first live
+        deployment turned that into "the server had a problem" — a 500 with
+        nothing the administrator could act on. The address is the problem, so
+        the address is what they are told."""
+        import smtplib
+
+        from accounts import reset
+
+        http, token, organization, _owner = signed_in
+        user_id = self._add_someone(http, token, organization, email="stranger@gmail.com")
+
+        def refuse(**kwargs):  # type: ignore[no-untyped-def]
+            raise smtplib.SMTPDataError(
+                554, b"Message rejected: Email address is not verified. stranger@gmail.com"
+            )
+
+        monkeypatch.setattr(reset, "send_mail", refuse)
+
+        response = http.post(reverse("v1:user-resend-invitation", args=[user_id]), **auth(token))
+
+        assert response.status_code == 400, response.content
+        body = response.json()["error"]
+        assert body["code"] == "INVITATION_UNDELIVERABLE"
+        assert "stranger@gmail.com" in body["message"]
+        assert "not yet a verified recipient" in body["message"]
+
+    def test_a_refused_email_still_reaches_the_phone(self, signed_in, monkeypatch):
+        """Every channel the person has is tried. Before, the email raising
+        unwound the request and the SMS that would have reached the same person
+        was never attempted."""
+        import smtplib
+
+        from accounts import reset
+
+        http, token, organization, _owner = signed_in
+        with tenant_context(organization):
+            from accounts.models import Role
+
+            role_id = Role.objects.get(name="Technician").pk
+        created = http.post(
+            reverse("v1:user-list"),
+            {
+                "email": "both@gmail.com",
+                "phone": "+254700000099",
+                "full_name": "Both Channels",
+                "role_ids": [role_id],
+            },
+            content_type="application/json",
+            **auth(token),
+        )
+        assert created.status_code == 201, created.content
+        user_id = created.json()["id"]
+
+        def refuse(**kwargs):  # type: ignore[no-untyped-def]
+            raise smtplib.SMTPDataError(554, b"Message rejected: Email address is not verified.")
+
+        monkeypatch.setattr(reset, "send_mail", refuse)
+
+        response = http.post(reverse("v1:user-resend-invitation", args=[user_id]), **auth(token))
+
+        assert response.status_code == 200, response.content
+        invitation = response.json()["invitation"]
+        assert invitation["reached"] is True
+        assert invitation["channels"] == ["sms"]
+        assert len(invitation["errors"]) == 1
+        assert "not yet a verified recipient" in invitation["errors"][0]
+
     def test_no_password_is_created_by_sending_it(self, signed_in):
         """The whole point of the invitation flow: nobody but the person ever
         knows their password."""
