@@ -1145,6 +1145,19 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* asking for a PDF never silently yields HTML: either the button is disabled with a
   reason, or the HTML arrives with an explanation. Production renders real PDFs (verified end to end).
 
+- [x] **T10.34 `[F/Ops]` A tab left open across a deploy recovers instead of freezing**
+  Refs: §7.1, §8.1, §12.2
+  Reported as "the URL changes but the screen stays on the report". Three faults compounded. The SPA
+  catch-all answered a missing chunk with `index.html` — 200, `text/html`, and because the path
+  matched `/assets/*`, `Cache-Control: immutable` for a year — so the import failed with a
+  MIME-type error the stale-bundle detector did not recognise, and React Router's transition kept
+  the old screen up under the new URL. And with `autoUpdate` only checking on a full page load, a
+  tab open all day never learned a deploy had happened.
+  Now: `/assets/*` is a real file or a real 404; the detector recognises the MIME-type wording; the
+  service worker checks for an update every fifteen minutes and whenever the tab regains focus.
+  *Done when:* a chunk answered with the shell reloads once and opens (E2E), and a missing asset on
+  production is a 404 with no cache header.
+
 ---
 
 ## Milestones

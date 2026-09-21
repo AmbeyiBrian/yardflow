@@ -63,7 +63,12 @@ export function isChunkLoadFailure(error: unknown): boolean {
     /importing a module script failed/i.test(message) ||
     /ChunkLoadError/i.test(message) ||
     // Safari, which reports the URL and little else.
-    /Unable to load script|Importing a module script failed/i.test(message)
+    /Unable to load script|Importing a module script failed/i.test(message) ||
+    // The server answered, but not with JavaScript: a misconfigured fallback
+    // handing back index.html for a missing chunk. Still a stale bundle, and
+    // still cured by a reload — but a reload only helps if the wrong answer was
+    // not cached, which is the server's half of this fix.
+    /Failed to load module script|Expected a JavaScript module|MIME type/i.test(message)
   );
 }
 

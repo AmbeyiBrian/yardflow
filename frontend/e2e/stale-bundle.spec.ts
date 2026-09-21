@@ -50,6 +50,34 @@ test.describe('when the app was updated while this tab was open', () => {
     await expect(page.getByText(/newer version is available/i)).toBeHidden();
   });
 
+  test('a chunk answered with the app shell still recovers', async ({ page }) => {
+    // What production actually did. The SPA catch-all sent index.html — 200,
+    // text/html — for a chunk that no longer existed, so the failure was not a
+    // 404 but a module that turned out to be a web page. The detector only knew
+    // the 404 wording; the import rejected with something else; the transition
+    // kept the old screen up with the new URL in the bar; and it looked stuck.
+    await signIn(page, PEOPLE.storekeeper);
+
+    let served = false;
+    await page.route(GATE_OUT_CHUNK, async (route) => {
+      if (served) return route.continue();
+      served = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html; charset=utf-8',
+        body: '<!doctype html><html><body>the shell, not the chunk</body></html>',
+      });
+    });
+
+    await page.getByRole('link', { name: /gate.?out/i }).first().click();
+
+    await expect(page.getByRole('heading', { name: /gate.?out/i }).first()).toBeVisible({
+      timeout: 20_000,
+    });
+    expect(served, 'the chunk should have been requested and answered wrongly once').toBe(true);
+    await expect(page.getByText(/newer version is available/i)).toBeHidden();
+  });
+
   test('a chunk that is really gone gets a message, not a blank page', async ({ page }) => {
     await signIn(page, PEOPLE.storekeeper);
 

@@ -21,8 +21,22 @@ export async function registerServiceWorker(): Promise<void> {
     const { registerSW } = await import('virtual:pwa-register');
     registerSW({
       immediate: true,
-      onRegisteredSW(url) {
+      onRegisteredSW(url, registration) {
         console.info('YardFlow offline support ready', url);
+        // `autoUpdate` only takes effect once the browser has *noticed* a new
+        // service worker, and it looks by itself only on a full page load. A
+        // yard runs this app in one tab all day, navigating inside it, so a
+        // deploy at 09:00 was invisible until somebody pressed reload — and
+        // meanwhile every in-app navigation asked for chunks that no longer
+        // existed. Ask on a timer, and whenever the tab comes back into view.
+        if (!registration) return;
+        const check = () => {
+          if (navigator.onLine) void registration.update().catch(() => undefined);
+        };
+        window.setInterval(check, 15 * 60 * 1000);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') check();
+        });
       },
       onRegisterError(error) {
         console.warn('YardFlow offline support unavailable', error);
