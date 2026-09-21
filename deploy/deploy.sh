@@ -56,6 +56,21 @@ for _ in $(seq 1 45); do
   status=$("${COMPOSE[@]}" ps --format json web 2>/dev/null \
     | grep -o '"Health":"[a-z]*"' | head -1 | cut -d'"' -f4 || true)
   if [[ "$status" == "healthy" ]]; then
+    # Record what is now running, so a later manual restart uses it.
+    #
+    # CI pins both images by commit and passes them in the environment. That
+    # environment is gone the moment this script exits, and the compose file's
+    # fallback is `:latest` — which on this box is whatever was pulled *first*,
+    # because CI never pulls `latest` again. So a hand-run
+    # `docker compose up -d --force-recreate web` to pick up a changed .env
+    # quietly rolled the worker back to the very first build. Writing the
+    # pinned tags into .env makes the deployed build the default instead.
+    if [[ -n "${BACKEND_IMAGE:-}" ]]; then
+      sed -i '/^BACKEND_IMAGE=/d;/^WEB_IMAGE=/d' .env
+      printf 'BACKEND_IMAGE=%s
+WEB_IMAGE=%s
+' "$BACKEND_IMAGE" "${WEB_IMAGE:-}" >> .env
+    fi
     say "Deployed."
     "${COMPOSE[@]}" ps
     # Old image layers accumulate a gigabyte at a time on a 40 GB disk.
