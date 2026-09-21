@@ -21,3 +21,11 @@ app = Celery("yardflow")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 
 app.autodiscover_tasks()
+
+# The scheduled sweeps live in `core/sweeps.py`, not `tasks.py`, so the default
+# discovery never imported them. Beat schedules a task by *name* and needs no
+# import, so it happily fired `core.sweeps.retry_notifications` every fifteen
+# minutes — and the worker, which does need the import to know the task, logged
+# "unregistered task" each time and did nothing. Notification retries and the
+# nightly ledger verification had never actually run.
+app.autodiscover_tasks(related_name="sweeps")
