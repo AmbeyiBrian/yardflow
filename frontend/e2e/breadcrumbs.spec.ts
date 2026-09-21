@@ -121,6 +121,51 @@ test.describe('Breadcrumbs', () => {
   });
 });
 
+test.describe('Leaving a screen that names its crumb', () => {
+  // The bug this guards: `useCrumb` and the crumb provider fed each other a
+  // never-ending stream of state updates from above the router's outlet, and a
+  // navigation transition starved under it — the URL changed, the old screen
+  // stayed. Intermittent, so each case tries the round trip more than once.
+
+  test('a project detail lets you go to Stock', async ({ page, request }) => {
+    const project = await someProject(request);
+    test.skip(!project, 'no project seeded — run the project spec first');
+
+    await signIn(page, PEOPLE.owner);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await open(page, `/projects/${project!.id}`);
+      await expect(page.getByRole('heading', { level: 1 })).toContainText(
+        project!.reference,
+        { timeout: 20_000 },
+      );
+
+      await page.getByRole('link', { name: /^stock$/i }).first().click();
+
+      await expect(page).toHaveURL(/\/stock$/);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(/stock/i, {
+        timeout: 15_000,
+      });
+    }
+  });
+
+  test('a report lets you go back to the catalogue', async ({ page }) => {
+    await signIn(page, PEOPLE.owner);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await open(page, '/reports/stock-on-hand');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(/stock on hand/i, {
+        timeout: 20_000,
+      });
+
+      await page.getByRole('link', { name: /all reports/i }).first().click();
+
+      await expect(page).toHaveURL(/\/reports$/);
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^reports$/i, {
+        timeout: 15_000,
+      });
+    }
+  });
+});
+
 test.describe('Approvals is the one queue', () => {
   test('the project decisions are tabs on it', async ({ page }) => {
     // They were briefly a screen of their own, which meant checking two lists

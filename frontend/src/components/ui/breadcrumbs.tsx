@@ -17,7 +17,7 @@
  * splitting on slashes would invent both.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
@@ -191,25 +191,34 @@ const CrumbContext = createContext<{
 export function CrumbProvider({ children }: { children: ReactNode }) {
   const [labels, setLabels] = useState<Labels>({});
 
-  const value = useMemo(
-    () => ({
-      labels,
-      publish: (pattern: string, label: string | undefined) =>
-        setLabels((current) => {
-          if (label === undefined) {
-            if (!(pattern in current)) return current;
-            const next = { ...current };
-            delete next[pattern];
-            return next;
-          }
-          // Same value: return the same object, or publishing on every render
-          // of a detail screen would re-render the whole shell each time.
-          if (current[pattern] === label) return current;
-          return { ...current, [pattern]: label };
-        }),
-    }),
-    [labels],
-  );
+  // `publish` must keep one identity for the life of the provider.
+  //
+  // It used to be rebuilt whenever `labels` changed, and `useCrumb` lists it as
+  // an effect dependency. So: the effect published a label, which changed
+  // `labels`, which rebuilt `publish`, which re-ran the effect — whose cleanup
+  // deleted the label, which changed `labels`, which rebuilt `publish`, which
+  // re-ran the effect, which published the label again. Forever. And this
+  // provider sits above the router's outlet, so that stream of updates starved
+  // every navigation transition: the URL changed and the old screen stayed.
+  // Reported as "the app gets stuck when you leave a report".
+  //
+  // `setLabels` is stable, so a callback over it with no dependencies is too.
+  const publish = useCallback((pattern: string, label: string | undefined) => {
+    setLabels((current) => {
+      if (label === undefined) {
+        if (!(pattern in current)) return current;
+        const next = { ...current };
+        delete next[pattern];
+        return next;
+      }
+      // Same value: return the same object, or publishing on every render of
+      // a detail screen would re-render the whole shell each time.
+      if (current[pattern] === label) return current;
+      return { ...current, [pattern]: label };
+    });
+  }, []);
+
+  const value = useMemo(() => ({ labels, publish }), [labels, publish]);
 
   return <CrumbContext.Provider value={value}>{children}</CrumbContext.Provider>;
 }
