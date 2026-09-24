@@ -16,16 +16,8 @@ import { Link } from 'react-router-dom';
 
 import { openDocument } from '../../api/client';
 import { errorMessage, useAction, useList, useResource } from '../../api/hooks';
-import {
-  Banner,
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-  Spinner,
-  Textarea,
-} from '../../components/ui';
+import { Banner, Button, Card, Field, Input, Spinner, Textarea } from '../../components/ui';
+import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet, Stat } from '../../components/ui/data';
 import type { GateOut } from '../dispatch/types';
 import type { ClientPositionRow } from './types';
@@ -107,7 +99,7 @@ export default function ClientReturnsPage() {
 
       <Card>
         <Field label="Client" htmlFor="client">
-          <Select
+          <ControlledReferenceSelect resource="clients"
             id="client"
             value={clientId}
             onChange={(event) => setClientId(event.target.value)}
@@ -118,7 +110,7 @@ export default function ClientReturnsPage() {
                 {client.name}
               </option>
             ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
       </Card>
 

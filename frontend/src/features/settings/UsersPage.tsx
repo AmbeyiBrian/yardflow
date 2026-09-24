@@ -18,6 +18,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useSearchParams } from 'react-router-dom';
 
+import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
+
 import { ApiError } from '../../api/client';
 import { applyFieldErrors, errorMessage, useAction, useList, useResource } from '../../api/hooks';
 import { useSession } from '../../auth/session';
@@ -32,17 +34,22 @@ import {
   Spinner,
   Textarea,
 } from '../../components/ui';
+import { ReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { DataList, EmptyState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import type { Delegation, ManagedUser, PermissionGroup, Role } from './types';
 
 type Tab = 'people' | 'roles' | 'delegations';
 
+const USER_TABS: readonly Tab[] = ['people', 'roles', 'delegations'];
+
 export default function UsersPage() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as Tab) || 'people';
+  // A thumb across the content moves between tabs; the strip still works.
+  const swipe = useSwipeTabs(USER_TABS, tab, (next) => setParams({ tab: next }));
 
-  return (
-    <div className="flex flex-col gap-4">
+return (
+    <div className="flex flex-col gap-4" {...swipe}>
       <PageHeader
         title="People and permissions"
         subtitle="Who can do what, and who is covering for whom."
@@ -284,17 +291,22 @@ interface PersonForm {
   role_ids: string[];
 }
 
-function PersonSheet({
+export function PersonSheet({
   open,
   user,
-  roles,
+  roles: givenRoles,
   onClose,
+  onCreated,
 }: {
   open: boolean;
   user: ManagedUser | null;
-  roles: Role[];
+  /** The People tab has these; a form elsewhere does not, so fetch them. */
+  roles?: Role[];
   onClose: () => void;
+  onCreated?: (record: { id: number }) => void;
 }) {
+  const fetchedRoles = useList<Role>('roles', { page_size: 200 }, { enabled: givenRoles === undefined });
+  const roles = givenRoles ?? fetchedRoles.data?.results ?? [];
   const form = useForm<PersonForm>({
     values: {
       full_name: user?.full_name ?? '',
@@ -305,7 +317,7 @@ function PersonSheet({
   });
   const [banner, setBanner] = useState<string | null>(null);
 
-  const create = useAction<Record<string, unknown>>({ resource: 'users' });
+  const create = useAction<Record<string, unknown>, { id: number }>({ resource: 'users' });
   const update = useAction<Record<string, unknown>>({
     resource: 'users',
     path: () => String(user?.id),
@@ -323,10 +335,12 @@ function PersonSheet({
       role_ids: values.role_ids.map(Number),
     };
     try {
+      let created: { id: number } | null = null;
       if (user) await update.mutateAsync(payload);
-      else await create.mutateAsync(payload);
+      else created = await create.mutateAsync(payload);
       form.reset();
       onClose();
+      if (created) onCreated?.(created);
     } catch (error) {
       setBanner(applyFieldErrors(error, form.setError));
     }
@@ -705,13 +719,13 @@ function DelegationSheet({ open, onClose }: { open: boolean; onClose: () => void
           htmlFor="del-from"
           error={form.formState.errors.from_user?.message}
         >
-          <Select id="del-from" {...form.register('from_user', { required: true })}>
+          <ReferenceSelect resource="users" form={form} name="from_user" rules={{ required: true }} id="del-from">
             {people.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.full_name || person.email}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         <Field
@@ -719,14 +733,14 @@ function DelegationSheet({ open, onClose }: { open: boolean; onClose: () => void
           htmlFor="del-to"
           error={form.formState.errors.to_user?.message}
         >
-          <Select id="del-to" {...form.register('to_user', { required: true })}>
+          <ReferenceSelect resource="users" form={form} name="to_user" rules={{ required: true }} id="del-to">
             <option value="">Choose…</option>
             {people.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.full_name || person.email}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         <Field
@@ -776,4 +790,20 @@ function DelegationSheet({ open, onClose }: { open: boolean; onClose: () => void
       </form>
     </Sheet>
   );
+}
+
+/**
+ * "Add new person…" from inside another form (features/quickCreate). The
+ * same sheet the People tab uses, fixed to create mode.
+ */
+export function NewPersonSheet({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated?: (record: { id: number }) => void;
+}) {
+  return <PersonSheet open={open} user={null} onClose={onClose} onCreated={onCreated} />;
 }

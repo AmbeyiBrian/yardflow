@@ -34,6 +34,7 @@ import {
   Spinner,
   Textarea,
 } from '../../components/ui';
+import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
 import { SearchField } from '../../components/ui/SearchField';
 import type {
@@ -360,7 +361,7 @@ function DecideSheet({
 
             {decision === 'RESTORE_TO_SERVICEABLE' ? (
               <Field label="Back to which yard" htmlFor="to-location">
-                <Select
+                <ControlledReferenceSelect resource="locations"
                   id="to-location"
                   value={toLocation}
                   onChange={(event) => setToLocation(event.target.value)}
@@ -371,7 +372,7 @@ function DecideSheet({
                       {row.name}
                     </option>
                   ))}
-                </Select>
+                </ControlledReferenceSelect>
               </Field>
             ) : null}
 

@@ -38,6 +38,7 @@ import {
   Select,
   Textarea,
 } from '../../components/ui';
+import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Reel, SerialUnit, StockBalance } from '../receiving/types';
 import type { Client, ItemType, Location, Site, Project } from '../settings/types';
@@ -439,7 +440,7 @@ export default function GateOutRequestPage() {
         ) : null}
 
         <Field label="Out of" htmlFor="go-from">
-          <Select
+          <ControlledReferenceSelect resource="locations"
             id="go-from"
             value={draft.from_location}
             onChange={(event) => set({ from_location: event.target.value })}
@@ -450,7 +451,7 @@ export default function GateOutRequestPage() {
                 {location.name}
               </option>
             ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
 
         <Field
@@ -458,7 +459,7 @@ export default function GateOutRequestPage() {
           htmlFor="go-holder"
           hint="It goes on their custody record when it leaves the gate."
         >
-          <Select
+          <ControlledReferenceSelect resource="users"
             id="go-holder"
             value={draft.custody_holder}
             onChange={(event) => set({ custody_holder: event.target.value })}
@@ -469,7 +470,7 @@ export default function GateOutRequestPage() {
                 {person.full_name}
               </option>
             ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
       </Card>
 
@@ -889,7 +890,7 @@ function LineSheet({
 
         {!scanned ? (
           <Field label="Or choose an item" htmlFor="gol-item">
-            <Select
+            <ControlledReferenceSelect resource="item-types"
               id="gol-item"
               value={itemId}
               onChange={(event) => setItemId(event.target.value)}
@@ -902,7 +903,7 @@ function LineSheet({
                     {row.name}
                   </option>
                 ))}
-            </Select>
+            </ControlledReferenceSelect>
           </Field>
         ) : null}
 

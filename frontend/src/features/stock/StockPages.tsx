@@ -32,6 +32,7 @@ import {
   Select,
   Spinner,
 } from '../../components/ui';
+import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
 import type { Client, ItemType, Location } from '../settings/types';
 import type { Movement, Reel, SerialUnit, StockBalance, StockCount } from '../receiving/types';
@@ -107,7 +108,7 @@ export default function StockPage() {
 
       <Card className="grid gap-3 sm:grid-cols-3">
         <Field label="Item" htmlFor="stock-item">
-          <Select
+          <ControlledReferenceSelect resource="item-types"
             id="stock-item"
             value={itemFilter}
             onChange={(event) => setItemFilter(event.target.value)}
@@ -118,7 +119,7 @@ export default function StockPage() {
                 {item.name}
               </option>
             ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
 
         <Field label="Where" htmlFor="stock-node">
@@ -461,7 +462,7 @@ export function TransfersPage() {
 
       <Card className="flex flex-col gap-3">
         <Field label="Item" htmlFor="tr-item">
-          <Select
+          <ControlledReferenceSelect resource="item-types"
             id="tr-item"
             value={form.item_type}
             onChange={(event) => setForm({ ...form, item_type: event.target.value })}
@@ -472,7 +473,7 @@ export function TransfersPage() {
                 {item.name}
               </option>
             ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
 
         <Field label="Quantity" htmlFor="tr-quantity">
@@ -628,7 +629,7 @@ function NewCountSheet({ open, onClose }: { open: boolean; onClose: () => void }
       <div className="flex flex-col gap-3">
         {banner ? <Banner tone="error">{banner}</Banner> : null}
         <Field label="Counting" htmlFor="count-location">
-          <Select
+          <ControlledReferenceSelect resource="locations"
             id="count-location"
             value={location}
             onChange={(event) => setLocation(event.target.value)}
@@ -639,7 +640,7 @@ function NewCountSheet({ open, onClose }: { open: boolean; onClose: () => void }
                 {entry.name}
               </option>
             ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
       </div>
     </Sheet>
@@ -706,7 +707,7 @@ export function CountDetailPage() {
           </p>
 
           <Field label="Item" htmlFor="cl-item">
-            <Select
+            <ControlledReferenceSelect resource="item-types"
               id="cl-item"
               value={line.item_type}
               onChange={(event) => setLine({ ...line, item_type: event.target.value })}
@@ -717,7 +718,7 @@ export function CountDetailPage() {
                   {item.name}
                 </option>
               ))}
-            </Select>
+            </ControlledReferenceSelect>
           </Field>
 
           <Field label="Counted" htmlFor="cl-qty">

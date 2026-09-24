@@ -20,7 +20,8 @@ import { useCrumb } from '../../components/ui/breadcrumbs';
 import { applyFieldErrors, useAction, useDetail, useList, useResource } from '../../api/hooks';
 import { PERM } from '../../auth/permissions';
 import { useSession } from '../../auth/session';
-import { Banner, Button, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
+import { Banner, Button, Field, Input, Spinner, Textarea } from '../../components/ui';
+import { ReferenceSelect } from '../../components/ui/ReferenceSelect';
 import {
   DataList,
   EmptyState,
@@ -113,10 +114,19 @@ export default function ProjectsPage() {
   );
 }
 
-function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ProjectSheet({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** For "Add new project…" inside another form: the saved record. */
+  onCreated?: (record: { id: number }) => void;
+}) {
   const clients = useList<Client>('clients', { page_size: 200 });
   const people = useList<{ id: number; full_name: string }>('users', { page_size: 200 });
-  const create = useAction<Record<string, unknown>>({ resource: 'projects' });
+  const create = useAction<Record<string, unknown>, { id: number }>({ resource: 'projects' });
 
   const form = useForm({
     defaultValues: {
@@ -142,7 +152,7 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
           disabled={create.isPending}
           onClick={form.handleSubmit(async (values) => {
             try {
-              await create.mutateAsync({
+              const created = await create.mutateAsync({
                 ...values,
                 manager: values.manager || null,
                 contract_value: values.contract_value || null,
@@ -150,6 +160,7 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
               });
               form.reset();
               onClose();
+              onCreated?.(created);
             } catch (error) {
               applyFieldErrors(error, form.setError);
             }
@@ -161,14 +172,14 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
     >
       <form className="flex flex-col gap-3">
         <Field label="Client" htmlFor="pr-client" error={form.formState.errors.client?.message}>
-          <Select id="pr-client" {...form.register('client', { required: 'Pick a client.' })}>
+          <ReferenceSelect resource="clients" form={form} name="client" rules={{ required: 'Pick a client.' }} id="pr-client">
             <option value="">Choose…</option>
             {(clients.data?.results ?? []).map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         <Field
@@ -201,14 +212,14 @@ function ProjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
               htmlFor="pr-manager"
               error={form.formState.errors.manager?.message}
             >
-              <Select id="pr-manager" {...form.register('manager')}>
+              <ReferenceSelect resource="users" form={form} name="manager" id="pr-manager">
                 <option value="">Choose…</option>
                 {(people.data?.results ?? []).map((person) => (
                   <option key={person.id} value={person.id}>
                     {person.full_name}
                   </option>
                 ))}
-              </Select>
+              </ReferenceSelect>
             </Field>
 
             <Field
@@ -531,14 +542,14 @@ function EditProjectSheet({
           hint="Material for this project can only move once its manager can act."
           error={form.formState.errors.manager?.message}
         >
-          <Select id="pe-manager" {...form.register('manager')}>
+          <ReferenceSelect resource="users" form={form} name="manager" id="pe-manager">
             <option value="">Nobody yet</option>
             {(people.data?.results ?? []).map((person) => (
               <option key={person.id} value={person.id}>
                 {person.full_name}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         {/*

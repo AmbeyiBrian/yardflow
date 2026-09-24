@@ -19,6 +19,7 @@ import { applyFieldErrors, useAction, useDetail, useList } from '../../api/hooks
 import { useCrumb } from '../../components/ui/breadcrumbs';
 import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
+import { ReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { PageHeader } from '../../components/ui/data';
 import { MoneyInput } from '../../components/ui/money';
 import type { ExpenseCategory, Project, ProjectExpense, ProjectJob } from './types';
@@ -140,9 +141,8 @@ export default function RecordExpensePage() {
                   </p>
                 </>
               ) : (
-                <Select
+                <ReferenceSelect resource="projects" form={form} name="project" rules={{ required: 'Which project is this for?' }}
                   id="ex-project"
-                  {...form.register('project', { required: 'Which project is this for?' })}
                 >
                   <option value="">Choose…</option>
                   {(projects.data?.results ?? [])
@@ -152,7 +152,7 @@ export default function RecordExpensePage() {
                         {project.po_number} {project.title}
                       </option>
                     ))}
-                </Select>
+                </ReferenceSelect>
               )}
             </Field>
 

@@ -1174,6 +1174,30 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   *Done when:* each finance report agrees with the costing module it sits beside (tested), and the
   twenty reports appear on the catalogue under five headings rather than as one grid.
 
+- [x] **T10.36 `[F]` "Add new …" as the last option of every reference select**
+  Refs: §7.3 · C5, O1, O4
+  A storekeeper raising a job for a site not yet on the system had to abandon the form, find
+  Settings → Network → Sites, create it, come back and start over. Every select over a reference
+  list — project, site, client, subcontractor, location, item, person — now ends with "＋ Add new …",
+  which opens that entity's own create sheet in place; on save the list refetches and the select
+  lands on the new record, with everything else in the form intact. One registry
+  (`features/quickCreate`) maps resource → sheet, lazily, so the settings area is not pulled into
+  every screen's bundle. Shown only to somebody who may create the thing. Two flavours of select
+  (react-hook-form and controlled) share the behaviour; 31 selects converted by a script that kept
+  every other attribute in place.
+  *Done when:* from the job form, "Add new site…" creates the site and the select shows it, without
+  losing the rest of the form (E2E); a storekeeper sees no such option.
+
+- [x] **T10.37 `[F]` Swipe between tabs on a phone**
+  Refs: §7.3
+  Tapping a tab strip that has scrolled off the right edge means finding it first. A horizontal
+  swipe across the content moves to the next or previous tab on every tabbed screen — Approvals,
+  Network, People, Settings. A swipe that is mostly vertical is a scroll and is left alone; one that
+  starts on something that scrolls sideways itself (the strip, a wide table) is too. The strip
+  still works.
+  *Done when:* on a phone, a swipe left on Approvals selects the next queue and a mostly-vertical
+  drag changes nothing (E2E).
+
 ---
 
 ## Milestones

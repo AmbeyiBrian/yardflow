@@ -17,8 +17,10 @@ import { useSearchParams } from 'react-router-dom';
 
 import { applyFieldErrors, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
+import { ReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import { SearchField } from '../../components/ui/SearchField';
+import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 import type { Subcontractor } from '../projects/types';
 import type { Client, Location, Site, Project } from './types';
 
@@ -37,9 +39,16 @@ const TABS: { key: Tab; label: string }[] = [
 export default function NetworkPage() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as Tab) || 'sites';
+  // Five tabs do not fit a phone's width; a thumb across the content is how
+  // people expect to move between them. The strip still works.
+  const swipe = useSwipeTabs(
+    TABS.map((entry) => entry.key),
+    tab,
+    (next) => setParams({ tab: next }),
+  );
 
-  return (
-    <div className="flex flex-col gap-4">
+return (
+    <div className="flex flex-col gap-4" {...swipe}>
       <PageHeader
         title="Network and locations"
         subtitle="Who the work is for, where it happens, and where material is kept."
@@ -156,15 +165,20 @@ interface SiteForm {
   references: { label: string; value: string }[];
 }
 
-function SiteSheet({
+export function SiteSheet({
   open,
   onClose,
-  clients,
+  clients: givenClients,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
-  clients: Client[];
+  /** The tab already has these; a form elsewhere does not, so fetch them. */
+  clients?: Client[];
+  onCreated?: (record: { id: number }) => void;
 }) {
+  const fetched = useList<Client>('clients', { page_size: 200 }, { enabled: givenClients === undefined });
+  const clients = givenClients ?? fetched.data?.results ?? [];
   const form = useForm<SiteForm>({
     defaultValues: {
       client: '',
@@ -217,6 +231,7 @@ function SiteSheet({
 
       form.reset();
       onClose();
+      onCreated?.(site);
     } catch (error) {
       setBanner(applyFieldErrors(error, form.setError));
     }
@@ -242,10 +257,9 @@ function SiteSheet({
         {banner ? <Banner tone="error">{banner}</Banner> : null}
 
         <Field label="Client" htmlFor="site-client" error={form.formState.errors.client?.message}>
-          <Select
+          <ReferenceSelect resource="clients" form={form} name="client" rules={{ required: 'Choose a client.' }}
             id="site-client"
             invalid={Boolean(form.formState.errors.client)}
-            {...form.register('client', { required: 'Choose a client.' })}
           >
             <option value="">Choose…</option>
             {clients.map((client) => (
@@ -253,7 +267,7 @@ function SiteSheet({
                 {client.name}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         <Field
@@ -373,7 +387,15 @@ interface ClientForm {
   contact_phone: string;
 }
 
-function ClientSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ClientSheet({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated?: (record: { id: number }) => void;
+}) {
   const form = useForm<ClientForm>({
     defaultValues: {
       name: '',
@@ -385,14 +407,15 @@ function ClientSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
     },
   });
   const [banner, setBanner] = useState<string | null>(null);
-  const create = useAction<Record<string, unknown>>({ resource: 'clients' });
+  const create = useAction<Record<string, unknown>, { id: number }>({ resource: 'clients' });
 
   const submit = form.handleSubmit(async (values) => {
     setBanner(null);
     try {
-      await create.mutateAsync({ ...values });
+      const created = await create.mutateAsync({ ...values });
       form.reset();
       onClose();
+      onCreated?.(created);
     } catch (error) {
       setBanner(applyFieldErrors(error, form.setError));
     }
@@ -511,7 +534,15 @@ function SubcontractorsTab() {
   );
 }
 
-function SubcontractorSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SubcontractorSheet({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated?: (record: { id: number }) => void;
+}) {
   const form = useForm({
     defaultValues: {
       name: '',
@@ -523,14 +554,15 @@ function SubcontractorSheet({ open, onClose }: { open: boolean; onClose: () => v
     },
   });
   const [banner, setBanner] = useState<string | null>(null);
-  const create = useAction<Record<string, unknown>>({ resource: 'subcontractors' });
+  const create = useAction<Record<string, unknown>, { id: number }>({ resource: 'subcontractors' });
 
   const submit = form.handleSubmit(async (values) => {
     setBanner(null);
     try {
-      await create.mutateAsync({ ...values });
+      const created = await create.mutateAsync({ ...values });
       form.reset();
       onClose();
+      onCreated?.(created);
     } catch (error) {
       setBanner(applyFieldErrors(error, form.setError));
     }
@@ -678,10 +710,9 @@ function ProjectSheet({
         {banner ? <Banner tone="error">{banner}</Banner> : null}
 
         <Field label="Client" htmlFor="wo-client" error={form.formState.errors.client?.message}>
-          <Select
+          <ReferenceSelect resource="clients" form={form} name="client" rules={{ required: 'Choose a client.' }}
             id="wo-client"
             invalid={Boolean(form.formState.errors.client)}
-            {...form.register('client', { required: 'Choose a client.' })}
           >
             <option value="">Choose…</option>
             {clients.map((client) => (
@@ -689,7 +720,7 @@ function ProjectSheet({
                 {client.name}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         <Field
@@ -766,15 +797,20 @@ function LocationsTab() {
   );
 }
 
-function LocationSheet({
+export function LocationSheet({
   open,
   onClose,
-  locations,
+  locations: givenLocations,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
-  locations: Location[];
+  /** For the parent picker. The tab has them; a form elsewhere fetches them. */
+  locations?: Location[];
+  onCreated?: (record: { id: number }) => void;
 }) {
+  const fetchedLocations = useList<Location>('locations', { page_size: 300 }, { enabled: givenLocations === undefined });
+  const locations = givenLocations ?? fetchedLocations.data?.results ?? [];
   const form = useForm<{
     name: string;
     code: string;
@@ -785,13 +821,13 @@ function LocationSheet({
     defaultValues: { name: '', code: '', type: 'YARD', parent: '', vehicle_reg: '' },
   });
   const [banner, setBanner] = useState<string | null>(null);
-  const create = useAction<Record<string, unknown>>({ resource: 'locations' });
+  const create = useAction<Record<string, unknown>, { id: number }>({ resource: 'locations' });
   const type = form.watch('type');
 
   const submit = form.handleSubmit(async (values) => {
     setBanner(null);
     try {
-      await create.mutateAsync({
+      const created = await create.mutateAsync({
         name: values.name,
         code: values.code || undefined,
         type: values.type,
@@ -800,6 +836,7 @@ function LocationSheet({
       });
       form.reset();
       onClose();
+      onCreated?.(created);
     } catch (error) {
       setBanner(applyFieldErrors(error, form.setError));
     }
@@ -837,14 +874,14 @@ function LocationSheet({
         </Field>
 
         <Field label="Inside" htmlFor="loc-parent" hint="Leave empty for a top-level yard.">
-          <Select id="loc-parent" {...form.register('parent')}>
+          <ReferenceSelect resource="locations" form={form} name="parent" id="loc-parent">
             <option value="">Top level</option>
             {locations.map((location) => (
               <option key={location.id} value={location.id}>
                 {location.name}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         {type === 'VEHICLE' ? (

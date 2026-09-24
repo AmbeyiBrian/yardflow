@@ -16,6 +16,7 @@ import { useForm } from 'react-hook-form';
 
 import { applyFieldErrors, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Field, Select, Spinner, Textarea } from '../../components/ui';
+import { ReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { Sheet } from '../../components/ui/data';
 import { MoneyInput } from '../../components/ui/money';
 import type { Site } from '../settings/types';
@@ -113,14 +114,14 @@ export function JobSheet({
     >
       <form className="flex flex-col gap-3">
         <Field label="Site" htmlFor="job-site" error={form.formState.errors.site?.message}>
-          <Select id="job-site" {...form.register('site', { required: 'Which site?' })}>
+          <ReferenceSelect resource="sites" form={form} name="site" rules={{ required: 'Which site?' }} id="job-site">
             <option value="">Choose…</option>
             {(sites.data?.results ?? []).map((site) => (
               <option key={site.id} value={site.id}>
                 {site.internal_ref} · {site.name}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         {project ? null : (
@@ -129,14 +130,14 @@ export function JobSheet({
             htmlFor="job-project"
             hint="Optional. Without one the job is not costed to a PO."
           >
-            <Select id="job-project" {...form.register('project')}>
+            <ReferenceSelect resource="projects" form={form} name="project" id="job-project">
               <option value="">Not under a project</option>
               {(projects.data?.results ?? []).map((row) => (
                 <option key={row.id} value={row.id}>
                   {row.po_number || row.reference} {row.title}
                 </option>
               ))}
-            </Select>
+            </ReferenceSelect>
           </Field>
         )}
 
@@ -146,9 +147,8 @@ export function JobSheet({
           hint="H1: a job nobody is named on is a job nobody has to finish."
           error={form.formState.errors.assignee?.message}
         >
-          <Select
+          <ReferenceSelect resource="users" form={form} name="assignee" rules={{ required: 'Somebody has to own this.' }}
             id="job-assignee"
-            {...form.register('assignee', { required: 'Somebody has to own this.' })}
           >
             <option value="">Choose…</option>
             {(people.data?.results ?? []).map((person) => (
@@ -156,7 +156,7 @@ export function JobSheet({
                 {person.full_name}
               </option>
             ))}
-          </Select>
+          </ReferenceSelect>
         </Field>
 
         <Field label="Who delivers it" htmlFor="job-mode">
@@ -187,9 +187,8 @@ export function JobSheet({
                   : undefined
               }
             >
-              <Select
+              <ReferenceSelect resource="subcontractors" form={form} name="subcontractor" rules={{ required: 'Which contractor?' }}
                 id="job-contractor"
-                {...form.register('subcontractor', { required: 'Which contractor?' })}
               >
                 <option value="">Choose…</option>
                 {(contractors.data?.results ?? []).map((contractor) => (
@@ -197,7 +196,7 @@ export function JobSheet({
                     {contractor.name}
                   </option>
                 ))}
-              </Select>
+              </ReferenceSelect>
             </Field>
 
             <Field

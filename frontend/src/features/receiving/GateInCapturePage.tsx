@@ -44,6 +44,7 @@ import {
   Spinner,
   Textarea,
 } from '../../components/ui';
+import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Client, ItemType, Location, Site } from '../settings/types';
 import type { Condition, GateIn, GateInLineInput, SourceType } from './types';
@@ -412,7 +413,7 @@ export default function GateInCapturePage() {
             htmlFor="gi-client"
             hint="Consignment stock stays theirs wherever it goes."
           >
-            <Select
+            <ControlledReferenceSelect resource="clients"
               id="gi-client"
               value={draft.header.client}
               onChange={(event) => setHeader({ client: event.target.value })}
@@ -423,7 +424,7 @@ export default function GateInCapturePage() {
                   {client.name}
                 </option>
               ))}
-            </Select>
+            </ControlledReferenceSelect>
           </Field>
         ) : (
           <Field label="Supplier" htmlFor="gi-supplier">
@@ -441,7 +442,7 @@ export default function GateInCapturePage() {
             htmlFor="gi-origin"
             hint="Recorded on the document and on each unit, so recoveries can be reported by site."
           >
-            <Select
+            <ControlledReferenceSelect resource="sites"
               id="gi-origin"
               value={draft.header.origin_site}
               onChange={(event) => setHeader({ origin_site: event.target.value })}
@@ -452,7 +453,7 @@ export default function GateInCapturePage() {
                   {site.internal_ref} · {site.name}
                 </option>
               ))}
-            </Select>
+            </ControlledReferenceSelect>
           </Field>
         ) : null}
 
@@ -463,7 +464,7 @@ export default function GateInCapturePage() {
               htmlFor="gi-returner"
               hint="This is whose custody record it comes off. Required for a return."
             >
-              <Select
+              <ControlledReferenceSelect resource="users"
                 id="gi-returner"
                 value={draft.header.returned_by}
                 onChange={(event) => setHeader({ returned_by: event.target.value })}
@@ -474,14 +475,14 @@ export default function GateInCapturePage() {
                     {person.full_name}
                   </option>
                 ))}
-              </Select>
+              </ControlledReferenceSelect>
             </Field>
             <Field
               label="Coming back from"
               htmlFor="gi-return-site"
               hint="Lets the site's reconciliation see the return."
             >
-              <Select
+              <ControlledReferenceSelect resource="sites"
                 id="gi-return-site"
                 value={draft.header.origin_site}
                 onChange={(event) => setHeader({ origin_site: event.target.value })}
@@ -492,13 +493,13 @@ export default function GateInCapturePage() {
                     {site.internal_ref} · {site.name}
                   </option>
                 ))}
-              </Select>
+              </ControlledReferenceSelect>
             </Field>
           </>
         ) : null}
 
         <Field label="Received into" htmlFor="gi-location">
-          <Select
+          <ControlledReferenceSelect resource="locations"
             id="gi-location"
             value={draft.header.to_location}
             onChange={(event) => setHeader({ to_location: event.target.value })}
@@ -509,7 +510,7 @@ export default function GateInCapturePage() {
                 {location.name}
               </option>
             ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
 
         <Field label="Their delivery note" htmlFor="gi-note-ref" hint="Keeps the paper trail.">
@@ -782,7 +783,7 @@ function LineSheet({
         {error ? <Banner tone="error">{error}</Banner> : null}
 
         <Field label="Item" htmlFor="line-item">
-          <Select id="line-item" value={itemId} onChange={(event) => setItemId(event.target.value)}>
+          <ControlledReferenceSelect resource="item-types" id="line-item" value={itemId} onChange={(event) => setItemId(event.target.value)}>
             <option value="">Choose…</option>
             {items
               .filter((row) => !row.is_archived)
@@ -792,7 +793,7 @@ function LineSheet({
                   {row.code ? ` (${row.code})` : ''}
                 </option>
               ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
 
         {mode === 'SERIALIZED' && !noSerialReason ? (
@@ -921,7 +922,7 @@ function LineSheet({
           htmlFor="line-owner"
           hint="Set here and carried on the stock permanently."
         >
-          <Select
+          <ControlledReferenceSelect resource="clients"
             id="line-owner"
             value={ownerClient}
             onChange={(event) => setOwnerClient(event.target.value)}
@@ -932,7 +933,7 @@ function LineSheet({
                 {client.name}
               </option>
             ))}
-          </Select>
+          </ControlledReferenceSelect>
         </Field>
 
         <Field label="Notes" htmlFor="line-notes">

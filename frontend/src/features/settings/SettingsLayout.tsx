@@ -7,7 +7,9 @@
  * regardless (§7.2).
  */
 
-import { NavLink, Navigate, Outlet } from 'react-router-dom';
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+
+import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 
 import { PERM, type Permission } from '../../auth/permissions';
 import { useSession } from '../../auth/session';
@@ -40,8 +42,20 @@ export default function SettingsLayout() {
     (pane) => pane.anyOf.length === 0 || hasAny(...pane.anyOf),
   );
 
+  // Nine panes are a long strip on a phone. A thumb across the pane moves to
+  // the next one this person may see; the strip still works. The current pane
+  // is the last path segment, which is exactly what each NavLink points at.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const current = location.pathname.replace(/\/+$/, '').split('/').pop() ?? '';
+  const swipe = useSwipeTabs(
+    visible.map((pane) => pane.to),
+    current,
+    (next) => navigate(next),
+  );
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" {...swipe}>
       <nav className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-2">
         {visible.map((pane) => (
           <NavLink

@@ -492,17 +492,24 @@ interface ItemForm {
   description: string;
 }
 
-function ItemTypeSheet({
+export function ItemTypeSheet({
   open,
   onClose,
-  categories,
-  defaultCategory,
+  categories: givenCategories,
+  defaultCategory = null,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
-  categories: ItemCategory[];
-  defaultCategory: number | null;
+  /** The catalogue screen has these; a form elsewhere does not, so fetch them. */
+  categories?: ItemCategory[];
+  defaultCategory?: number | null;
+  onCreated?: (record: { id: number }) => void;
 }) {
+  const fetchedCategories = useList<ItemCategory>('item-categories', { page_size: 200 }, {
+    enabled: givenCategories === undefined,
+  });
+  const categories = givenCategories ?? fetchedCategories.data?.results ?? [];
   const form = useForm<ItemForm>({
     defaultValues: {
       category: defaultCategory ? String(defaultCategory) : '',
@@ -517,7 +524,7 @@ function ItemTypeSheet({
     },
   });
   const [banner, setBanner] = useState<string | null>(null);
-  const create = useAction<Record<string, unknown>>({ resource: 'item-types' });
+  const create = useAction<Record<string, unknown>, { id: number }>({ resource: 'item-types' });
 
   const trackingMode = form.watch('default_tracking_mode');
   const returnable = form.watch('is_returnable');
@@ -525,7 +532,7 @@ function ItemTypeSheet({
   const submit = form.handleSubmit(async (values) => {
     setBanner(null);
     try {
-      await create.mutateAsync({
+      const created = await create.mutateAsync({
         category: Number(values.category),
         name: values.name,
         code: values.code || undefined,
@@ -540,6 +547,7 @@ function ItemTypeSheet({
       });
       form.reset();
       onClose();
+      onCreated?.(created);
     } catch (error) {
       setBanner(applyFieldErrors(error, form.setError));
     }

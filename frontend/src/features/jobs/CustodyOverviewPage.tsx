@@ -23,6 +23,7 @@ import { Link } from 'react-router-dom';
 
 import { errorMessage, useList, useResource } from '../../api/hooks';
 import { Banner, Button, Card, OwnershipBadge, Select, Spinner } from '../../components/ui';
+import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import {
   DataList,
   EmptyState,
@@ -318,7 +319,7 @@ export function ReconciliationPage() {
           <label htmlFor="target" className="text-sm font-medium text-slate-700">
             Which one
           </label>
-          <Select
+          <ControlledReferenceSelect resource="sites"
             id="target"
             value={target}
             onChange={(event) => setTarget(event.target.value)}
@@ -336,7 +337,7 @@ export function ReconciliationPage() {
                     {project.reference} {project.title}
                   </option>
                 ))}
-          </Select>
+          </ControlledReferenceSelect>
         </div>
       </Card>
 

@@ -48,6 +48,7 @@ import {
   Spinner,
   Textarea,
 } from '../../components/ui';
+import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Stat, StatusBadge } from '../../components/ui/data';
 import { type Carried, carriedLabel, mergeCarried } from './carried';
 import type {
@@ -431,7 +432,7 @@ export default function JobCloseoutPage() {
                   return (
                     <div key={index} className="flex flex-col gap-2 rounded-xl bg-slate-50 p-3">
                       <Field label="Who" htmlFor={`labour-person-${index}`}>
-                        <Select
+                        <ControlledReferenceSelect resource="users"
                           id={`labour-person-${index}`}
                           value={entry.person}
                           onChange={(event) =>
@@ -450,7 +451,7 @@ export default function JobCloseoutPage() {
                               {person.full_name}
                             </option>
                           ))}
-                        </Select>
+                        </ControlledReferenceSelect>
                       </Field>
 
                       <div className="grid grid-cols-2 gap-2">

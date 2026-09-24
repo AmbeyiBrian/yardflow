@@ -22,6 +22,7 @@ import { Link, useParams } from 'react-router-dom';
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
 import { PERM } from '../../auth/permissions';
 import { useCrumb } from '../../components/ui/breadcrumbs';
+import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 import { CloseoutQueue, ExpenseQueue } from '../projects/ProjectQueuesPage';
 import { biometricsAvailable, signApproval } from '../../auth/webauthn';
 import { useSession } from '../../auth/session';
@@ -93,9 +94,16 @@ export default function ApprovalsPage() {
   ];
 
   const [tab, setTab] = useState<Tab>(tabs[0]?.key ?? 'material');
+  // On a phone, a thumb across the queue moves to the next one. The strip
+  // still works; this is the gesture people already make.
+  const swipe = useSwipeTabs<Tab>(
+    tabs.map((entry) => entry.key),
+    tab,
+    setTab,
+  );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" {...swipe}>
       <PageHeader
         title="Approvals"
         subtitle="What is waiting on a decision, and everything already decided."
