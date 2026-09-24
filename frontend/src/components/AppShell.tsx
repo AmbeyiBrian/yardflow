@@ -146,7 +146,7 @@ function AppShellInner() {
   const visible = NAV_ITEMS.filter((item) => !item.anyOf || hasAny(...item.anyOf));
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-50 md:flex-row">
+    <div className="flex min-h-full min-h-dvh flex-col bg-slate-50 md:flex-row">
 
       {/* Sidebar from md up.
           `sticky top-0 h-screen`: navigation stays put while the content beside
@@ -231,7 +231,12 @@ function AppShellInner() {
           </div>
         ) : null}
 
-        <main className="min-w-0 flex-1 px-4 py-4 md:px-6 md:py-6">
+        {/*
+          A flex column so a tabbed screen can stretch to the bottom edge: a
+          swipe is read by the screen's wrapper, and on a short page a thumb
+          below the content must still land on it.
+        */}
+        <main className="flex min-w-0 flex-1 flex-col px-4 py-4 md:px-6 md:py-6">
           {/*
             P2: one trail for every screen, derived from the URL. Putting it in
             `PageHeader` instead would mean twenty-six screens each stating

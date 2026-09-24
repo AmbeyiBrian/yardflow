@@ -29,6 +29,13 @@
  * transformed ancestor becomes the containing block for `position: fixed`
  * descendants and every sheet in this app is one.
  *
+ * Two tabbed screens can nest: Network and People are panes of Settings, and
+ * both have tabs of their own. A touch bubbles through both wrappers, and
+ * without a rule both would act — the inner moving to the next Network tab, the
+ * outer to the next settings pane, and the outer's navigation winning. The
+ * innermost wrapper owns the gesture: it claims the touch as it starts, and an
+ * outer wrapper that sees a claimed touch leaves it alone.
+ *
  * Mouse users are unaffected: only touch events are read. Somebody who has
  * asked for reduced motion gets the tab change with neither the drag nor the
  * slide.
@@ -41,6 +48,12 @@ export const NO_SWIPE = 'data-no-swipe';
 
 /** How far a finger may wander before the gesture is judged sideways or not. */
 const SLOP = 10;
+
+/** How far a clearly vertical movement must go before the touch is written off as a scroll. */
+const SCROLL_LOCK = 24;
+
+/** Touches an inner tabbed screen has already taken; an outer one must not act on them. */
+const claimed = new WeakSet<Event>();
 
 /** How much of the finger's travel the pane follows past the last tab. */
 const EDGE_RESISTANCE = 0.25;
@@ -128,10 +141,12 @@ export function useSwipeTabs<T extends string>(
   const enteredFrom = arrival.tab === current ? arrival.from : null;
 
   const onTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
-    if (event.touches.length !== 1) {
+    if (event.touches.length !== 1 || claimed.has(event.nativeEvent)) {
+      // Two fingers, or a tabbed screen nested inside this one already has it.
       gesture.current = null;
       return;
     }
+    claimed.add(event.nativeEvent);
     const touch = event.touches[0];
     const target = event.target as HTMLElement | null;
     // Started on something that scrolls sideways itself: let it scroll.
@@ -150,13 +165,15 @@ export function useSwipeTabs<T extends string>(
       const dy = touch.clientY - began.y;
 
       if (!began.dragging) {
-        // Too early to tell.
-        if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
-        // Heading up or down: it is a scroll, and stays one for this touch.
-        if (Math.abs(dx) < Math.abs(dy) * 1.5) {
+        // Clearly up or down: it is a scroll, and stays one for this touch. A
+        // real thumb rarely starts dead straight, so this waits for a
+        // decisive vertical run rather than judging the first wobble.
+        if (Math.abs(dy) >= SCROLL_LOCK && Math.abs(dy) > Math.abs(dx) * 1.5) {
           began.ignore = true;
           return;
         }
+        // Sideways, and more sideways than not: start following the finger.
+        if (Math.abs(dx) < SLOP || Math.abs(dx) <= Math.abs(dy)) return;
         began.dragging = true;
       }
 
@@ -185,8 +202,13 @@ export function useSwipeTabs<T extends string>(
       const touch = event.changedTouches[0];
       const dx = touch.clientX - began.x;
       const dy = touch.clientY - began.y;
-      // Sideways, decisively: a diagonal scroll must not change tabs.
-      const decisive = Math.abs(dx) >= threshold && Math.abs(dx) >= Math.abs(dy) * 1.5;
+      // Far enough, and sideways: a diagonal scroll must not change tabs. A
+      // touch already judged as a drag (the pane has been following it) is
+      // held to the distance alone; one with no moves to judge by — a very
+      // quick flick — must be decisively sideways in total.
+      const decisive =
+        Math.abs(dx) >= threshold &&
+        (began.dragging ? Math.abs(dx) > Math.abs(dy) : Math.abs(dx) >= Math.abs(dy) * 1.5);
       // Swipe left (dx < 0) moves to the tab on the right, as in every mobile
       // app people already use.
       const next =

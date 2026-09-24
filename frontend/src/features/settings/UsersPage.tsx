@@ -51,7 +51,7 @@ export default function UsersPage() {
   const swipe = useSwipeTabs(USER_TABS, tab, (next) => setParams({ tab: next }));
 
   return (
-    <div className="flex flex-col gap-4" {...swipe.handlers}>
+    <div className="flex flex-1 flex-col gap-4" {...swipe.handlers}>
       <PageHeader
         title="People and permissions"
         subtitle="Who can do what, and who is covering for whom."
@@ -67,7 +67,7 @@ export default function UsersPage() {
         onSelect={(next) => setParams({ tab: next })}
       />
 
-      <SwipePane {...swipe.pane}>
+      <SwipePane {...swipe.pane} className="flex-1">
         {tab === 'people' ? <PeopleTab /> : null}
         {tab === 'roles' ? <RolesTab /> : null}
         {tab === 'delegations' ? <DelegationsTab /> : null}

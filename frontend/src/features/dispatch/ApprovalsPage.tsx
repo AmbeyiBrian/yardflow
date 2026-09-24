@@ -105,7 +105,7 @@ export default function ApprovalsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4" {...swipe.handlers}>
+    <div className="flex flex-1 flex-col gap-4" {...swipe.handlers}>
       <PageHeader
         title="Approvals"
         subtitle="What is waiting on a decision, and everything already decided."
@@ -116,7 +116,7 @@ export default function ApprovalsPage() {
         <TabStrip<Tab> tabs={tabs} current={tab} onSelect={setTab} aria-label="Queues" />
       ) : null}
 
-      <SwipePane {...swipe.pane}>
+      <SwipePane {...swipe.pane} className="flex-1">
         {tab === 'expenses' ? <ExpenseQueue /> : null}
         {tab === 'closeouts' ? <CloseoutQueue /> : null}
         {tab === 'material' ? <MaterialQueue /> : null}

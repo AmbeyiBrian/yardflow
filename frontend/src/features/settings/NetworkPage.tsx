@@ -50,7 +50,7 @@ export default function NetworkPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4" {...swipe.handlers}>
+    <div className="flex flex-1 flex-col gap-4" {...swipe.handlers}>
       <PageHeader
         title="Network and locations"
         subtitle="Who the work is for, where it happens, and where material is kept."
@@ -58,7 +58,7 @@ export default function NetworkPage() {
 
       <TabStrip tabs={TABS} current={tab} onSelect={(next) => setParams({ tab: next })} />
 
-      <SwipePane {...swipe.pane}>
+      <SwipePane {...swipe.pane} className="flex-1">
         {tab === 'sites' ? <SitesTab /> : null}
         {tab === 'clients' ? <ClientsTab /> : null}
         {tab === 'projects' ? <ProjectsTab /> : null}

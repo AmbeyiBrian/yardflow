@@ -56,7 +56,7 @@ export default function SettingsLayout() {
   );
 
   return (
-    <div className="flex flex-col gap-4" {...swipe.handlers}>
+    <div className="flex flex-1 flex-col gap-4" {...swipe.handlers}>
       <TabStrip
         tabs={visible.map((pane) => ({ key: pane.to, label: pane.label }))}
         current={current}
@@ -65,7 +65,8 @@ export default function SettingsLayout() {
         aria-label="Settings"
       />
 
-      <SwipePane {...swipe.pane}>
+      {/* A column that grows, so a nested tabbed pane can grow with it. */}
+      <SwipePane {...swipe.pane} className="flex flex-1 flex-col">
         <Outlet />
       </SwipePane>
     </div>
