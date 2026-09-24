@@ -20,6 +20,8 @@ import { Banner, Button, Field, Input, Select, Spinner, Textarea } from '../../c
 import { ReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import { SearchField } from '../../components/ui/SearchField';
+import { TabStrip } from '../../components/ui/TabStrip';
+import { SwipePane } from '../../components/ui/SwipePane';
 import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 import type { Subcontractor } from '../projects/types';
 import type { Client, Location, Site, Project } from './types';
@@ -47,34 +49,22 @@ export default function NetworkPage() {
     (next) => setParams({ tab: next }),
   );
 
-return (
-    <div className="flex flex-col gap-4" {...swipe}>
+  return (
+    <div className="flex flex-col gap-4" {...swipe.handlers}>
       <PageHeader
         title="Network and locations"
         subtitle="Who the work is for, where it happens, and where material is kept."
       />
 
-      <nav className="flex gap-1 overflow-x-auto">
-        {TABS.map((entry) => (
-          <button
-            key={entry.key}
-            type="button"
-            onClick={() => setParams({ tab: entry.key })}
-            className={[
-              'min-h-[44px] rounded-lg px-3 text-sm font-medium whitespace-nowrap',
-              tab === entry.key ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100',
-            ].join(' ')}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </nav>
+      <TabStrip tabs={TABS} current={tab} onSelect={(next) => setParams({ tab: next })} />
 
-      {tab === 'sites' ? <SitesTab /> : null}
-      {tab === 'clients' ? <ClientsTab /> : null}
-      {tab === 'projects' ? <ProjectsTab /> : null}
-      {tab === 'subcontractors' ? <SubcontractorsTab /> : null}
-      {tab === 'locations' ? <LocationsTab /> : null}
+      <SwipePane {...swipe.pane}>
+        {tab === 'sites' ? <SitesTab /> : null}
+        {tab === 'clients' ? <ClientsTab /> : null}
+        {tab === 'projects' ? <ProjectsTab /> : null}
+        {tab === 'subcontractors' ? <SubcontractorsTab /> : null}
+        {tab === 'locations' ? <LocationsTab /> : null}
+      </SwipePane>
     </div>
   );
 }

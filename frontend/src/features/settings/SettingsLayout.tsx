@@ -7,13 +7,14 @@
  * regardless (§7.2).
  */
 
-import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { TabStrip } from '../../components/ui/TabStrip';
+import { SwipePane } from '../../components/ui/SwipePane';
 import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 
 import { PERM, type Permission } from '../../auth/permissions';
 import { useSession } from '../../auth/session';
-import { cn } from '../../components/ui/cn';
 
 const PANES: { to: string; label: string; anyOf: Permission[] }[] = [
   // Everyone's own, so no permission gates it: the person who owns the phone is
@@ -55,25 +56,18 @@ export default function SettingsLayout() {
   );
 
   return (
-    <div className="flex flex-col gap-4" {...swipe}>
-      <nav className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-2">
-        {visible.map((pane) => (
-          <NavLink
-            key={pane.to}
-            to={pane.to}
-            className={({ isActive }) =>
-              cn(
-                'flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium whitespace-nowrap',
-                isActive ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100',
-              )
-            }
-          >
-            {pane.label}
-          </NavLink>
-        ))}
-      </nav>
+    <div className="flex flex-col gap-4" {...swipe.handlers}>
+      <TabStrip
+        tabs={visible.map((pane) => ({ key: pane.to, label: pane.label }))}
+        current={current}
+        linkTo={(to) => to}
+        className="border-b border-slate-200 pb-2"
+        aria-label="Settings"
+      />
 
-      <Outlet />
+      <SwipePane {...swipe.pane}>
+        <Outlet />
+      </SwipePane>
     </div>
   );
 }

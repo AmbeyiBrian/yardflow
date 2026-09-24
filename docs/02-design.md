@@ -872,6 +872,14 @@ security.
   it. Roles with five or fewer destinations get no More button at all. `e2e/navigation.spec.ts`
   asserts the rule that matters: whatever the sidebar offers a role, a phone can reach.
 - Lists are cards on narrow screens, tables at `md` and above. No horizontal page scroll.
+- Tabbed screens (Approvals, Network, People, Settings) change tab on a horizontal swipe across the
+  content, and it has to feel like one: the pane follows the finger (`useSwipeTabs` + `SwipePane`),
+  springs back from a short drag, and the next pane slides in from the side the finger was heading,
+  also on a tap. The strip (`TabStrip`) scrolls sideways, never the page, to keep the selected tab in
+  view — nine settings panes do not fit a phone, and a highlighted tab off the edge looks like no
+  selection at all. The pane moves by direct style writes, not state, and drops its transform the
+  moment the gesture ends: sheets are `position: fixed` and a transformed ancestor would trap them.
+  Reduced motion keeps the change and loses the movement.
 - Barcode scanning uses `BarcodeDetector` where available, `@zxing/browser` otherwise, and manual
   entry is always available (`D7` — many recoveries have no barcode at all).
 - Signature capture is a canvas pad, uploaded as PNG (`G3`).

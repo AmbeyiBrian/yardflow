@@ -22,6 +22,8 @@ import { Link, useParams } from 'react-router-dom';
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
 import { PERM } from '../../auth/permissions';
 import { useCrumb } from '../../components/ui/breadcrumbs';
+import { TabStrip } from '../../components/ui/TabStrip';
+import { SwipePane } from '../../components/ui/SwipePane';
 import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 import { CloseoutQueue, ExpenseQueue } from '../projects/ProjectQueuesPage';
 import { biometricsAvailable, signApproval } from '../../auth/webauthn';
@@ -103,7 +105,7 @@ export default function ApprovalsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4" {...swipe}>
+    <div className="flex flex-col gap-4" {...swipe.handlers}>
       <PageHeader
         title="Approvals"
         subtitle="What is waiting on a decision, and everything already decided."
@@ -111,28 +113,14 @@ export default function ApprovalsPage() {
 
       {/* One tab is no choice, so do not draw a strip for it. */}
       {tabs.length > 1 ? (
-        <div className="flex gap-1 overflow-x-auto">
-          {tabs.map((entry) => (
-            <button
-              key={entry.key}
-              type="button"
-              onClick={() => setTab(entry.key)}
-              className={[
-                'min-h-[44px] rounded-lg px-3 text-sm font-medium whitespace-nowrap',
-                tab === entry.key
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-700 hover:bg-slate-100',
-              ].join(' ')}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
+        <TabStrip<Tab> tabs={tabs} current={tab} onSelect={setTab} aria-label="Queues" />
       ) : null}
 
-      {tab === 'expenses' ? <ExpenseQueue /> : null}
-      {tab === 'closeouts' ? <CloseoutQueue /> : null}
-      {tab === 'material' ? <MaterialQueue /> : null}
+      <SwipePane {...swipe.pane}>
+        {tab === 'expenses' ? <ExpenseQueue /> : null}
+        {tab === 'closeouts' ? <CloseoutQueue /> : null}
+        {tab === 'material' ? <MaterialQueue /> : null}
+      </SwipePane>
     </div>
   );
 }

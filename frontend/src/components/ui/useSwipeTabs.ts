@@ -7,6 +7,14 @@
  * "previous tab" on any screen with a tab strip — Approvals, Network, People,
  * Settings — without each of them re-deriving what counts as a swipe.
  *
+ * It has to *feel* like a swipe, not a tap that happened to be sideways. So:
+ *
+ * * While the finger is down the pane follows it (`SwipePane`, its own file), with a little
+ *   resistance past the first or last tab so the edge is felt rather than read.
+ * * Let go short of the threshold and the pane springs back.
+ * * Let go past it and the next pane slides in from the side the finger was
+ *   heading, whether the change came from the swipe or from a tap on the strip.
+ *
  * What counts: a single touch that travels at least `threshold` pixels
  * sideways and clearly more sideways than up or down. Anything else is a
  * scroll and is left alone. Touches that begin on something that scrolls
@@ -14,30 +22,114 @@
  * swipe there means "scroll this", and taking it over would break the thing
  * people were actually doing.
  *
- * Mouse users are unaffected: only touch events are read.
+ * The pane is moved by writing to its style directly, not through React state:
+ * a touch reports at up to 120 times a second and re-rendering a queue of
+ * approval cards at that rate is exactly the stutter this is meant to remove.
+ * The transform is removed the moment the gesture or the entry ends, because a
+ * transformed ancestor becomes the containing block for `position: fixed`
+ * descendants and every sheet in this app is one.
+ *
+ * Mouse users are unaffected: only touch events are read. Somebody who has
+ * asked for reduced motion gets the tab change with neither the drag nor the
+ * slide.
  */
 
-import { useCallback, useRef } from 'react';
-
-interface SwipeHandlers {
-  onTouchStart: (event: React.TouchEvent<HTMLElement>) => void;
-  onTouchEnd: (event: React.TouchEvent<HTMLElement>) => void;
-}
+import { useCallback, useRef, useState, type RefObject, type TouchEvent } from 'react';
 
 /** Mark an element whose own horizontal scrolling must win over a tab swipe. */
 export const NO_SWIPE = 'data-no-swipe';
+
+/** How far a finger may wander before the gesture is judged sideways or not. */
+const SLOP = 10;
+
+/** How much of the finger's travel the pane follows past the last tab. */
+const EDGE_RESISTANCE = 0.25;
+
+interface Gesture {
+  x: number;
+  y: number;
+  /** Began on something that scrolls sideways itself, or turned into a scroll. */
+  ignore: boolean;
+  /** Decided as a sideways drag; the pane is following the finger. */
+  dragging: boolean;
+}
+
+export type Direction = 'left' | 'right';
+
+export interface SwipeTabs<T extends string> {
+  /** Spread onto the element that wraps the strip and the pane. */
+  handlers: {
+    onTouchStart: (event: TouchEvent<HTMLElement>) => void;
+    onTouchMove: (event: TouchEvent<HTMLElement>) => void;
+    onTouchEnd: (event: TouchEvent<HTMLElement>) => void;
+    onTouchCancel: (event: TouchEvent<HTMLElement>) => void;
+  };
+  /** Spread onto `SwipePane`. Kept as one bag so the screens need not know its parts. */
+  pane: SwipePaneProps<T>;
+}
+
+export interface SwipePaneProps<T extends string> {
+  /** The tab whose pane is showing; `SwipePane` remounts on it. */
+  tab: T;
+  /** Which side the current pane arrived from, or none on first paint. */
+  enteredFrom: Direction | null;
+  paneRef: RefObject<HTMLDivElement | null>;
+}
+
+function reducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/** Put the pane back where it was, animated or not. */
+function release(element: HTMLDivElement | null, animate: boolean) {
+  if (!element) return;
+  element.style.transition = animate ? 'transform 200ms ease-out, opacity 200ms ease-out' : '';
+  element.style.transform = '';
+  element.style.opacity = '';
+  if (animate) {
+    element.addEventListener(
+      'transitionend',
+      () => {
+        element.style.transition = '';
+      },
+      { once: true },
+    );
+  }
+}
 
 export function useSwipeTabs<T extends string>(
   keys: readonly T[],
   current: T,
   onChange: (next: T) => void,
   { threshold = 56 }: { threshold?: number } = {},
-): SwipeHandlers {
-  const start = useRef<{ x: number; y: number; ignore: boolean } | null>(null);
+): SwipeTabs<T> {
+  const gesture = useRef<Gesture | null>(null);
+  const pane = useRef<HTMLDivElement | null>(null);
 
-  const onTouchStart = useCallback((event: React.TouchEvent<HTMLElement>) => {
+  // Which way the pane just arrived from, judged by where the previous tab sat
+  // in the strip. A tap two tabs to the right still slides in from the right.
+  // Tracked as state derived during render, so no ref is read while rendering.
+  const index = keys.indexOf(current);
+  const [arrival, setArrival] = useState<{ tab: T; from: Direction | null }>({
+    tab: current,
+    from: null,
+  });
+  if (arrival.tab !== current) {
+    const previous = keys.indexOf(arrival.tab);
+    setArrival({
+      tab: current,
+      from: previous === -1 || index === -1 ? null : index > previous ? 'right' : 'left',
+    });
+  }
+  const enteredFrom = arrival.tab === current ? arrival.from : null;
+
+  const onTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
     if (event.touches.length !== 1) {
-      start.current = null;
+      gesture.current = null;
       return;
     }
     const touch = event.touches[0];
@@ -46,30 +138,82 @@ export function useSwipeTabs<T extends string>(
     const ignore = Boolean(
       target?.closest(`[${NO_SWIPE}], .overflow-x-auto, input, textarea, select`),
     );
-    start.current = { x: touch.clientX, y: touch.clientY, ignore };
+    gesture.current = { x: touch.clientX, y: touch.clientY, ignore, dragging: false };
   }, []);
 
+  const onTouchMove = useCallback(
+    (event: TouchEvent<HTMLElement>) => {
+      const began = gesture.current;
+      if (!began || began.ignore || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - began.x;
+      const dy = touch.clientY - began.y;
+
+      if (!began.dragging) {
+        // Too early to tell.
+        if (Math.abs(dx) < SLOP && Math.abs(dy) < SLOP) return;
+        // Heading up or down: it is a scroll, and stays one for this touch.
+        if (Math.abs(dx) < Math.abs(dy) * 1.5) {
+          began.ignore = true;
+          return;
+        }
+        began.dragging = true;
+      }
+
+      if (reducedMotion()) return;
+      const element = pane.current;
+      if (!element) return;
+      const hasNext = dx < 0 ? index + 1 < keys.length : index - 1 >= 0;
+      const offset = hasNext ? dx : dx * EDGE_RESISTANCE;
+      element.style.transition = '';
+      element.style.transform = `translateX(${offset}px)`;
+      // Fades a little as it goes, so the drag reads as "leaving".
+      element.style.opacity = String(Math.max(0.6, 1 - Math.abs(offset) / 480));
+    },
+    [index, keys.length],
+  );
+
   const onTouchEnd = useCallback(
-    (event: React.TouchEvent<HTMLElement>) => {
-      const began = start.current;
-      start.current = null;
-      if (!began || began.ignore || event.changedTouches.length !== 1) return;
+    (event: TouchEvent<HTMLElement>) => {
+      const began = gesture.current;
+      gesture.current = null;
+      if (!began || began.ignore || event.changedTouches.length !== 1) {
+        release(pane.current, began?.dragging ?? false);
+        return;
+      }
 
       const touch = event.changedTouches[0];
       const dx = touch.clientX - began.x;
       const dy = touch.clientY - began.y;
       // Sideways, decisively: a diagonal scroll must not change tabs.
-      if (Math.abs(dx) < threshold || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-
-      const index = keys.indexOf(current);
-      if (index === -1) return;
+      const decisive = Math.abs(dx) >= threshold && Math.abs(dx) >= Math.abs(dy) * 1.5;
       // Swipe left (dx < 0) moves to the tab on the right, as in every mobile
       // app people already use.
-      const next = keys[dx < 0 ? index + 1 : index - 1];
-      if (next !== undefined) onChange(next);
+      const next =
+        decisive && index !== -1 ? keys[dx < 0 ? index + 1 : index - 1] : undefined;
+
+      if (next === undefined) {
+        // Not far enough, or nothing that way: spring back.
+        release(pane.current, began.dragging);
+        return;
+      }
+      // The dragged pane is about to be replaced; the new one slides in
+      // through `SwipePane`. Clear the transform first so a sheet opened at
+      // once is not trapped inside a transformed box.
+      release(pane.current, false);
+      onChange(next);
     },
-    [keys, current, onChange, threshold],
+    [keys, index, onChange, threshold],
   );
 
-  return { onTouchStart, onTouchEnd };
+  const onTouchCancel = useCallback(() => {
+    const began = gesture.current;
+    gesture.current = null;
+    release(pane.current, began?.dragging ?? false);
+  }, []);
+
+  return {
+    handlers: { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel },
+    pane: { tab: current, enteredFrom, paneRef: pane },
+  };
 }

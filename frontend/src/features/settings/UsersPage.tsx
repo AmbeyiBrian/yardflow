@@ -18,6 +18,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useSearchParams } from 'react-router-dom';
 
+import { TabStrip } from '../../components/ui/TabStrip';
+import { SwipePane } from '../../components/ui/SwipePane';
 import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 
 import { ApiError } from '../../api/client';
@@ -48,38 +50,28 @@ export default function UsersPage() {
   // A thumb across the content moves between tabs; the strip still works.
   const swipe = useSwipeTabs(USER_TABS, tab, (next) => setParams({ tab: next }));
 
-return (
-    <div className="flex flex-col gap-4" {...swipe}>
+  return (
+    <div className="flex flex-col gap-4" {...swipe.handlers}>
       <PageHeader
         title="People and permissions"
         subtitle="Who can do what, and who is covering for whom."
       />
 
-      <nav className="flex gap-1 overflow-x-auto">
-        {(
-          [
-            ['people', 'People'],
-            ['roles', 'Roles'],
-            ['delegations', 'Delegations'],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setParams({ tab: key })}
-            className={[
-              'min-h-[44px] rounded-lg px-3 text-sm font-medium whitespace-nowrap',
-              tab === key ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100',
-            ].join(' ')}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+      <TabStrip
+        tabs={[
+          { key: 'people', label: 'People' },
+          { key: 'roles', label: 'Roles' },
+          { key: 'delegations', label: 'Delegations' },
+        ]}
+        current={tab}
+        onSelect={(next) => setParams({ tab: next })}
+      />
 
-      {tab === 'people' ? <PeopleTab /> : null}
-      {tab === 'roles' ? <RolesTab /> : null}
-      {tab === 'delegations' ? <DelegationsTab /> : null}
+      <SwipePane {...swipe.pane}>
+        {tab === 'people' ? <PeopleTab /> : null}
+        {tab === 'roles' ? <RolesTab /> : null}
+        {tab === 'delegations' ? <DelegationsTab /> : null}
+      </SwipePane>
     </div>
   );
 }

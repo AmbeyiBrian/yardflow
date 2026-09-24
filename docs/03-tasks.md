@@ -1197,6 +1197,11 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
   still works.
   *Done when:* on a phone, a swipe left on Approvals selects the next queue and a mostly-vertical
   drag changes nothing (E2E).
+  *Follow-up (shipped):* the first cut switched instantly and left the strip where it was, so it
+  read as "static and hard". Now the pane follows the finger, springs back from a short drag, and
+  the new pane slides in from the side it came from; a shared `TabStrip` scrolls the selected tab
+  into view on every change. E2E: the pane carries the finger's offset mid-drag, and after four
+  swipes on Settings the highlighted tab is still within the strip.
 
 ---
 

@@ -33,27 +33,57 @@ async function firstProjectId(request: import('@playwright/test').APIRequestCont
 /** The element a screen's swipe handlers are attached to: its wrapper inside <main>. */
 const SWIPE_SURFACE = 'main > div.flex.flex-col.gap-4';
 
-/** A one-finger horizontal swipe across `locator`, as a real touch screen sends it. */
-async function swipe(page: Page, selector: string, direction: 'left' | 'right') {
+/** The pane a tab's content lives in; it follows the finger and slides in on change. */
+const PANE = '[data-tab-pane]';
+
+/**
+ * A one-finger horizontal swipe across `selector`, as a real touch screen sends
+ * it: a start, a few moves along the way, and an end. `to` may be given to end
+ * the finger somewhere other than the far side — a short drag that lets go.
+ */
+async function swipe(
+  page: Page,
+  selector: string,
+  direction: 'left' | 'right',
+  { distance, moves = 4 }: { distance?: number; moves?: number } = {},
+) {
   const box = await page.locator(selector).first().boundingBox();
   if (!box) throw new Error(`nothing to swipe at ${selector}`);
   const y = box.y + Math.min(box.height / 2, 300);
   const from = direction === 'left' ? box.x + box.width * 0.8 : box.x + box.width * 0.2;
-  const to = direction === 'left' ? box.x + box.width * 0.2 : box.x + box.width * 0.8;
+  const travel = distance ?? box.width * 0.6;
+  const to = direction === 'left' ? from - travel : from + travel;
   await page.evaluate(
-    ({ selector, from, to, y }) => {
+    ({ selector, from, to, y, moves }) => {
       const el = document.querySelector(selector) as HTMLElement;
       const touch = (x: number) =>
         new Touch({ identifier: 1, target: el, clientX: x, clientY: y, pageX: x, pageY: y });
-      el.dispatchEvent(
-        new TouchEvent('touchstart', { bubbles: true, touches: [touch(from)], changedTouches: [touch(from)] }),
-      );
-      el.dispatchEvent(
-        new TouchEvent('touchend', { bubbles: true, touches: [], changedTouches: [touch(to)] }),
-      );
+      const fire = (type: string, x: number, down: boolean) =>
+        el.dispatchEvent(
+          new TouchEvent(type, {
+            bubbles: true,
+            touches: down ? [touch(x)] : [],
+            changedTouches: [touch(x)],
+          }),
+        );
+      fire('touchstart', from, true);
+      for (let step = 1; step <= moves; step += 1) {
+        fire('touchmove', from + ((to - from) * step) / moves, true);
+      }
+      fire('touchend', to, false);
     },
-    { selector, from, to, y },
+    { selector, from, to, y, moves },
   );
+}
+
+/** Whether `inner` sits entirely inside `outer`, sideways. */
+async function withinSideways(page: Page, outer: string, inner: string) {
+  const [o, i] = await Promise.all([
+    page.locator(outer).boundingBox(),
+    page.locator(inner).boundingBox(),
+  ]);
+  if (!o || !i) return false;
+  return i.x >= o.x - 1 && i.x + i.width <= o.x + o.width + 1;
 }
 
 test.describe('Add new … from inside a form', () => {
@@ -73,7 +103,7 @@ test.describe('Add new … from inside a form', () => {
     // Something already typed must survive the detour.
     await jobSheet.getByLabel('Who is responsible').selectOption({ label: 'Tom Technician' });
 
-    await site.selectOption({ label: /add new site/i });
+    await site.selectOption('__add_new__');
 
     // The site sheet opens on top; the job sheet stays underneath.
     const siteSheet = page.getByRole('dialog').last();
@@ -120,11 +150,73 @@ test.describe('Swiping between tabs', () => {
     // The handlers sit on the page's wrapper *inside* <main>, and a touch
     // bubbles up, not down — dispatched on <main> it would never arrive.
     await swipe(page, SWIPE_SURFACE, 'left');
-    // Moved one tab to the right: Closeout costs is now selected.
-    await expect(page.getByRole('button', { name: 'Closeout costs' })).toHaveClass(/bg-slate-900/);
+    // Moved one tab to the right: Closeout costs is now selected, and its
+    // pane is the one on screen.
+    await expect(page.getByRole('button', { name: 'Closeout costs' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(page.locator('[data-tab-pane="closeouts"]')).toBeVisible();
 
     await swipe(page, SWIPE_SURFACE, 'right');
-    await expect(page.getByRole('button', { name: 'Expenses' })).toHaveClass(/bg-slate-900/);
+    await expect(page.getByRole('button', { name: 'Expenses' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  test('the pane follows the finger, and springs back from a short drag', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'phone', 'a thumb gesture is a phone thing');
+
+    await signIn(page, PEOPLE.manager);
+    await open(page, '/approvals');
+    await expect(page.locator(PANE)).toBeVisible();
+
+    // A finger part-way across: the content has moved with it. This is what
+    // makes it feel like a swipe rather than a tap that happened sideways.
+    await page.evaluate((selector) => {
+      const el = document.querySelector(selector) as HTMLElement;
+      const t = (x: number) =>
+        new Touch({ identifier: 1, target: el, clientX: x, clientY: 300, pageX: x, pageY: 300 });
+      el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [t(300)], changedTouches: [t(300)] }));
+      el.dispatchEvent(new TouchEvent('touchmove', { bubbles: true, touches: [t(260)], changedTouches: [t(260)] }));
+    }, SWIPE_SURFACE);
+    await expect(page.locator(PANE)).toHaveAttribute('style', /translateX\(-40px\)/);
+
+    // Let go short of the threshold: nothing changes and the pane settles back.
+    await page.evaluate((selector) => {
+      const el = document.querySelector(selector) as HTMLElement;
+      const t = (x: number) =>
+        new Touch({ identifier: 1, target: el, clientX: x, clientY: 300, pageX: x, pageY: 300 });
+      el.dispatchEvent(new TouchEvent('touchend', { bubbles: true, touches: [], changedTouches: [t(270)] }));
+    }, SWIPE_SURFACE);
+    await expect(page.getByRole('button', { name: 'Expenses' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator(PANE)).not.toHaveAttribute('style', /translateX/);
+  });
+
+  test('a long strip scrolls to keep the selected tab in view', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'phone', 'only a phone is too narrow for nine panes');
+
+    // An owner sees every settings pane — far more than a phone is wide.
+    await signIn(page, PEOPLE.owner);
+    await open(page, '/settings');
+    const strip = 'nav[aria-label="Settings"]';
+    const active = `${strip} a[aria-current="page"]`;
+    await expect(page.locator(active)).toBeVisible();
+    const overflows = await page
+      .locator(strip)
+      .evaluate((el) => el.scrollWidth > el.clientWidth + 8);
+    test.skip(!overflows, 'this owner has too few panes to overflow the strip');
+
+    // Swipe to the far end; each time, the highlighted tab must be on screen.
+    for (let step = 0; step < 4; step += 1) {
+      const before = await page.locator(active).textContent();
+      await swipe(page, SWIPE_SURFACE, 'left');
+      await expect(page.locator(active)).not.toHaveText(before ?? '');
+      await expect.poll(() => withinSideways(page, strip, active)).toBe(true);
+    }
+    const scrolled = await page.locator(strip).evaluate((el) => el.scrollLeft);
+    expect(scrolled).toBeGreaterThan(0);
   });
 
   test('a swipe that is mostly vertical is a scroll, not a tab change', async ({ page }, testInfo) => {
@@ -143,5 +235,7 @@ test.describe('Swiping between tabs', () => {
     });
 
     await expect(page.locator('button.bg-slate-900').first()).toHaveText(before ?? '');
+    // And the pane never moved: a vertical drag is never a half-swipe.
+    await expect(page.locator(PANE)).not.toHaveAttribute('style', /translateX/);
   });
 });
