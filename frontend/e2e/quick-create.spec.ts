@@ -30,6 +30,9 @@ async function firstProjectId(request: import('@playwright/test').APIRequestCont
   return projects.results[0]?.id as number | undefined;
 }
 
+/** The element a screen's swipe handlers are attached to: its wrapper inside <main>. */
+const SWIPE_SURFACE = 'main > div.flex.flex-col.gap-4';
+
 /** A one-finger horizontal swipe across `locator`, as a real touch screen sends it. */
 async function swipe(page: Page, selector: string, direction: 'left' | 'right') {
   const box = await page.locator(selector).first().boundingBox();
@@ -114,11 +117,13 @@ test.describe('Swiping between tabs', () => {
     const strip = page.getByRole('button', { name: 'Expenses' });
     await expect(strip).toBeVisible();
 
-    await swipe(page, 'main', 'left');
+    // The handlers sit on the page's wrapper *inside* <main>, and a touch
+    // bubbles up, not down — dispatched on <main> it would never arrive.
+    await swipe(page, SWIPE_SURFACE, 'left');
     // Moved one tab to the right: Closeout costs is now selected.
     await expect(page.getByRole('button', { name: 'Closeout costs' })).toHaveClass(/bg-slate-900/);
 
-    await swipe(page, 'main', 'right');
+    await swipe(page, SWIPE_SURFACE, 'right');
     await expect(page.getByRole('button', { name: 'Expenses' })).toHaveClass(/bg-slate-900/);
   });
 
@@ -130,7 +135,7 @@ test.describe('Swiping between tabs', () => {
     const before = await page.locator('button.bg-slate-900').first().textContent();
 
     await page.evaluate(() => {
-      const el = document.querySelector('main') as HTMLElement;
+      const el = document.querySelector('main > div.flex.flex-col.gap-4') as HTMLElement;
       const t = (x: number, y: number) =>
         new Touch({ identifier: 1, target: el, clientX: x, clientY: y, pageX: x, pageY: y });
       el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [t(200, 100)], changedTouches: [t(200, 100)] }));
