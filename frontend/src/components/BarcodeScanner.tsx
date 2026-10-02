@@ -208,13 +208,16 @@ export function BarcodeScanner({
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
           ref={videoRef}
-          className="aspect-[4/3] w-full object-cover"
+          className="aspect-square w-full object-cover"
           playsInline
           muted
         />
         {mode === 'scanning' ? (
+          {/* A big square, because yard labels are QR codes and a letterbox
+              frame tells the hand to line up a strip that is not there. The
+              decoder reads the whole picture; the frame only says where to aim. */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="h-24 w-4/5 rounded-lg border-2 border-white/80" />
+            <div className="aspect-square w-[72%] rounded-xl border-2 border-white/80" />
           </div>
         ) : null}
         {/* A running count on the viewfinder, because the whole point of
