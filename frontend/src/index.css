@@ -13,8 +13,14 @@
   --color-own-stock: oklch(0.52 0.13 240);
 }
 
+/*
+ * Light only. The app paints every surface light and has no dark palette, so
+ * telling the browser it may use dark would hand a phone in dark mode white
+ * default text on those light surfaces -- which is exactly what happened to
+ * the scanned-serial chips on gate in.
+ */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 html,
@@ -25,6 +31,7 @@ body,
 
 body {
   margin: 0;
+  color: var(--color-slate-900, #0f172a);
   -webkit-text-size-adjust: 100%;
   /* Never a horizontally scrolling page (§7.3); wide content scrolls inside its
      own container instead. */

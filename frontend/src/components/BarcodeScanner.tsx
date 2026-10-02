@@ -212,10 +212,10 @@ export function BarcodeScanner({
           playsInline
           muted
         />
+        {/* A big square guide, because yard labels are QR codes and a letterbox
+            frame tells the hand to line up a strip that is not there. The
+            decoder reads the whole picture; the frame only says where to aim. */}
         {mode === 'scanning' ? (
-          {/* A big square, because yard labels are QR codes and a letterbox
-              frame tells the hand to line up a strip that is not there. The
-              decoder reads the whole picture; the frame only says where to aim. */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="aspect-square w-[72%] rounded-xl border-2 border-white/80" />
           </div>
