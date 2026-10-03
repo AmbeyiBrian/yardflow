@@ -871,6 +871,102 @@ message naming the thing involved. Codes are upper case, as every `DomainError` 
   the stranger refused and the third unit short. As with every E2E here, CI does not run these; they
   run against a seeded tenant.
 
+### 4.16 Site earmarks (Epic Q)
+
+> **Status: proposed 2026-10-03, awaiting approval** with Epic Q.
+
+#### 4.16.1 The decision: an earmark is a projection, like a box
+
+The ledger is unchanged. An earmark says which site a piece of stock is meant for; it adds no
+quantity and no movement type. It is kept beside the ledger, written in the same transaction as the
+movements that change it, and checked by `verify_ledger` — the contract boxes already have (§4.15.1).
+
+#### 4.16.2 Data model
+
+| Model / field | Shape | Notes |
+|---|---|---|
+| `SerialUnit.earmark_site` | → Site (null) | Travels with the unit. |
+| `Reel.earmark_site` | → Site (null) | A drum is earmarked whole. |
+| `BulkEarmark` | `site`, `node`, `item_type`, `owner_client`, `condition`, `quantity` (> 0) | A claim on the lot at `node`, unique per (site, node, lot); deleted at zero. Mirrors `BoxBulkContent`. |
+| `EarmarkEvent` | `action`, `site`, `to_site` (null), subject (`serial_unit` / `reel` / bulk lot + `quantity`), document refs, `actor`, `occurred_at`, `reason` | Append-only. Actions: EARMARKED, CHANGED, CLEARED, DELIVERED, DIVERTED, MOVED, REDUCED. The report reads from it. |
+| `GateIn.for_site`, `GateInLine.for_site` | → Site (null) | The delivery's default and each line's own. |
+| `GateOutLine.divert_reason` | text | Required when the line uses another site's earmark. |
+
+RLS migrations and isolation fixtures as every tenant table (§2). **Free** bulk at a node, for a lot,
+is `balance − Σ BulkEarmark` there.
+
+#### 4.16.3 Ledger hook — `post_movement` (Q2, Q3, edge cases)
+
+`MovementRequest` gains `for_sites: frozenset[Site] | None` (the sites the movement is delivering
+to; empty = none) and `divert_reason: str = ""`. Rules, run beside the box rules (§4.15.3):
+
+- **A unit or a drum that leaves the perimeter** (ISSUE, INSTALL, CONSUME, DISPOSE, RETURN to a
+  client): if it is earmarked and its site is in `for_sites`, the earmark is cleared as DELIVERED;
+  if not, the movement must carry `divert_reason` (else `EARMARK_DIVERSION_NEEDS_REASON`), and it is
+  cleared as DIVERTED. Moving inside the perimeter keeps the earmark (MOVED event, node only).
+- **Bulk out of a node:** drawn in order — earmarks of a site in `for_sites`, then free, then other
+  sites' earmarks (by site name). Drawing another site's needs `divert_reason` (else
+  `EARMARK_DIVERSION_NEEDS_REASON`, naming the sites). For a movement inside the perimeter
+  (TRANSFER, QUARANTINE, RESTORE) the drawn earmarks move with it to the destination node (MOVED),
+  never treated as diversions. ADJUST and REVERSAL take free first, then reduce earmarks (REDUCED),
+  as corrections do for boxes.
+- Every reduction writes its `EarmarkEvent` with the movement's document refs.
+
+#### 4.16.4 Gate-in (Q1)
+
+`for_site` on the header and lines (a line inherits the header's when blank). Posting earmarks the
+units and drums it creates and adds a `BulkEarmark` at the destination node for bulk lines, each with
+an EARMARKED event. The offline replay needs nothing new: the payload carries the fields.
+
+#### 4.16.5 Gate-out (Q3)
+
+- `destination_sites(gate_out)`: the pass's site; else its job's site; for a project destination,
+  the project's sites; for a person with no job, a client, or another location, none. (Another
+  location is a transfer inside the perimeter: earmarks move, nothing is diverted.)
+- **Submit** works out, line by line, what release would draw, with the rules above: a named unit
+  earmarked for a site not in the destination set, a drum likewise, or a bulk quantity that cannot be
+  met from own earmarks plus free stock, is a diversion; without `divert_reason` the line is refused
+  (`EARMARK_DIVERSION_NEEDS_REASON`, naming the site and quantity). The detail and approval payloads
+  carry, per line, `diversions: [{site, quantity or serials}]` and `divert_reason`.
+- **Release** passes `for_sites` and the line's `divert_reason` to every movement.
+
+#### 4.16.6 Changing an earmark (Q4)
+
+`POST /stock/earmarks/change` with a subject (a unit, a drum, or a bulk lot at a node with a
+quantity and its current site or "free"), the new site or none, and a reason (required). Permission
+`stock.adjust` or `gate_in.post`. Writes CHANGED or CLEARED.
+
+#### 4.16.7 Reads
+
+- Units and drums carry `earmark_site` and its name; `GET /stock` rows carry `earmarked:
+  [{site, name, quantity}]` and `free` (one subquery, not per row).
+- `issuable_contents` (boxes, §4.15.4) and the gate-out holdings list say what is earmarked, so the
+  screen can warn before submit.
+
+#### 4.16.8 Report — "Material by site" (Q5)
+
+Registered with the report framework in the "Stock" group. Parameters: period, client, project
+(its sites), site. One row per site and item: received for (EARMARKED + CHANGED-to in the period),
+sent to (DELIVERED, plus released gate-out lines to that site that used free stock), still in the
+yard (current earmarks), diverted away (DIVERTED). Quantities in the item's unit; units counted.
+Exports through the existing Excel and PDF paths.
+
+#### 4.16.9 Errors
+
+`EARMARK_DIVERSION_NEEDS_REASON` (409) — names the site, item and quantity, and says to give a reason
+or take free stock. `EARMARK_CHANGE_INVALID` (400) — the subject is not earmarked as stated, or the
+quantity exceeds the earmark.
+
+#### 4.16.10 Testing
+
+Backend: the hook rules (deliver, divert with and without a reason, bulk draw order, transfers carry,
+corrections reduce), gate-in earmarking, submit's diversion detection and the approval payload,
+release consuming earmarks, the change endpoint, the report's four columns on a scenario,
+`verify_ledger` (Σ earmarks ≤ balance; earmarked units inside the perimeter), RLS and isolation.
+Frontend: unit tests for the split text and diversion detection. E2E (phone): receive two RRUs for
+site X; request one to site X (no reason asked) and one to site Y (reason asked, then sent); the
+report shows site X received 2, sent 1, diverted 1.
+
 ---
 
 ## 5. Approval engine
@@ -1692,6 +1788,7 @@ projects that include them as partly unvalued, rather than quietly understating 
 | N — Offline | 8 |
 | O — Projects & PO performance | 3.2, 4.4, 4.9, 4.14, 5.4, 6, 10 |
 | P — Boxes | 3, 4.15, 8 |
+| Q — Site earmarks | 4.16, 10 |
 | Non-functional | 1.1, 12, 13, 14 |
 
 ---

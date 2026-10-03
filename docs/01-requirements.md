@@ -1082,6 +1082,63 @@ is loaded, so that the load is checked against the pass by the scanner rather th
 
 ---
 
+### Epic Q — Material earmarked for a site
+
+> **Status: proposed 2026-10-03, awaiting approval.** Decisions already taken: earmark (not label,
+> not reservation); a diversion is allowed with a reason; a site's own earmark is used first;
+> earmarks can be changed with a reason; the report is a per-site summary.
+
+Material — the client's and our own — arrives for a particular site: "these RRUs are for site X".
+Until now a delivery recorded where it came from but not who it was for, so an RRU meant for one site
+could leave for another and nobody would know until the first site was short. The site, not the
+project, is what the yard records: it is on the paperwork and the storekeeper can see it; which
+project a site belongs to is the office's question, and is answered when material goes out through
+the job at that site.
+
+**Q1.** As a storekeeper, I want to say which site a delivery's material is for, so that it is
+earmarked for that site from the moment it arrives.
+- The delivery has an optional "For site". Each line inherits it and can change it, because one
+  delivery often carries material for several sites. Spares and consumables can be for no site.
+- A unit, a drum or a bulk quantity received for a site is earmarked for it.
+
+**Q2.** As any authorised user, I want to see what is earmarked and for which site, so that I can
+answer "is site X's material here?".
+- A unit and a drum show the site they are earmarked for.
+- Stock on hand shows a bulk quantity's split: "40 ea — 25 for Site X, 15 free".
+- Earmarked stock moved inside the yard (to another store, to quarantine and back) keeps its
+  earmark.
+
+**Q3.** As a storekeeper raising a gate-out, I want material earmarked for the destination site to
+be used first, and to say why when I use another site's, so that diversions are deliberate and
+visible.
+- Going to site X: X's earmarked stock first, then free stock, and only then another site's.
+- Using another site's earmarked stock is a **diversion**: the line asks why, and the request
+  cannot be sent without a reason. Nothing is blocked beyond that.
+- The approver sees each diversion and its reason before deciding.
+- A gate-out that is not to a site (to a person with no job, or to a client) uses free stock
+  first; using earmarked stock is a diversion.
+- When the material leaves the yard, its earmark is used up — as delivered for its site, or as
+  diverted, with the reason.
+
+**Q4.** As someone who manages stock, I want to change or clear an earmark without moving the stock,
+so that a changed plan is recorded as it happens.
+- A unit's, a drum's or a bulk quantity's earmark can be moved to another site or cleared, with a
+  reason, from the stock screens. Who, when and why are kept.
+
+**Q5.** As a manager, I want a per-site summary, so that I can see what each site was sent, what is
+still waiting in the yard for it, and what went elsewhere.
+- For each site: received for it, sent to it, still in the yard for it, and diverted away from it,
+  by item, for a chosen period; filterable by client and by project (the sites of a project).
+- In the reports catalogue with the other stock reports, exportable like them.
+
+**Edge cases.**
+- A stock count or a correction that lowers a quantity below what is earmarked reduces the
+  earmarks and records it, as it does for boxes.
+- A returned unit coming back from a site carries no earmark unless the return says one.
+- Earmarks and boxes are independent: a carton can hold units earmarked for different sites.
+
+---
+
 ## 6. Non-functional requirements
 
 | # | Requirement |

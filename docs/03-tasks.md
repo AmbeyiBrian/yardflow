@@ -1431,6 +1431,47 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
   *Done when:* an E2E receives a coil of cable with no drum number and sends part of it out.
 ---
 
+## Phase 13 — Material earmarked for a site
+
+Epic Q, design §4.16. Proposed 2026-10-03, awaiting approval. Backend first; the two ledger and
+gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes through them.
+
+- [ ] **T13.1 `[B]` Earmark models** — Refs: §4.16.2 · Q1, Q2
+  `SerialUnit.earmark_site`, `Reel.earmark_site`, `BulkEarmark`, `EarmarkEvent` (append-only),
+  `GateIn.for_site`, `GateInLine.for_site`, `GateOutLine.divert_reason`; RLS; isolation.
+  *Done when:* migrations apply; RLS, isolation and append-only tests pass.
+
+- [ ] **T13.2 `[B]` Ledger hook for earmarks** — Refs: §4.16.3 · Q2, Q3
+  Deliver, divert with a reason, bulk draw order, carry inside the perimeter, corrections reduce;
+  `verify_ledger` checks earmarks. Lands alone.
+  *Done when:* each rule is tested and the whole backend suite passes unchanged.
+
+- [ ] **T13.3 `[B]` Gate-in earmarks** — Refs: §4.16.4 · Q1
+  *Done when:* a delivery for site X earmarks its units, drums and bulk; a line can override; an
+  offline replay earmarks once.
+
+- [ ] **T13.4 `[B]` Gate-out diversions** — Refs: §4.16.5 · Q3
+  Destination sites, submit-time diversion detection and reasons, the approval payload, release
+  consuming earmarks.
+  *Done when:* to site X uses X's earmark with no reason; to site Y is refused without a reason and
+  sent with one; release records DELIVERED and DIVERTED.
+
+- [ ] **T13.5 `[B]` Change an earmark, and earmarks on reads** — Refs: §4.16.6, §4.16.7 · Q2, Q4
+  *Done when:* the change endpoint moves and clears earmarks with a reason; stock rows carry the
+  split; units and drums carry their site.
+
+- [ ] **T13.6 `[B]` "Material by site" report** — Refs: §4.16.8 · Q5
+  *Done when:* on a scenario the four columns are right per site and item, and it exports.
+
+- [ ] **T13.7 `[F]` "For site" at gate-in** — Refs: Q1
+- [ ] **T13.8 `[F]` Diversions at gate-out and approval** — Refs: Q3
+- [ ] **T13.9 `[F]` Earmarks on stock screens, and changing one** — Refs: Q2, Q4
+- [ ] **T13.10 `[T]` Earmarks end to end, and ship** — Refs: §4.16.10
+  *Done when:* the phone E2E in §4.16.10 passes against the demo tenant, CI is green, and production
+  serves it.
+
+---
+
 ## Milestones
 
 | Milestone | Completes | Meaning |
