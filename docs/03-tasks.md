@@ -1359,7 +1359,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
 
 ### Verification
 
-- [ ] **T11.18 `[T]` Boxes end to end**
+- [x] **T11.18 `[T]` Boxes end to end**
   Refs: §4.15.12
   `e2e/boxes.spec.ts` on the phone project: receive a box of three by manual entry; scan it at
   gate-out and see one line with three serials; release by scanning two units and a stranger.

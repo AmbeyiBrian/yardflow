@@ -70,7 +70,7 @@ test.describe('Receiving a delivery', () => {
     // D8, M6: receiving moves stock and gives the storekeeper a number they can
     // write on the supplier's paperwork.
     await page.getByRole('button', { name: /receive it|save on this device/i }).click();
-    await expect(page.getByText(/GRN-\d+/).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/GRN-\d+/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
   });
 
   test('a delivery with no destination cannot be received', async ({ page }) => {

@@ -60,7 +60,7 @@ test.describe('The gate-out loop', () => {
     await page.getByRole('button', { name: /send for approval/i }).click();
 
     // The number is what everybody refers to it by from here on (M6).
-    const heading = page.getByText(/GP-\d+/).first();
+    const heading = page.getByText(/GP-\d+/).filter({ visible: true }).first();
     await expect(heading).toBeVisible({ timeout: 30_000 });
     passNumber = ((await heading.textContent()) ?? '').match(/GP-\d+/)?.[0] ?? '';
     expect(passNumber).toMatch(/GP-\d+/);
@@ -111,7 +111,7 @@ test.describe('The gate-out loop', () => {
     await expect(sheet).toBeHidden();
 
     await page.getByRole('button', { name: /send for approval/i }).click();
-    await expect(page.getByText(/GP-\d+/).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/GP-\d+/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
 
     // On the detail screen the requester is warned *before* tapping, because a
     // refusal after the tap is a worse way to learn the rule.
@@ -159,7 +159,7 @@ test.describe('The gate-out loop', () => {
     // one. Filtering to what is visible is what makes the same step work at
     // either width.
     await page.getByText(passNumber).filter({ visible: true }).first().click();
-    await expect(page.getByText(passNumber).first()).toBeVisible();
+    await expect(page.getByText(passNumber).filter({ visible: true }).first()).toBeVisible();
 
     // By its exact name: /release/i also matches the line summary button, and
     // clicking that opens nothing.
@@ -182,7 +182,7 @@ test.describe('The gate-out loop', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Release short' }).click();
 
     // Released, and the shortfall is now somebody's problem to acknowledge.
-    await expect(page.getByText(/released|partially/i).first()).toBeVisible({
+    await expect(page.getByText(/released|partially/i).filter({ visible: true }).first()).toBeVisible({
       timeout: 30_000,
     });
   });
