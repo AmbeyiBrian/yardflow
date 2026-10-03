@@ -1436,7 +1436,7 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
 Epic Q, design §4.16. Approved 2026-10-03; nothing ships until T13.10 passes. Backend first; the two ledger and
 gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes through them.
 
-- [ ] **T13.1 `[B]` Earmark models** — Refs: §4.16.2 · Q1, Q2
+- [x] **T13.1 `[B]` Earmark models** — Refs: §4.16.2 · Q1, Q2
   `SerialUnit.earmark_site`, `Reel.earmark_site`, `BulkEarmark`, `EarmarkEvent` (append-only),
   `GateIn.for_site`, `GateInLine.for_site`, `GateOutLine.divert_reason`; RLS; isolation.
   *Done when:* migrations apply; RLS, isolation and append-only tests pass.
