@@ -41,7 +41,9 @@ def _units(tenant, yard, item, count, prefix="RRU"):
             organization=tenant,
             item_type=item,
             serial_number=f"{prefix}-{n + 1}",
-            current_node=yard.node,
+            # Starts outside and the receipt moves it in, as gate-in does
+            # (T11.3: a movement starts where the unit is).
+            current_node=external_node(tenant.pk),
         )
         with transaction.atomic():
             post_movement(
@@ -185,7 +187,7 @@ class TestScanRequired:
         self._turn_on(tenant)
         with pytest.raises(ScanRequiredForRelease) as raised:
             release_gate_out(gate_out, released_by=people[0])
-        assert raised.value.code == "scan_required_for_release"
+        assert raised.value.code == "SCAN_REQUIRED_FOR_RELEASE"
         units[0].refresh_from_db()
         assert units[0].current_node == gate_out.from_location.node
 
@@ -302,7 +304,7 @@ class TestApiAndReplay:
         )
 
         assert response.status_code == 409
-        assert response.json()["error"]["code"] == "scan_required_for_release"
+        assert response.json()["error"]["code"] == "SCAN_REQUIRED_FOR_RELEASE"
 
     def test_a_queued_release_replays_with_its_named_units(self, signed_in, api_pass):
         http, token, organization, _owner = signed_in

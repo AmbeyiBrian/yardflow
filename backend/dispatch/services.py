@@ -72,7 +72,7 @@ class ReleaseNotPermitted(DomainError):
 class ScanRequiredForRelease(DomainError):
     """P11, G1: this organization wants every serialized unit named at the gate."""
 
-    code = "scan_required_for_release"
+    code = "SCAN_REQUIRED_FOR_RELEASE"
     status_code = 409
     default_message = "Scan the units being loaded before releasing."
 
