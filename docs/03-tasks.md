@@ -1441,7 +1441,7 @@ gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes t
   `GateIn.for_site`, `GateInLine.for_site`, `GateOutLine.divert_reason`; RLS; isolation.
   *Done when:* migrations apply; RLS, isolation and append-only tests pass.
 
-- [ ] **T13.2 `[B]` Ledger hook for earmarks** — Refs: §4.16.3 · Q2, Q3
+- [x] **T13.2 `[B]` Ledger hook for earmarks** — Refs: §4.16.3 · Q2, Q3
   Deliver, divert with a reason, bulk draw order, carry inside the perimeter, corrections reduce;
   `verify_ledger` checks earmarks. Lands alone.
   *Done when:* each rule is tested and the whole backend suite passes unchanged.
@@ -1456,7 +1456,7 @@ gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes t
   *Done when:* to site X uses X's earmark with no reason; to site Y is refused without a reason and
   sent with one; release records DELIVERED and DIVERTED.
 
-- [ ] **T13.5 `[B]` Change an earmark, and earmarks on reads** — Refs: §4.16.6, §4.16.7 · Q2, Q4
+- [x] **T13.5 `[B]` Change an earmark, and earmarks on reads** — Refs: §4.16.6, §4.16.7 · Q2, Q4
   *Done when:* the change endpoint moves and clears earmarks with a reason; stock rows carry the
   split; units and drums carry their site.
 
@@ -1464,7 +1464,7 @@ gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes t
   *Done when:* on a scenario the four columns are right per site and item, and it exports.
 
 - [ ] **T13.7 `[F]` "For site" at gate-in** — Refs: Q1
-- [ ] **T13.5a `[B]` What is waiting for a site** — Refs: §4.16.8a · Q6
+- [x] **T13.5a `[B]` What is waiting for a site** — Refs: §4.16.8a · Q6
   *Done when:* the endpoint lists a site's earmarked units, drums and bulk at a location, and its
   open jobs by project.
 - [ ] **T13.8 `[F]` Site-first gate-out, diversions, approval** — Refs: Q3, Q6
