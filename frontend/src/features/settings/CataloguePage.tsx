@@ -12,9 +12,11 @@
  * actually routes an approval (§5.1) and an admin who cannot see it is guessing.
  */
 
-import { useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { PERM } from '../../auth/permissions';
+import { useSession } from '../../auth/session';
 import { applyFieldErrors, errorMessage, useAction, useList } from '../../api/hooks';
 import {
   Banner,
@@ -27,7 +29,7 @@ import {
   Spinner,
   Textarea,
 } from '../../components/ui';
-import { DataList, EmptyState, PageHeader, Sheet } from '../../components/ui/data';
+import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type {
   CategoryCustomField,
   Criticality,
@@ -64,6 +66,10 @@ export default function CataloguePage() {
   const [categorySheet, setCategorySheet] = useState(false);
   const [fieldSheet, setFieldSheet] = useState(false);
   const [itemSheet, setItemSheet] = useState(false);
+  // C10: the item being changed, or null when the sheet is creating one.
+  const [editing, setEditing] = useState<ItemType | null>(null);
+  const { has } = useSession();
+  const canManage = has(PERM.CATALOGUE_MANAGE);
 
   const categories = useList<ItemCategory>('item-categories', { page_size: 200 });
   const items = useList<ItemType>('item-types', {
@@ -84,7 +90,16 @@ export default function CataloguePage() {
             <Button variant="secondary" onClick={() => setCategorySheet(true)}>
               New category
             </Button>
-            <Button onClick={() => setItemSheet(true)}>New item type</Button>
+            {canManage ? (
+              <Button
+                onClick={() => {
+                  setEditing(null);
+                  setItemSheet(true);
+                }}
+              >
+                New item type
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -169,42 +184,30 @@ export default function CataloguePage() {
             {items.isLoading ? (
               <Spinner className="text-slate-400" />
             ) : (
-              <DataList
+              <ItemRows
                 rows={items.data?.results ?? []}
-                rowKey={(row) => row.id}
                 empty={
                   <EmptyState
                     title="No item types here."
                     hint="An item type is what a gate-in line refers to."
-                    action={<Button onClick={() => setItemSheet(true)}>New item type</Button>}
+                    action={
+                      canManage ? (
+                        <Button
+                          onClick={() => {
+                            setEditing(null);
+                            setItemSheet(true);
+                          }}
+                        >
+                          New item type
+                        </Button>
+                      ) : undefined
+                    }
                   />
                 }
-                columns={[
-                  {
-                    header: 'Name',
-                    cell: (row) => (
-                      <span className={row.is_archived ? 'text-slate-400 line-through' : ''}>
-                        {row.name}
-                      </span>
-                    ),
-                  },
-                  { header: 'Code', cell: (row) => row.code || '—', wideOnly: true },
-                  { header: 'Tracking', cell: (row) => row.default_tracking_mode.toLowerCase() },
-                  { header: 'Unit', cell: (row) => row.uom },
-                  {
-                    header: 'Criticality',
-                    cell: (row) => row.criticality.toLowerCase(),
-                    wideOnly: true,
-                  },
-                  {
-                    header: 'Returnable',
-                    cell: (row) =>
-                      row.is_returnable
-                        ? `yes, ${row.default_return_days ?? '?'} days`
-                        : 'no',
-                    wideOnly: true,
-                  },
-                ]}
+                onOpen={(row) => {
+                  setEditing(row);
+                  setItemSheet(true);
+                }}
               />
             )}
           </Card>
@@ -225,11 +228,64 @@ export default function CataloguePage() {
       ) : null}
       <ItemTypeSheet
         open={itemSheet}
+        item={editing ?? undefined}
         onClose={() => setItemSheet(false)}
         categories={categoryRows}
         defaultCategory={selectedCategory}
       />
     </div>
+  );
+}
+
+/**
+ * C10: every row is a button that opens the item. One list at every width: a
+ * table row with a click handler cannot be reached from the keyboard, and the
+ * accessible name has to say which item it opens.
+ */
+function ItemRows({
+  rows,
+  empty,
+  onOpen,
+}: {
+  rows: ItemType[];
+  empty: ReactNode;
+  onOpen: (row: ItemType) => void;
+}) {
+  if (rows.length === 0) return <>{empty}</>;
+  return (
+    <ul className="flex flex-col gap-2">
+      {rows.map((row) => (
+        <li key={row.id}>
+          <button
+            type="button"
+            aria-label={`Edit ${row.name}`}
+            onClick={() => onOpen(row)}
+            className="flex min-h-[44px] w-full flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left hover:bg-slate-50 active:bg-slate-50"
+          >
+            <span
+              className={[
+                'text-sm font-medium',
+                row.is_archived ? 'text-slate-400 line-through' : 'text-slate-900',
+              ].join(' ')}
+            >
+              {row.name}
+            </span>
+            <span className="text-xs text-slate-500">
+              {[
+                row.is_archived ? 'archived' : null,
+                row.code,
+                row.default_tracking_mode.toLowerCase(),
+                row.uom,
+                `${row.criticality.toLowerCase()} criticality`,
+                row.is_returnable ? `back in ${row.default_return_days ?? '?'} days` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -498,6 +554,7 @@ export function ItemTypeSheet({
   categories: givenCategories,
   defaultCategory = null,
   onCreated,
+  item,
 }: {
   open: boolean;
   onClose: () => void;
@@ -505,26 +562,53 @@ export function ItemTypeSheet({
   categories?: ItemCategory[];
   defaultCategory?: number | null;
   onCreated?: (record: { id: number }) => void;
+  /** C10: present means edit mode: the sheet opens filled in and saves in place. */
+  item?: ItemType;
 }) {
   const fetchedCategories = useList<ItemCategory>('item-categories', { page_size: 200 }, {
     enabled: givenCategories === undefined,
   });
   const categories = givenCategories ?? fetchedCategories.data?.results ?? [];
+  const { has } = useSession();
+  const canManage = has(PERM.CATALOGUE_MANAGE);
+  const emptyForm: ItemForm = {
+    category: defaultCategory ? String(defaultCategory) : '',
+    name: '',
+    code: '',
+    uom: 'ea',
+    default_tracking_mode: 'BULK',
+    is_returnable: false,
+    default_return_days: '',
+    min_stock_qty: '',
+    description: '',
+  };
   const form = useForm<ItemForm>({
-    defaultValues: {
-      category: defaultCategory ? String(defaultCategory) : '',
-      name: '',
-      code: '',
-      uom: 'ea',
-      default_tracking_mode: 'BULK',
-      is_returnable: false,
-      default_return_days: '',
-      min_stock_qty: '',
-      description: '',
-    },
+    defaultValues: item ? valuesOf(item) : emptyForm,
   });
+  const locked = Boolean(item?.tracking_locked);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+
+  // The sheet stays mounted and is reused, so it is refilled whenever it opens
+  // (on a different item, or on none) rather than relying on first defaults.
+  useEffect(() => {
+    if (!open) return;
+    form.reset(item ? valuesOf(item) : emptyForm);
+    setBanner(null);
+    setConfirmingArchive(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, item?.id]);
+
   const create = useAction<Record<string, unknown>, { id: number }>({ resource: 'item-types' });
+  const save = useAction<Record<string, unknown>, { id: number }>({
+    resource: 'item-types',
+    method: 'patch',
+    path: () => String(item?.id),
+  });
+  const archive = useAction<{ archive: boolean }>({
+    resource: 'item-types',
+    path: (body) => `${item?.id}/${body.archive ? 'archive' : 'unarchive'}`,
+  });
 
   const trackingMode = form.watch('default_tracking_mode');
   const returnable = form.watch('is_returnable');
@@ -532,7 +616,7 @@ export function ItemTypeSheet({
   const submit = form.handleSubmit(async (values) => {
     setBanner(null);
     try {
-      const created = await create.mutateAsync({
+      const body: Record<string, unknown> = {
         category: Number(values.category),
         name: values.name,
         code: values.code || undefined,
@@ -544,7 +628,19 @@ export function ItemTypeSheet({
           ? Number(values.default_return_days)
           : null,
         min_stock_qty: values.min_stock_qty || null,
-      });
+      };
+      if (item) {
+        // C10: a locked item's tracking mode and unit are not sent at all, so
+        // saving a rename never trips the server's refusal.
+        if (locked) {
+          delete body.uom;
+          delete body.default_tracking_mode;
+        }
+        await save.mutateAsync(body);
+        onClose();
+        return;
+      }
+      const created = await create.mutateAsync(body);
       form.reset();
       onClose();
       onCreated?.(created);
@@ -553,26 +649,45 @@ export function ItemTypeSheet({
     }
   });
 
+  const toggleArchive = async () => {
+    setBanner(null);
+    try {
+      await archive.mutateAsync({ archive: !item?.is_archived });
+      setConfirmingArchive(false);
+      onClose();
+    } catch (error) {
+      setBanner(errorMessage(error));
+    }
+  };
+
   const selectedMode = TRACKING_MODES.find((mode) => mode.value === trackingMode);
 
   return (
     <Sheet
       open={open}
-      title="New item type"
+      title={item ? (canManage ? `Change ${item.name}` : item.name) : 'New item type'}
       onClose={onClose}
       footer={
-        <>
+        item && !canManage ? (
           <Button variant="secondary" onClick={onClose} block>
-            Cancel
+            Close
           </Button>
-          <Button onClick={submit} loading={create.isPending} block>
-            Create
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={onClose} block>
+              Cancel
+            </Button>
+            <Button onClick={submit} loading={create.isPending || save.isPending} block>
+              {item ? 'Save changes' : 'Create'}
+            </Button>
+          </>
+        )
       }
     >
       <form className="flex flex-col gap-3" onSubmit={submit}>
         {banner ? <Banner tone="error">{banner}</Banner> : null}
+        {/* C10: without catalogue.manage the sheet only answers "what is this set up as". */}
+        <fieldset disabled={Boolean(item) && !canManage} className="flex flex-col gap-3">
 
         <Field
           label="Category"
@@ -606,12 +721,12 @@ export function ItemTypeSheet({
             <Input id="item-code" {...form.register('code')} />
           </Field>
           <Field label="Unit" htmlFor="item-uom" hint="ea, m, box.">
-            <Input id="item-uom" {...form.register('uom', { required: true })} />
+            <Input id="item-uom" disabled={locked} {...form.register('uom', { required: true })} />
           </Field>
         </div>
 
         <Field label="How it is tracked" htmlFor="item-tracking" hint={selectedMode?.hint}>
-          <Select id="item-tracking" {...form.register('default_tracking_mode')}>
+          <Select id="item-tracking" disabled={locked} {...form.register('default_tracking_mode')}>
             {TRACKING_MODES.map((mode) => (
               <option key={mode.value} value={mode.value}>
                 {mode.label}
@@ -654,7 +769,53 @@ export function ItemTypeSheet({
         <Field label="Description" htmlFor="item-description">
           <Textarea id="item-description" {...form.register('description')} />
         </Field>
+        </fieldset>
+
+        {locked ? (
+          <p className="text-sm text-slate-600">
+            Fixed: this item has stock history, so changing it would change what past movements
+            mean.
+          </p>
+        ) : null}
+
+        {item && canManage ? (
+          confirmingArchive ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="text-sm text-amber-900">
+                {item.is_archived
+                  ? `Restore ${item.name}? It will appear in pickers again.`
+                  : `Archive ${item.name}? It disappears from pickers; its history stays.`}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={() => setConfirmingArchive(false)} block>
+                  Keep as it is
+                </Button>
+                <Button onClick={toggleArchive} loading={archive.isPending} block>
+                  {item.is_archived ? 'Yes, restore it' : 'Yes, archive it'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="secondary" onClick={() => setConfirmingArchive(true)} block>
+              {item.is_archived ? 'Restore this item' : 'Archive this item'}
+            </Button>
+          )
+        ) : null}
       </form>
     </Sheet>
   );
+}
+
+function valuesOf(item: ItemType): ItemForm {
+  return {
+    category: String(item.category),
+    name: item.name,
+    code: item.code ?? '',
+    uom: item.uom,
+    default_tracking_mode: item.default_tracking_mode,
+    is_returnable: item.is_returnable,
+    default_return_days: item.default_return_days ? String(item.default_return_days) : '',
+    min_stock_qty: item.min_stock_qty ?? '',
+    description: item.description ?? '',
+  };
 }

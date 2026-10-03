@@ -50,6 +50,8 @@ export interface ItemType {
   min_stock_qty: string | null;
   unit_cost: string | null;
   is_archived: boolean;
+  /** C10: true once any stock movement names the item; tracking mode and unit are then fixed. */
+  tracking_locked?: boolean;
   criticality: Criticality;
   attributes: Record<string, unknown>;
 }
