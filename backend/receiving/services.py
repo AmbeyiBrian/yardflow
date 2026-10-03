@@ -42,7 +42,10 @@ from stock.boxes import MAX_DEPTH, create_box, empty_box, put_bulk, put_units
 from stock.models import (
     Box,
     BoxStatus,
+    BulkEarmark,
     Condition,
+    EarmarkAction,
+    EarmarkEvent,
     MovementType,
     OwnerType,
     Reel,
@@ -164,15 +167,33 @@ def validate_for_posting(gate_in: GateIn) -> None:
     if gate_in.status == DocumentStatus.VOID:
         raise GateInNotReady("This gate-in has been voided and cannot be posted.")
 
-    lines = list(gate_in.lines.select_related("item_type", "item_type__category").all())
+    lines = list(
+        gate_in.lines.select_related("item_type", "item_type__category", "for_site").all()
+    )
     if not lines:
         raise GateInNotReady("Add at least one line before posting.")
 
     settings = gate_in.organization.settings
     field_errors: dict[str, list[str]] = {}
 
+    from network.models import SiteStatus
+
+    header_site = gate_in.for_site
+    if header_site is not None and header_site.status != SiteStatus.ACTIVE:
+        field_errors["for_site"] = [
+            f"{header_site.internal_ref} is decommissioned; material cannot be "
+            f"earmarked for it."
+        ]
+
     for index, line in enumerate(lines):
         prefix = f"lines.{index}"
+
+        line_site = line.for_site
+        if line_site is not None and line_site.status != SiteStatus.ACTIVE:
+            field_errors[f"{prefix}.for_site"] = [
+                f"{line_site.internal_ref} is decommissioned; material cannot be "
+                f"earmarked for it."
+            ]
 
         # C2: required custom fields are enforced at posting (T3.11).
         try:
@@ -485,8 +506,14 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
     box_units: dict[str, list[SerialUnit]] = {}
     box_bulk: dict[str, list[tuple[GateInLine, Decimal]]] = {}
     box_nodes: dict[str, StockNode] = {}
+    # Q1: what each line produced, so earmarking happens once the stock is in.
+    earmark_units: list[tuple[GateInLine, SerialUnit]] = []
+    earmark_reels: list[tuple[GateInLine, Reel]] = []
+    earmark_bulk: list[tuple[GateInLine, StockNode]] = []
 
-    for line in gate_in.lines.select_related("item_type", "item_type__category").all():
+    for line in gate_in.lines.select_related(
+        "item_type", "item_type__category", "for_site"
+    ).all():
         destination = destination_node_for(gate_in, line)
         common = {
             "item_type": line.item_type,
@@ -529,6 +556,7 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
                         from_condition=unit.condition,
                     )
                 )
+                earmark_units.append((line, unit))
                 if serial_entry.box_key:
                     box_units.setdefault(serial_entry.box_key, []).append(unit)
                     box_nodes[serial_entry.box_key] = destination
@@ -544,6 +572,7 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
                         **common,
                     )
                 )
+                earmark_reels.append((line, reel))
 
         else:
             held = held_condition_for(gate_in, line)
@@ -558,11 +587,15 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
                         from_condition=(held if from_node.type != NodeType.EXTERNAL else ""),
                     )
                 )
+            earmark_bulk.append((line, destination))
             if line.box_key:
                 box_bulk.setdefault(line.box_key, []).append((line, line.quantity))
                 box_nodes[line.box_key] = destination
 
     _create_boxes(gate_in, box_nodes, box_units, box_bulk, posted_by=posted_by)
+    # After the boxes: an earmark is independent of them, so the order only
+    # keeps all the projection writes together at the end.
+    _earmark_for_sites(gate_in, earmark_units, earmark_reels, earmark_bulk, posted_by=posted_by)
 
     gate_in.save(update_fields=["number", "status", "posted_at", "posted_by", "updated_at"])
 
@@ -578,6 +611,140 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
     )
 
     return gate_in
+
+
+def _effective_site(gate_in: GateIn, line: GateInLine):
+    """Q1: the line's own site, else the delivery's."""
+    return line.for_site if line.for_site_id else gate_in.for_site
+
+
+def _earmark_for_sites(gate_in, units, reels, bulk, *, posted_by) -> None:
+    """Earmark what this gate-in received for a site (§4.16.4, Q1).
+
+    Written directly, in the posting transaction, beside the ledger movements
+    (§4.16.1). A line with no effective site is left free.
+    """
+    for line, unit in units:
+        site = _effective_site(gate_in, line)
+        if site is None:
+            continue
+        unit.earmark_site = site
+        unit.save(update_fields=["earmark_site", "updated_at"])
+        _earmark_event(gate_in, posted_by, site=site, serial_unit=unit)
+
+    for line, reel in reels:
+        site = _effective_site(gate_in, line)
+        if site is None:
+            continue
+        reel.earmark_site = site
+        reel.save(update_fields=["earmark_site", "updated_at"])
+        _earmark_event(gate_in, posted_by, site=site, reel=reel, quantity=reel.initial_length)
+
+    for line, node in bulk:
+        site = _effective_site(gate_in, line)
+        if site is None:
+            continue
+        claim, created = BulkEarmark.objects.get_or_create(
+            organization_id=gate_in.organization_id,
+            site=site,
+            node=node,
+            item_type=line.item_type,
+            owner_client=line.owner_client,
+            condition=line.condition,
+            defaults={"quantity": line.quantity},
+        )
+        if not created:
+            claim.quantity += line.quantity
+            claim.save(update_fields=["quantity", "updated_at"])
+        _earmark_event(
+            gate_in,
+            posted_by,
+            site=site,
+            quantity=line.quantity,
+            node=node,
+            item_type=line.item_type,
+            owner_client=line.owner_client,
+            condition=line.condition,
+        )
+
+
+def _earmark_event(gate_in, actor, *, action=EarmarkAction.EARMARKED, reason="", **fields):
+    return EarmarkEvent.objects.create(
+        organization_id=gate_in.organization_id,
+        action=action,
+        document_type="receiving.GateIn",
+        document_id=str(gate_in.pk),
+        document_number=gate_in.number,
+        actor=actor,
+        reason=reason,
+        **fields,
+    )
+
+
+def _clear_earmarks(gate_in: GateIn, *, actor, reason: str) -> None:
+    """Undo what this gate-in earmarked, before its movements are reversed (Q1).
+
+    The events are the record of what posting did, so they say what to undo.
+    A unit or drum goes back to free only if it is still earmarked for the site
+    this gate-in named (someone may have changed it since, Q4). A bulk claim is
+    reduced by what this GRN added, never below zero.
+    """
+    events = list(
+        EarmarkEvent.objects.filter(
+            document_type="receiving.GateIn",
+            document_id=str(gate_in.pk),
+            action=EarmarkAction.EARMARKED,
+        ).order_by("pk")
+    )
+    note = f"Void of {gate_in.number}: {reason}"
+    for event in events:
+        subject = event.serial_unit or event.reel
+        if subject is not None:
+            if subject.earmark_site_id != event.site_id:
+                continue
+            subject.earmark_site = None
+            subject.save(update_fields=["earmark_site", "updated_at"])
+            _earmark_event(
+                gate_in,
+                actor,
+                action=EarmarkAction.CLEARED,
+                reason=note,
+                site=event.site,
+                serial_unit=event.serial_unit,
+                reel=event.reel,
+                quantity=event.quantity,
+            )
+            continue
+
+        claim = BulkEarmark.objects.filter(
+            site_id=event.site_id,
+            node_id=event.node_id,
+            item_type_id=event.item_type_id,
+            owner_client_id=event.owner_client_id,
+            condition=event.condition,
+        ).first()
+        if claim is None or event.quantity is None:
+            continue
+        taken = min(claim.quantity, event.quantity)
+        if taken >= claim.quantity:
+            claim.delete()
+            action = EarmarkAction.CLEARED
+        else:
+            claim.quantity -= taken
+            claim.save(update_fields=["quantity", "updated_at"])
+            action = EarmarkAction.REDUCED
+        _earmark_event(
+            gate_in,
+            actor,
+            action=action,
+            reason=note,
+            site=event.site,
+            quantity=taken,
+            node=event.node,
+            item_type=event.item_type,
+            owner_client=event.owner_client,
+            condition=event.condition,
+        )
 
 
 def _box_context(gate_in: GateIn, actor) -> EventContext:
@@ -802,6 +969,10 @@ def void_gate_in(gate_in: GateIn, *, reason: str, voided_by=None, request=None) 
         raise GateInNotReady("Only a posted gate-in can be voided.")
     if not reason:
         raise GateInNotReady("Voiding a posted document requires a reason (M4).")
+
+    # Q1: clear this gate-in's earmarks first, so the reversals below find the
+    # units and the bulk lot with nothing claimed on them by this delivery.
+    _clear_earmarks(gate_in, actor=voided_by, reason=reason)
 
     # P5: a box is not stock, so it is emptied and closed before the units go.
     # Deepest first, so a parent is never asked to close around an open child.

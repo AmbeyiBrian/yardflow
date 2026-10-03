@@ -33,6 +33,18 @@ from receiving.models import (
 from receiving.services import post_gate_in, void_gate_in
 
 
+def _check_for_site(site):  # type: ignore[no-untyped-def]
+    """Q1: a delivery can only be for a live site. Another tenant's site is not
+    visible at all, so the field's own "does not exist" covers that."""
+    from network.models import SiteStatus
+
+    if site is not None and site.status != SiteStatus.ACTIVE:
+        raise serializers.ValidationError(
+            f"{site.internal_ref} is decommissioned; material cannot be earmarked for it."
+        )
+    return site
+
+
 class GateInSerialSerializer(serializers.ModelSerializer):
     class Meta:
         model = GateInSerial
@@ -70,6 +82,10 @@ class GateInLineSerializer(serializers.ModelSerializer):
     owner_client_name = serializers.CharField(
         source="owner_client.name", read_only=True, default=""
     )
+    for_site_name = serializers.CharField(source="for_site.name", read_only=True, default="")
+
+    def validate_for_site(self, site):  # type: ignore[no-untyped-def]
+        return _check_for_site(site)
 
     class Meta:
         model = GateInLine
@@ -86,6 +102,8 @@ class GateInLineSerializer(serializers.ModelSerializer):
             "owner_type",
             "owner_client",
             "owner_client_name",
+            "for_site",
+            "for_site_name",
             "custom_field_values",
             "no_serial_reason",
             "declared_unit_value",
@@ -107,6 +125,10 @@ class GateInSerializer(serializers.ModelSerializer):
     origin_site_ref = serializers.CharField(
         source="origin_site.internal_ref", read_only=True, default=""
     )
+    for_site_name = serializers.CharField(source="for_site.name", read_only=True, default="")
+
+    def validate_for_site(self, site):  # type: ignore[no-untyped-def]
+        return _check_for_site(site)
 
     class Meta:
         model = GateIn
@@ -122,6 +144,8 @@ class GateInSerializer(serializers.ModelSerializer):
             "returned_by_name",
             "origin_site",
             "origin_site_ref",
+            "for_site",
+            "for_site_name",
             "to_location",
             "to_location_name",
             "received_at",
@@ -229,11 +253,13 @@ class GateInViewSet(TenantScopedViewSet):
         "client",
         "returned_by",
         "origin_site",
+        "for_site",
         "posted_by",
     )
     prefetch_related = (
         "lines",
         "lines__item_type",
+        "lines__for_site",
         "lines__serials",
         "lines__reels",
         "gate_in_boxes",

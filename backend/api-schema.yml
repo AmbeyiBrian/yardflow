@@ -10929,6 +10929,13 @@ components:
           type: string
           readOnly: true
           default: ''
+        for_site:
+          type: integer
+          nullable: true
+        for_site_name:
+          type: string
+          readOnly: true
+          default: ''
         to_location:
           type: integer
         to_location_name:
@@ -10978,6 +10985,7 @@ components:
       required:
       - client_name
       - created_at
+      - for_site_name
       - id
       - number
       - origin_site_ref
@@ -11068,6 +11076,13 @@ components:
           type: string
           readOnly: true
           default: ''
+        for_site:
+          type: integer
+          nullable: true
+        for_site_name:
+          type: string
+          readOnly: true
+          default: ''
         custom_field_values: {}
         no_serial_reason:
           type: string
@@ -11094,6 +11109,7 @@ components:
           items:
             $ref: '#/components/schemas/GateInReel'
       required:
+      - for_site_name
       - id
       - is_unserviceable
       - item_name
@@ -11126,6 +11142,9 @@ components:
         owner_type:
           $ref: '#/components/schemas/OwnerTypeEnum'
         owner_client:
+          type: integer
+          nullable: true
+        for_site:
           type: integer
           nullable: true
         custom_field_values: {}
@@ -11210,6 +11229,9 @@ components:
           nullable: true
           description: Where the material came off. Required for a recovery (D5);
             worth recording on a return so the site's reconciliation can see it (H4).
+        for_site:
+          type: integer
+          nullable: true
         to_location:
           type: integer
         received_at:
@@ -13972,6 +13994,9 @@ components:
           nullable: true
           description: Where the material came off. Required for a recovery (D5);
             worth recording on a return so the site's reconciliation can see it (H4).
+        for_site:
+          type: integer
+          nullable: true
         to_location:
           type: integer
         received_at:
