@@ -65,6 +65,43 @@ def scenario(tenant):
         occurred_at=timezone.now() - timedelta(days=90),
     )
 
+    # What reached each site: real releases on passes to it (Q5's "sent to"):
+    # 4 clamps to Alpha, and the 2 diverted from Alpha's earmark to Bravo.
+    from django.db import transaction
+
+    from dispatch.tests.test_gate_out import make_gate_out
+    from locations.nodes import consumed_node, external_node
+    from stock.models import MovementType
+    from stock.services import MovementRequest, post_movement
+
+    holder, requester = UserFactory(), UserFactory()
+    with transaction.atomic():
+        post_movement(
+            MovementRequest(
+                item_type=clamp,
+                quantity=D("6"),
+                from_node=external_node(tenant.pk),
+                to_node=yard.node,
+                movement_type=MovementType.RECEIPT,
+                tracking_mode=TrackingMode.BULK,
+            )
+        )
+        for site, qty in ((site_a, "4"), (site_b, "2")):
+            gate_out = make_gate_out(tenant, yard, requester, holder, site=site)
+            post_movement(
+                MovementRequest(
+                    item_type=clamp,
+                    quantity=D(qty),
+                    from_node=yard.node,
+                    to_node=consumed_node(tenant.pk),
+                    movement_type=MovementType.ISSUE,
+                    tracking_mode=TrackingMode.BULK,
+                    document_type="dispatch.GateOut",
+                    document_id=str(gate_out.pk),
+                    document_number=f"GP-{gate_out.pk}",
+                )
+            )
+
     for site, qty in ((site_a, "4"), (site_b, "8")):
         BulkEarmark.objects.create(
             site=site, node=yard.node, item_type=clamp, condition=Condition.NEW, quantity=D(qty)
@@ -94,7 +131,8 @@ class TestMaterialBySite:
         assert figures(got["Alpha", "Clamp"]) == (D("10"), D("4"), D("4"), D("2"))
         assert figures(got["Alpha", "Radio"]) == (2, 0, 2, 0)
         # 5 earmarked + 3 changed to it; the 90-day-old 100 is outside the period.
-        assert figures(got["Bravo", "Clamp"]) == (D("8"), 0, D("8"), 0)
+        # Bravo was sent the 2 diverted from Alpha: "sent to" is what reached it.
+        assert figures(got["Bravo", "Clamp"]) == (D("8"), D("2"), D("8"), 0)
         assert figures(got["Bravo", "Radio"]) == (0, 0, 1, 0)
         assert figures(got["Bravo", "Cable"]) == (0, 0, D("120.500"), 0)
         assert [(r["site"], r["item"]) for r in rows] == sorted(

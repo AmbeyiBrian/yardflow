@@ -136,7 +136,9 @@ class MaterialBySiteReport(Report):
 
         yield "received", grouped(EarmarkAction.EARMARKED, "site")
         yield "received", grouped(EarmarkAction.CHANGED, "to_site")
-        yield "sent", grouped(EarmarkAction.DELIVERED, "site")
+        # Everything released to the site, earmarked or not: a site manager asks
+        # "what did we send them", not "what of theirs did we send" (Q5).
+        yield "sent", _sent_to_sites(params, site_ids)
         yield "diverted", grouped(EarmarkAction.DIVERTED, "site")
 
     @staticmethod
@@ -161,3 +163,45 @@ class MaterialBySiteReport(Report):
             .values("site_key", "item_type_id")
             .annotate(total=Sum("quantity"))
         )
+
+
+def _sent_to_sites(params: dict, site_ids: list[int]) -> list[dict]:
+    """Σ issued on gate-outs to each site — its own site, or its job's (Q5).
+
+    Covers earmarked material delivered, free stock, and another site's
+    earmark diverted here: all of it reached this site. Grouped in the
+    database by pass and item, then folded to sites, so the cost does not grow
+    with the number of sites.
+    """
+    from django.db.models import Q
+    from django.db.models.functions import Coalesce as _Coalesce
+
+    from dispatch.models import GateOut
+    from stock.models import MovementType, StockMovement
+
+    destinations = {
+        str(row["pk"]): row["dest"]
+        for row in GateOut.objects.filter(Q(site__in=site_ids) | Q(job__site__in=site_ids))
+        .annotate(dest=_Coalesce("site_id", "job__site_id"))
+        .values("pk", "dest")
+        if row["dest"] in site_ids
+    }
+    if not destinations:
+        return []
+    movements = StockMovement.objects.filter(
+        document_type="dispatch.GateOut",
+        movement_type=MovementType.ISSUE,
+        document_id__in=list(destinations),
+    )
+    if params.get("from_date"):
+        movements = movements.filter(occurred_at__date__gte=params["from_date"])
+    if params.get("to_date"):
+        movements = movements.filter(occurred_at__date__lte=params["to_date"])
+    totals: dict[tuple[int, int], Decimal] = {}
+    for row in movements.values("document_id", "item_type_id").annotate(total=Sum("quantity")):
+        key = (destinations[row["document_id"]], row["item_type_id"])
+        totals[key] = totals.get(key, ZERO) + (row["total"] or ZERO)
+    return [
+        {"site_key": site, "item_type_id": item, "total": total}
+        for (site, item), total in totals.items()
+    ]
