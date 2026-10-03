@@ -51,7 +51,6 @@ import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Client, Location, Site } from '../settings/types';
 import {
   boxErrorMessages,
-  boxLabel,
   boxPath,
   buildTree,
   describeCounts,
@@ -65,6 +64,12 @@ import {
   type BoxNode,
   type DraftBox,
 } from './gateInBoxes';
+import {
+  lineToSheet,
+  moveSerial,
+  replaceLineAt,
+  sheetToLine,
+} from './gateInLineEdit';
 import type {
   Condition,
   GateIn,
@@ -195,6 +200,8 @@ export default function GateInCapturePage() {
 
   const [draft, setDraft] = useState<Draft>(() => (editingId ? emptyDraft() : readDraft()));
   const [lineSheet, setLineSheet] = useState(false);
+  /** The line being changed (D9), or null when the sheet is adding one. */
+  const [editingLine, setEditingLine] = useState<number | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [restored, setRestored] = useState(() =>
     editingId ? false : readDraft().lines.length > 0,
@@ -290,8 +297,21 @@ export default function GateInCapturePage() {
   );
 
   function addLine(line: GateInLineInput) {
-    setDraft((current) => ({ ...current, lines: [...current.lines, line] }));
+    // Changing a line replaces it where it stands: same place, same count (D9).
+    setDraft((current) => ({
+      ...current,
+      lines:
+        editingLine === null
+          ? [...current.lines, line]
+          : replaceLineAt(current.lines, editingLine, line),
+    }));
     setLineSheet(false);
+    setEditingLine(null);
+  }
+
+  function changeLine(index: number) {
+    setEditingLine(index);
+    setLineSheet(true);
   }
 
   function removeLine(index: number) {
@@ -597,7 +617,14 @@ export default function GateInCapturePage() {
           <h2 className="text-sm font-semibold text-slate-900">
             Lines {draft.lines.length ? `(${draft.lines.length})` : ''}
           </h2>
-          <Button onClick={() => setLineSheet(true)}>Add a line</Button>
+          <Button
+            onClick={() => {
+              setEditingLine(null);
+              setLineSheet(true);
+            }}
+          >
+            Add a line
+          </Button>
         </div>
 
         {draft.lines.length === 0 && draft.boxes.length === 0 ? (
@@ -616,6 +643,7 @@ export default function GateInCapturePage() {
                     depth={0}
                     onRemoveBox={removeBox}
                     onRemoveLine={removeLine}
+                    onChangeLine={changeLine}
                   />
                 ))}
               </ul>
@@ -662,13 +690,23 @@ export default function GateInCapturePage() {
                         <p className="text-amber-800">Goes to quarantine, not to free stock.</p>
                       ) : null}
                     </div>
-                    <Button
-                      variant="ghost"
-                      className="min-h-0 px-2 py-1 text-sm text-red-700"
-                      onClick={() => removeLine(index)}
-                    >
-                      Remove
-                    </Button>
+                    <div className="flex shrink-0 items-center">
+                      <Button
+                        variant="ghost"
+                        className="px-2 text-sm"
+                        aria-label={`Change the ${line.item_name ?? 'item'} line`}
+                        onClick={() => changeLine(index)}
+                      >
+                        Change
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="min-h-0 px-2 py-1 text-sm text-red-700"
+                        onClick={() => removeLine(index)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   </li>
                 );
               })}
@@ -710,8 +748,12 @@ export default function GateInCapturePage() {
 
       <LineSheet
         open={lineSheet}
-        onClose={() => setLineSheet(false)}
+        onClose={() => {
+          setLineSheet(false);
+          setEditingLine(null);
+        }}
         onAdd={addLine}
+        initial={editingLine !== null ? draft.lines[editingLine] : undefined}
         boxes={draft.boxes}
         onStartBox={addBox}
         clients={clients.data?.results ?? []}
@@ -729,6 +771,7 @@ function LineSheet({
   open,
   onClose,
   onAdd,
+  initial,
   boxes,
   onStartBox,
   clients,
@@ -737,6 +780,8 @@ function LineSheet({
   open: boolean;
   onClose: () => void;
   onAdd: (line: GateInLineInput) => void;
+  /** The line being changed; absent when adding (D9). */
+  initial?: GateInLineInput;
   /** The delivery's boxes so far, and how to start another (P1, 4.15.5). */
   boxes: DraftBox[];
   onStartBox: (box: DraftBox) => void;
@@ -891,9 +936,27 @@ function LineSheet({
     setStartError(null);
   }
 
+  // Opening on a line fills the sheet from it (D9); opening to add starts
+  // from the delivery's default owner.
   useEffect(() => {
-    if (open) setOwnerClient(defaultClient);
-  }, [open, defaultClient]);
+    if (!open) return;
+    if (!initial) {
+      setOwnerClient(defaultClient);
+      return;
+    }
+    const state = lineToSheet(initial);
+    setItem(state.item);
+    setQuantity(state.quantity);
+    setCondition(state.condition);
+    setOwnerClient(state.ownerClient);
+    setSerials(state.serials);
+    setDrums(state.drums);
+    setNoSerialReason(state.noSerialReason);
+    setNotes(state.notes);
+    intoRef.current = state.intoKey;
+    setIntoKey(state.intoKey);
+    setError(null);
+  }, [open, initial, defaultClient]);
 
   function reset() {
     setItem(null);
@@ -974,30 +1037,30 @@ function LineSheet({
       return;
     }
 
-    onAdd({
-      item_type: item.id,
-      item_name: item.name,
-      tracking_mode: trackingMode,
-      quantity: total,
-      uom: item.uom,
-      condition,
-      owner_type: ownerClient ? 'CLIENT' : 'OWN',
-      owner_client: ownerClient ? Number(ownerClient) : null,
-      no_serial_reason: noSerialReason,
-      notes,
-      serials: allSerials,
-      reels: allDrums,
-      // Bulk only: the whole quantity is in that box. Serialized units carry
-      // their own box_key, and drums take none (4.15.5).
-      box_key: trackingMode === 'BULK' ? activeKey : '',
-    });
+    onAdd(
+      sheetToLine(
+        {
+          item,
+          mode,
+          quantity: total,
+          condition,
+          ownerClient,
+          noSerialReason,
+          notes,
+          serials: allSerials,
+          drums: allDrums,
+          activeKey,
+        },
+        initial,
+      ),
+    );
     reset();
   }
 
   return (
     <Sheet
       open={open}
-      title="Add a line"
+      title={initial ? 'Change this line' : 'Add a line'}
       onClose={() => {
         reset();
         onClose();
@@ -1015,7 +1078,7 @@ function LineSheet({
             Cancel
           </Button>
           <Button block onClick={add}>
-            Add line
+            {initial ? 'Save changes' : 'Add line'}
           </Button>
         </>
       }
@@ -1087,12 +1150,30 @@ function LineSheet({
                     className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm"
                   >
                     <span className="font-mono">{entry.serial_number}</span>
-                    {entry.box_key && boxes.some((box) => box.key === entry.box_key) ? (
-                      // Which box each unit went into (P10), so a slip of the
-                      // selector mid-scan is visible while it can still be fixed.
-                      <span className="text-xs text-slate-500">
-                        in {boxLabel(boxes, entry.box_key)}
-                      </span>
+                    {boxes.length > 0 ? (
+                      // Which box each unit is in (P10), and where it is moved:
+                      // a select on the unit itself, so a slip of the selector
+                      // mid-scan is fixed here instead of by removing and
+                      // scanning again (D9).
+                      <select
+                        aria-label={`Box for ${entry.serial_number}`}
+                        className="max-w-[9rem] rounded bg-white px-1 py-1 text-xs text-slate-700"
+                        value={
+                          boxes.some((box) => box.key === entry.box_key) ? entry.box_key : ''
+                        }
+                        onChange={(event) =>
+                          setSerials((current) =>
+                            moveSerial(current, entry.serial_number, event.target.value),
+                          )
+                        }
+                      >
+                        <option value="">Loose</option>
+                        {boxes.map((box) => (
+                          <option key={box.key} value={box.key}>
+                            {boxPath(boxes, box.key)}
+                          </option>
+                        ))}
+                      </select>
                     ) : null}
                     <button
                       type="button"
@@ -1507,11 +1588,13 @@ function BoxBranch({
   depth,
   onRemoveBox,
   onRemoveLine,
+  onChangeLine,
 }: {
   node: BoxNode;
   depth: number;
   onRemoveBox: (key: string) => void;
   onRemoveLine: (index: number) => void;
+  onChangeLine: (index: number) => void;
 }) {
   return (
     <li className="rounded-lg border border-slate-200 p-3">
@@ -1541,6 +1624,7 @@ function BoxBranch({
               key={`${entry.lineIndex}-${entry.serials[0] ?? 'line'}`}
               entry={entry}
               onRemoveLine={onRemoveLine}
+              onChangeLine={onChangeLine}
             />
           ))}
           {node.children.map((child) => (
@@ -1550,6 +1634,7 @@ function BoxBranch({
               depth={depth + 1}
               onRemoveBox={onRemoveBox}
               onRemoveLine={onRemoveLine}
+              onChangeLine={onChangeLine}
             />
           ))}
         </ul>
@@ -1561,9 +1646,11 @@ function BoxBranch({
 function BoxContents({
   entry,
   onRemoveLine,
+  onChangeLine,
 }: {
   entry: BoxEntry;
   onRemoveLine: (index: number) => void;
+  onChangeLine: (index: number) => void;
 }) {
   const bulk = entry.line.tracking_mode === 'BULK';
   return (
@@ -1580,14 +1667,24 @@ function BoxContents({
           </p>
         ) : null}
       </div>
-      <Button
-        variant="ghost"
-        className="px-2 text-sm text-red-700"
-        aria-label={`Remove the ${entry.line.item_name ?? 'item'} line`}
-        onClick={() => onRemoveLine(entry.lineIndex)}
-      >
-        Remove line
-      </Button>
+      <div className="flex shrink-0 items-center">
+        <Button
+          variant="ghost"
+          className="px-2 text-sm"
+          aria-label={`Change the ${entry.line.item_name ?? 'item'} line`}
+          onClick={() => onChangeLine(entry.lineIndex)}
+        >
+          Change
+        </Button>
+        <Button
+          variant="ghost"
+          className="px-2 text-sm text-red-700"
+          aria-label={`Remove the ${entry.line.item_name ?? 'item'} line`}
+          onClick={() => onRemoveLine(entry.lineIndex)}
+        >
+          Remove line
+        </Button>
+      </div>
     </li>
   );
 }

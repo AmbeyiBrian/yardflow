@@ -346,4 +346,75 @@ test.describe('Correcting a draft', () => {
     await page.getByPlaceholder(/number, supplier/i).fill(supplier);
     await expect(page.getByText(supplier)).toHaveCount(0, { timeout: 20_000 });
   });
+
+  test('a line is changed in place before it is received (D9)', async ({ page }) => {
+    await open(page, '/gate-in/new');
+    await page.getByLabel('Source').selectOption('PURCHASE');
+    await page.getByLabel('Supplier').fill('Huawei Kenya');
+    await page.getByLabel('Received into').selectOption({ index: 1 });
+
+    await page.getByRole('button', { name: 'Add a line' }).click();
+    const sheet = page.getByRole('dialog');
+    const bulk = await pickItem(sheet, 'Item', 'Cable clamp');
+    test.skip(!bulk, 'no bulk item in the seeded catalogue');
+    await sheet.getByLabel(/^Quantity/).fill('10');
+    await sheet.getByRole('button', { name: 'Add line' }).click();
+    await expect(sheet).toBeHidden();
+
+    // Change reopens the sheet filled in, and saving replaces the line.
+    await page.getByRole('button', { name: /^Change the .* line$/ }).click();
+    const again = page.getByRole('dialog');
+    await expect(again.getByLabel(/^Quantity/)).toHaveValue('10');
+    await again.getByLabel(/^Quantity/).fill('12');
+    await again.getByRole('button', { name: 'Save changes' }).click();
+    await expect(again).toBeHidden();
+
+    await expect(page.getByText(/12(\.\d+)? .*Cable clamp/).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Change the .* line$/ })).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: 'Lines (1)' })).toBeVisible();
+
+    await page.getByRole('button', { name: /receive it|save on this device/i }).click();
+    await expect(page.getByText(/GRN-\d+/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/12(\.0+)?\b/).filter({ visible: true }).first()).toBeVisible();
+  });
+
+  test('a unit is moved to another box while changing its line (D9)', async ({ page }) => {
+    const boxA = unique('CTNA');
+    const boxB = unique('CTNB');
+    const serials = [unique('MV1'), unique('MV2')];
+    await open(page, '/gate-in/new');
+    await page.getByLabel('Source').selectOption('PURCHASE');
+    await page.getByLabel('Supplier').fill('Huawei Kenya');
+    await page.getByLabel('Received into').selectOption({ index: 1 });
+
+    await page.getByRole('button', { name: 'Add a line' }).click();
+    const sheet = page.getByRole('dialog');
+    const serialized = await pickItem(sheet, 'Item', 'Baseband board');
+    test.skip(!serialized, 'no serialized item in the seeded catalogue');
+    await sheet.getByRole('button', { name: 'Start a box' }).click();
+    await sheet.getByLabel('Box code').fill(boxA);
+    await sheet.getByRole('button', { name: /^Start box/ }).click();
+    for (const serial of serials) {
+      await sheet.getByLabel('Serial number').fill(serial);
+      await sheet.getByRole('button', { name: /^add$/i }).first().click();
+    }
+    await sheet.getByRole('button', { name: 'Add line' }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText(`${boxA} · 2 units`)).toBeVisible();
+
+    await page.getByRole('button', { name: /^Change the .* line$/ }).click();
+    const again = page.getByRole('dialog');
+    await expect(again.getByLabel(`Box for ${serials[1]}`)).toHaveValue(/.+/);
+    await again.getByRole('button', { name: 'Start a box' }).click();
+    await again.getByLabel('Box code').fill(boxB);
+    await again.getByRole('button', { name: /^Start box/ }).click();
+    // A unit is moved by the select on its own chip.
+    await again.getByLabel(`Box for ${serials[1]}`).selectOption({ label: boxB });
+    await again.getByRole('button', { name: 'Save changes' }).click();
+    await expect(again).toBeHidden();
+
+    await expect(page.getByText(`${boxA} · 1 unit`)).toBeVisible();
+    await expect(page.getByText(`${boxB} · 1 unit`)).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Change the .* line$/ })).toHaveCount(2);
+  });
 });
