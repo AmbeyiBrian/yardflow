@@ -1404,7 +1404,7 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
   *Done when:* an E2E changes a line's quantity and moves a unit to another box before receiving,
   and the received delivery shows the change.
 
-- [ ] **T12.5 `[B]` Lock tracking mode and unit once an item has moved**
+- [x] **T12.5 `[B]` Lock tracking mode and unit once an item has moved**
   Refs: C10
   Updating an item refuses a change to `default_tracking_mode` or `uom` when any stock movement
   names it (`ITEM_TRACKING_LOCKED`, naming the field); the item payload says whether it is locked.
