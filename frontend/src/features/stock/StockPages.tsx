@@ -21,7 +21,7 @@ import { useCrumb } from '../../components/ui/breadcrumbs';
 import { api } from '../../api/client';
 import { errorMessage, useAction, useList, useResource } from '../../api/hooks';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
-import { ItemPicker } from '../../components/ItemPicker.tsx';
+import { ItemPicker } from '../../components/ItemPicker';
 import {
   ActionBar,
   Banner,

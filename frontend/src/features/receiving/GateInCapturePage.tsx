@@ -33,7 +33,7 @@ import { useOffline } from '../../offline/OfflineProvider';
 import { newUuid } from '../../offline/db';
 import { submitOrQueue } from '../../offline/sync';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
-import { ItemPicker, type PickedItem } from '../../components/ItemPicker.tsx';
+import { ItemPicker, type PickedItem } from '../../components/ItemPicker';
 import type { LabelReading } from '../boxes/readLabel';
 import {
   ActionBar,

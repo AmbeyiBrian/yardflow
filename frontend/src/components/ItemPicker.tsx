@@ -35,7 +35,7 @@ import {
   readRecent,
   shownText,
   type RecentItem,
-} from './itemPicker';
+} from './itemPickerLogic';
 import { Input } from './ui';
 
 /** What a line sheet needs to know about the chosen item. */

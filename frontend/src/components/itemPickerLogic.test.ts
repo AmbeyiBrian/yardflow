@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pushRecent, readRecent, rankItems, shownText } from './itemPicker';
+import { pushRecent, readRecent, rankItems, shownText } from './itemPickerLogic';
 
 const ITEMS = [
   { id: 1, name: 'Antenna for RRU', code: 'ANT-1', description: '' },

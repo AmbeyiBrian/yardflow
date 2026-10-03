@@ -39,7 +39,7 @@ import {
   Textarea,
 } from '../../components/ui';
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
-import { ItemPicker, type PickedItem } from '../../components/ItemPicker.tsx';
+import { ItemPicker, type PickedItem } from '../../components/ItemPicker';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Reel, SerialUnit, StockBalance } from '../receiving/types';
 import type { Client, ItemType, Location, Site, Project } from '../settings/types';
