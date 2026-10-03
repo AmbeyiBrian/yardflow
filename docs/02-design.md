@@ -842,16 +842,17 @@ survives a reload. The IndexedDB schema does not change: queued payloads are sto
 #### 4.15.11 Errors
 
 All through the existing `{error: {code, message, field_errors, details}}` envelope (§13), each
-message naming the thing involved.
+message naming the thing involved. Codes are upper case, as every `DomainError` here already is.
+`UNIT_NOT_AT_ORIGIN` (T11.3) joins them: a serialized movement asked to start where the unit is not.
 
 | Code | When |
 |---|---|
-| `box_code_in_use` | A code already used in the tenant, open or closed; names where it sits |
-| `box_too_deep`, `box_cycle` | Nesting beyond three, or a box inside itself |
-| `box_empty`, `box_mixed_destinations` | Gate-in validation |
-| `boxed_stock_only` | Bulk drawn without naming a box, loose stock short; names the boxes |
-| `unit_not_available` | Submit: a named unit is elsewhere or on another open pass; names it |
-| `scan_required_for_release` | Release without scans when the setting is on |
+| `BOX_CODE_IN_USE` | A code already used in the tenant, open or closed; names where it sits |
+| `BOX_TOO_DEEP`, `BOX_CYCLE` | Nesting beyond three, or a box inside itself |
+| `BOX_EMPTY`, `BOX_MIXED_DESTINATIONS` | Gate-in validation |
+| `BOXED_STOCK_ONLY` | Bulk drawn without naming a box, loose stock short; names the boxes |
+| `UNIT_NOT_AVAILABLE` | Submit: a named unit is elsewhere or on another open pass; names it |
+| `SCAN_REQUIRED_FOR_RELEASE` | Release without scans when the setting is on |
 
 #### 4.15.12 Testing
 

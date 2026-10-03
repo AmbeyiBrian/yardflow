@@ -1268,7 +1268,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
 - [ ] **T11.7 `[B]` Gate-in receives boxes**
   Refs: §4.15.5 · P1, P2, P9, P10
   `GateInBox`, `GateInSerial.box_key`, `GateInLine.box_key`; serializer read and write; validation
-  (`box_code_in_use`, `box_too_deep`, `box_cycle`, `box_empty`, `box_mixed_destinations`); posting
+  (`BOX_CODE_IN_USE`, `BOX_TOO_DEEP`, `BOX_CYCLE`, `BOX_EMPTY`, `BOX_MIXED_DESTINATIONS`); posting
   creates the boxes top-down and fills them; void empties and closes them first.
   *Done when:* a pallet of two cartons, one mixed and one of bulk, posts and is found by lookup; each
   validation is tested; void leaves every box closed; an offline replay of the same payload through
@@ -1285,7 +1285,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
 - [ ] **T11.9 `[B]` Gate-out by box**
   Refs: §4.15.7 · P5, P6, P9, P10
   `GateOutLine.box`; submit refuses a unit that is elsewhere or on another open pass
-  (`unit_not_available`) and a box line beyond its claim; `_release_line` draws bulk with
+  (`UNIT_NOT_AVAILABLE`) and a box line beyond its claim; `_release_line` draws bulk with
   `from_box`; the detail serializer and the releasable bundle carry each unit's serial, asset tag
   and box path, and each line's box path; the gate-pass PDF groups lines under box codes.
   *Done when:* a whole box requested, approved and released leaves the box closed; one unit
@@ -1295,7 +1295,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   Refs: §4.15.8 · P11, G1
   `release_gate_out(released_serials=…)` issues exactly the named units; anything unnamed is short
   with a variance. `OrganizationSettings.release_scan_required` (default off) and
-  `scan_required_for_release`. The offline replay passes `released_serials` through.
+  `SCAN_REQUIRED_FOR_RELEASE`. The offline replay passes `released_serials` through.
   *Done when:* releasing two named units of three issues those two and raises a variance for the
   third; the setting refuses an unscanned release; a queued release with named serials replays
   correctly; schema regenerated.
