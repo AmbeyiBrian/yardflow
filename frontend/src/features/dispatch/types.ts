@@ -37,6 +37,15 @@ export interface GateOutLineReel {
   length_released?: string;
 }
 
+/** Q3: earmarked material of another site that a line would use. */
+export interface GateOutDiversion {
+  site: number;
+  site_name: string;
+  quantity: string;
+  serials?: string[];
+  drums?: string[];
+}
+
 export interface GateOutLine {
   id?: number;
   line_number?: number;
@@ -62,6 +71,10 @@ export interface GateOutLine {
    * can identify — see the gate-out line's own validation.
    */
   no_serial_reason?: string;
+  /** Q3: why this line uses another site's earmarked stock. Asked for on refusal. */
+  divert_reason?: string;
+  /** Q3: read side only (detail and approval; the list always sends none). */
+  diversions?: GateOutDiversion[];
   /** Box the line was picked from, and its chain outermost first (§4.15.8). */
   box?: number | null;
   box_code?: string | null;
@@ -150,6 +163,8 @@ export interface ApprovalDocumentSummary {
     owner: string;
     is_client_owned: boolean;
     criticality: 'LOW' | 'MEDIUM' | 'HIGH';
+    divert_reason?: string;
+    diversions?: GateOutDiversion[];
   }[];
 }
 

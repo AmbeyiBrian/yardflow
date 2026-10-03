@@ -45,6 +45,7 @@ import {
 import { ScanTheLoadPanel, UnitTicks } from '../boxes/ScanTheLoad';
 import { useLoadScan } from '../boxes/useLoadScan';
 import { groupLinesByBox } from './gateOutBoxes';
+import { diversionText } from './earmarkedGateOut';
 import type { GateOut } from './types';
 
 const OPEN_STATUSES = 'DRAFT,PENDING_APPROVAL,APPROVED,PARTIALLY_RELEASED';
@@ -381,6 +382,17 @@ export function GateOutDetailPage() {
             },
           ]}
         />
+            {/* Q3: what is being taken from another site's earmark, and why. */}
+            {group.lines.flatMap(({ line }) =>
+              (line.diversions ?? []).map((diversion) => (
+                <p
+                  key={`${line.id}-${diversion.site}`}
+                  className="rounded-md bg-amber-50 p-2 text-sm text-amber-900"
+                >
+                  {line.item_name}: {diversionText(diversion, line.divert_reason)}
+                </p>
+              )),
+            )}
           </div>
         ))}
       </Card>

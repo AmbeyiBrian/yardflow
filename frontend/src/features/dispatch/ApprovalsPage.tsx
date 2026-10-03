@@ -38,6 +38,7 @@ import {
   Textarea,
 } from '../../components/ui';
 import { EmptyState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
+import { diversionText } from './earmarkedGateOut';
 import type { ApprovalRequest } from './types';
 
 /**
@@ -273,6 +274,15 @@ function ApprovalCard({ request }: { request: ApprovalRequest }) {
               {/* E1: ownership on the approval screen, not a tap away — it
                   changes whether you approve. */}
               <OwnershipBadge client={line.is_client_owned ? line.owner : null} />
+              {/* Q3: the approver sees each diversion and its reason first. */}
+              {(line.diversions ?? []).map((diversion) => (
+                <p
+                  key={diversion.site}
+                  className="basis-full rounded-md bg-amber-50 p-2 text-amber-900"
+                >
+                  {diversionText(diversion, line.divert_reason)}
+                </p>
+              ))}
             </li>
           ))}
         </ul>

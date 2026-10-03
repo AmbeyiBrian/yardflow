@@ -45,7 +45,7 @@ test.describe('The gate-out loop', () => {
     await chooseFirst(page.getByLabel('A site'));
     await chooseFirst(page.getByLabel('Who is taking it'));
 
-    await page.getByRole('button', { name: 'Add' }).click();
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
     const sheet = page.getByRole('dialog');
     await expect(sheet).toBeVisible();
 
@@ -59,6 +59,9 @@ test.describe('The gate-out loop', () => {
     await page.getByRole('button', { name: /send for approval/i }).click();
 
     // The number is what everybody refers to it by from here on (M6).
+    // On the pass itself: the request screen can name other passes (an earmarked
+    // unit that is already on one).
+    await expect(page).toHaveURL(/\/gate-out\/\d+$/, { timeout: 30_000 });
     const heading = page.getByText(/GP-\d+/).filter({ visible: true }).first();
     await expect(heading).toBeVisible({ timeout: 30_000 });
     passNumber = ((await heading.textContent()) ?? '').match(/GP-\d+/)?.[0] ?? '';
@@ -92,7 +95,7 @@ test.describe('The gate-out loop', () => {
     await chooseFirst(page.getByLabel('A site'));
     await chooseFirst(page.getByLabel('Who is taking it'));
 
-    await page.getByRole('button', { name: 'Add' }).click();
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
     const sheet = page.getByRole('dialog');
 
     // A **high-criticality** item, because that is what routes for approval
@@ -108,6 +111,7 @@ test.describe('The gate-out loop', () => {
     await expect(sheet).toBeHidden();
 
     await page.getByRole('button', { name: /send for approval/i }).click();
+    await expect(page).toHaveURL(/\/gate-out\/\d+$/, { timeout: 30_000 });
     await expect(page.getByText(/GP-\d+/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
 
     // On the detail screen the requester is warned *before* tapping, because a

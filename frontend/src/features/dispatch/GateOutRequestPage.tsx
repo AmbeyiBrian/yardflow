@@ -20,8 +20,9 @@
  */
 
 import { drumOrLooseMessage, LOOSE_LENGTH_LABEL, lengthLabel, lineTrackingMode } from './looseLength';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 
 import { api, ApiError } from '../../api/client';
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
@@ -33,6 +34,7 @@ import {
   Banner,
   Button,
   Card,
+  Checkbox,
   Field,
   Input,
   OwnershipBadge,
@@ -60,6 +62,18 @@ import {
   type IssuableResult,
   type LookedUpBox,
 } from './gateOutBoxes';
+import {
+  allTicked,
+  divertErrors,
+  earmarkedBulkProblem,
+  earmarkedRows,
+  earmarkedToLines,
+  groupJobsByProject,
+  jobMissing,
+  jobRule,
+  type EarmarkedJob,
+  type EarmarkedResult,
+} from './earmarkedGateOut';
 import type { GateOut, GateOutLine, GateOutPurpose } from './types';
 
 const DRAFT_KEY = 'yardflow.gate-out.draft';
@@ -154,6 +168,16 @@ export default function GateOutRequestPage() {
   // P10: the server's refusal of a unit or a box claim, kept apart from the
   // generic banner so each unit it names can be taken off the request.
   const [refusal, setRefusal] = useState<{ message: string; problems: string[] } | null>(null);
+  // Q3: the server's "this line needs a reason" by line index, and which lines
+  // have had the reason field opened by hand.
+  const [divertMessages, setDivertMessages] = useState<Record<number, string>>({});
+  const [reasonOpen, setReasonOpen] = useState<Set<number>>(new Set());
+  // Q6: the store-and-site the preload panel was last put away for.
+  const [dismissedKey, setDismissedKey] = useState('');
+  // A refused submit leaves the draft saved on the server. The next send must
+  // update that one: creating again would hand back the old copy unchanged
+  // (N2), and the reason just typed would never reach it.
+  const savedId = useRef<number | null>(null);
 
   // Skipped while editing: that draft lives on the server, and writing it here
   // would overwrite an unsaved request the same person may have in progress.
@@ -217,7 +241,44 @@ export default function GateOutRequestPage() {
     { enabled: draft.destination_kind === 'site' && Boolean(draft.destination_id) },
   ).data?.results ?? [];
 
-  const selectedJob = jobsAtSite.find((job) => String(job.id) === draft.job);
+  // Q6: what is earmarked for the chosen site at the chosen store, and the
+  // site's open jobs. Fetched as soon as both are known.
+  const earmarkedKey = `${draft.destination_id}:${draft.from_location}`;
+  const preload = useQuery({
+    queryKey: ['earmarked', draft.destination_id, draft.from_location],
+    queryFn: () =>
+      api.get<EarmarkedResult>(
+        `/stock/earmarked?site=${encodeURIComponent(draft.destination_id)}&from_location=${encodeURIComponent(draft.from_location)}`,
+      ),
+    enabled:
+      draft.destination_kind === 'site' &&
+      Boolean(draft.destination_id) &&
+      Boolean(draft.from_location),
+    staleTime: 0,
+    gcTime: 0,
+  });
+  // The earmarked answer names jobs with their project; until it arrives (or
+  // while no store is chosen) the plain job list stands in.
+  const siteJobs: EarmarkedJob[] =
+    draft.destination_kind !== 'site' || !draft.destination_id
+      ? []
+      : (preload.data?.jobs ??
+        jobsAtSite.map((job) => ({
+          id: job.id,
+          reference: job.reference,
+          project: job.project,
+          project_name: job.project_reference ?? '',
+        })));
+  const rule = jobRule(siteJobs);
+  const siteName = (sites.data?.results ?? []).find(
+    (site) => String(site.id) === draft.destination_id,
+  )?.name;
+
+  // Exactly one job at the site: it is chosen for them.
+  // Derived, not stored: the one job is the job unless something else is chosen.
+  const jobId = draft.job || (rule.kind === 'single' ? String(rule.job.id) : '');
+
+  const selectedJob = siteJobs.find((job) => String(job.id) === jobId);
   const selectedProject = projects.data?.results.find(
     (project) => project.id === selectedJob?.project,
   );
@@ -258,6 +319,9 @@ export default function GateOutRequestPage() {
 
   function clearDraft() {
     if (editingId) return;
+    savedId.current = null;
+    setDivertMessages({});
+    setReasonOpen(new Set());
     setDraft(emptyDraft(holderId));
     try {
       localStorage.removeItem(DRAFT_KEY);
@@ -277,7 +341,7 @@ export default function GateOutRequestPage() {
       client: draft.destination_kind === 'client' ? Number(draft.destination_id) : null,
       to_location:
         draft.destination_kind === 'to_location' ? Number(draft.destination_id) : null,
-      job: draft.job ? Number(draft.job) : null,
+      job: jobId ? Number(jobId) : null,
       from_location: Number(draft.from_location),
       custody_holder: Number(draft.custody_holder),
       notes: draft.notes,
@@ -289,10 +353,15 @@ export default function GateOutRequestPage() {
   async function saveThenSubmit(alsoSubmit: boolean) {
     setBanner(null);
     setRefusal(null);
+    setDivertMessages({});
     try {
-      const created = editingId
-        ? await update.mutateAsync(payload())
+      const existingId = editingId ?? savedId.current;
+      const created = existingId
+        ? editingId
+          ? await update.mutateAsync(payload())
+          : await api.patch<{ id: number }>(`/gate-outs/${existingId}`, payload())
         : await create.mutateAsync(payload());
+      if (!editingId) savedId.current = created.id;
       if (alsoSubmit) {
         const result = await submit.mutateAsync({ id: created.id });
         clearDraft();
@@ -303,12 +372,31 @@ export default function GateOutRequestPage() {
       navigate(`/gate-out/${created.id}`);
     } catch (error) {
       const refused = error instanceof ApiError ? submitRefusal(error) : null;
+      const diverted = error instanceof ApiError ? divertErrors(error.fieldErrors) : {};
       if (refused) setRefusal(refused);
-      else setBanner(errorMessage(error));
+      else if (Object.keys(diverted).length > 0) {
+        // Q3: say so on the line itself, where the reason is typed.
+        setDivertMessages(diverted);
+        setBanner(
+          'Some of this is going from material kept for another site. Say why, on each line marked below, then send again.',
+        );
+      } else setBanner(errorMessage(error));
     }
   }
 
+  function setLineReason(index: number, reason: string) {
+    setDraft((current) => ({
+      ...current,
+      lines: current.lines.map((line, position) =>
+        position === index ? { ...line, divert_reason: reason } : line,
+      ),
+    }));
+  }
+
   function removeLine(index: number) {
+    // Positions shift, so what was said about a position no longer holds.
+    setDivertMessages({});
+    setReasonOpen(new Set());
     setDraft((current) => ({
       ...current,
       lines: current.lines.filter((_line, position) => position !== index),
@@ -337,14 +425,21 @@ export default function GateOutRequestPage() {
         label: `${site.internal_ref} · ${site.name}`,
       })),
     },
-    {
-      kind: 'project',
-      label: 'A project',
-      options: (projects.data?.results ?? []).map((project) => ({
-        id: project.id,
-        label: project.reference,
-      })),
-    },
+    // Q6: a project is no longer something a new request is addressed to — it
+    // is worked out from the site's job. A draft or pass that already has one
+    // still shows it (read-only, below); it is simply not offered otherwise.
+    ...(draft.destination_kind === 'project'
+      ? [
+          {
+            kind: 'project' as const,
+            label: 'A project',
+            options: (projects.data?.results ?? []).map((project) => ({
+              id: project.id,
+              label: project.reference,
+            })),
+          },
+        ]
+      : []),
     {
       kind: 'client',
       label: 'Back to a client',
@@ -366,6 +461,7 @@ export default function GateOutRequestPage() {
     Boolean(draft.from_location) &&
     Boolean(draft.destination_id) &&
     Boolean(draft.custody_holder) &&
+    !jobMissing(rule, jobId) &&
     draft.lines.length > 0;
 
   return (
@@ -450,7 +546,11 @@ export default function GateOutRequestPage() {
         <Field
           label="Where it is going"
           htmlFor="go-destination-kind"
-          hint="A project is optional — a site on its own is fine."
+          hint={
+            draft.destination_kind === 'project'
+              ? 'This request was addressed to a project, and stays that way. Choose something else to change it.'
+              : 'A site brings what is waiting for it. The project follows from the site’s job.'
+          }
         >
           <Select
             id="go-destination-kind"
@@ -459,6 +559,7 @@ export default function GateOutRequestPage() {
               set({
                 destination_kind: event.target.value as DestinationKind,
                 destination_id: '',
+                job: '',
               })
             }
           >
@@ -474,7 +575,8 @@ export default function GateOutRequestPage() {
           <Select
             id="go-destination"
             value={draft.destination_id}
-            onChange={(event) => set({ destination_id: event.target.value })}
+            disabled={draft.destination_kind === 'project'}
+            onChange={(event) => set({ destination_id: event.target.value, job: '' })}
           >
             <option value="">Choose…</option>
             {chosen.options.map((option) => (
@@ -492,25 +594,68 @@ export default function GateOutRequestPage() {
           resolves — a pass addressed to a project already says which.
         */}
         {draft.destination_kind === 'site' && draft.destination_id ? (
-          <Field
-            label="For which job"
-            htmlFor="go-job"
-            hint="Optional. Naming it is what costs the material to a project."
-          >
-            <Select
-              id="go-job"
-              value={draft.job}
-              onChange={(event) => set({ job: event.target.value })}
+          rule.kind === 'single' ? (
+            <p className="text-sm text-slate-700" data-testid="go-job-single">
+              For job {rule.job.reference || `Job ${rule.job.id}`}
+              {rule.job.project_name ? ` · ${rule.job.project_name}` : ''}, the only open job at{' '}
+              {siteName ?? 'this site'}.
+            </p>
+          ) : rule.kind === 'none' ? null : (
+            <Field
+              label={rule.kind === 'required' ? 'Which job' : 'For which job'}
+              htmlFor="go-job"
+              hint={
+                rule.kind === 'required'
+                  ? 'This site has open jobs in more than one project. Choose the one this is for.'
+                  : 'Optional. Naming it is what costs the material to a project.'
+              }
             >
-              <option value="">Not for a particular job</option>
-              {jobsAtSite.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.reference || `Job ${job.id}`}
-                  {job.project_reference ? ` · ${job.project_reference}` : ''}
+              <Select
+                id="go-job"
+                value={draft.job}
+                onChange={(event) => set({ job: event.target.value })}
+              >
+                <option value="">
+                  {rule.kind === 'required' ? 'Choose…' : 'Not for a particular job'}
                 </option>
-              ))}
-            </Select>
-          </Field>
+                {groupJobsByProject(siteJobs).map((group) => (
+                  <optgroup key={group.project ?? 'none'} label={group.label}>
+                    {group.jobs.map((job) => (
+                      <option key={job.id} value={job.id}>
+                        {job.reference || `Job ${job.id}`}
+                        {job.description ? ` · ${job.description}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </Select>
+            </Field>
+          )
+        ) : null}
+
+        {/* Q6: what is already waiting for this site at this store. */}
+        {!editingId &&
+        draft.destination_kind === 'site' &&
+        draft.destination_id &&
+        draft.from_location &&
+        preload.data &&
+        dismissedKey !== earmarkedKey ? (
+          <EarmarkedPanel
+            key={earmarkedKey}
+            data={preload.data}
+            siteName={siteName ?? 'the site'}
+            storeName={
+              (locations.data?.results ?? []).find(
+                (row) => String(row.id) === draft.from_location,
+              )?.name ?? 'that store'
+            }
+            existing={draft.lines}
+            onAdd={(lines) => {
+              setDraft((current) => ({ ...current, lines: [...current.lines, ...lines] }));
+              setDismissedKey(earmarkedKey);
+            }}
+            onDismiss={() => setDismissedKey(earmarkedKey)}
+          />
         ) : null}
 
         {/*
@@ -636,9 +781,41 @@ export default function GateOutRequestPage() {
                               {line.expected_return_date ? ` by ${line.expected_return_date}` : ''}.
                             </p>
                           ) : null}
+                          {/* Q3: the server says which lines would use another
+                              site's earmarked material; the reason is typed here. */}
+                          {divertMessages[index] ? (
+                            <p className="mt-1 rounded-md bg-amber-50 p-2 text-amber-900" role="alert">
+                              {divertMessages[index]}
+                            </p>
+                          ) : null}
+                          {divertMessages[index] || line.divert_reason || reasonOpen.has(index) ? (
+                            <Field
+                              label="Why is it going here instead?"
+                              htmlFor={`go-line-reason-${index}`}
+                            >
+                              <Input
+                                id={`go-line-reason-${index}`}
+                                value={line.divert_reason ?? ''}
+                                onChange={(event) => setLineReason(index, event.target.value)}
+                              />
+                            </Field>
+                          ) : null}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
-                          {fromBox ? null : (
+                          {fromBox || line.serials?.length || line.reels?.length ? (
+                            // A line that names units or drums keeps them; the
+                            // line sheet would rebuild it. The reason can still
+                            // be given (Q3).
+                            <Button
+                              variant="ghost"
+                              className="min-h-0 px-2 py-1 text-sm"
+                              onClick={() =>
+                                setReasonOpen((current) => new Set(current).add(index))
+                              }
+                            >
+                              Reason
+                            </Button>
+                          ) : (
                             <Button
                               variant="ghost"
                               className="min-h-0 px-2 py-1 text-sm"
@@ -807,6 +984,8 @@ function LineSheet({
   const [noSerialReason, setNoSerialReason] = useState('');
   /** Cable taken as loose length rather than from a named drum (D10). */
   const [looseLength, setLooseLength] = useState(false);
+  // Q3: given up front when the line is known to use another site's material.
+  const [divertReason, setDivertReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   void fromLocation;
@@ -858,6 +1037,7 @@ function LineSheet({
     setProposal(null);
     setNoSerialReason('');
     setLooseLength(false);
+    setDivertReason('');
     setHoldingKey('');
     setError(null);
   }
@@ -967,6 +1147,7 @@ function LineSheet({
         untagged: serializedWithoutAScan,
       }),
       no_serial_reason: serializedWithoutAScan ? noSerialReason.trim() : '',
+      divert_reason: divertReason.trim(),
       requested_qty: quantity,
       uom: item.uom,
       // Whose stock, and in what condition — taken from the lot that was
@@ -1030,6 +1211,7 @@ function LineSheet({
     setReturnable(Boolean(initial.is_returnable));
     setReturnDate(initial.expected_return_date ?? '');
     setNoSerialReason(initial.no_serial_reason ?? '');
+    setDivertReason(initial.divert_reason ?? '');
     setHoldingKey(`${initial.owner_client ?? 'own'}:${initial.condition ?? 'NEW'}`);
   }, [open, initial]);
 
@@ -1210,6 +1392,18 @@ function LineSheet({
           />
         </Field>
 
+        <Field
+          label="Why is it going here instead?"
+          htmlFor="gol-divert"
+          hint="Only if this takes material kept for another site. The request will ask if it needs to."
+        >
+          <Input
+            id="gol-divert"
+            value={divertReason}
+            onChange={(event) => setDivertReason(event.target.value)}
+          />
+        </Field>
+
         {returnable ? (
           <Field
             label="Expected back"
@@ -1317,5 +1511,152 @@ function BoxProposalPanel({
         </Banner>
       ) : null}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* What is waiting for the site                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Everything earmarked for the chosen site at the chosen store, all ticked
+ * (Q6). Untick what is not going, lower a bulk quantity to take part of it,
+ * then "Add ticked" turns the rest into lines. Remounted (by key) when the site
+ * or store changes, so each starts ticked again.
+ */
+function EarmarkedPanel({
+  data,
+  siteName,
+  storeName,
+  existing,
+  onAdd,
+  onDismiss,
+}: {
+  data: EarmarkedResult;
+  siteName: string;
+  storeName: string;
+  existing: GateOutLine[];
+  onAdd: (lines: GateOutLine[]) => void;
+  onDismiss: () => void;
+}) {
+  const rows = earmarkedRows(data.lines);
+  const [ticked, setTicked] = useState<Set<string>>(() => allTicked(data.lines));
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm text-slate-600">
+          Nothing is earmarked for {siteName} at {storeName}.
+        </p>
+        {data.excluded.length > 0 ? <ExcludedList rows={data.excluded} /> : null}
+      </div>
+    );
+  }
+
+  function toggle(key: string) {
+    setTicked((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function addTicked() {
+    for (const row of rows) {
+      if (row.kind !== 'bulk' || !ticked.has(row.key)) continue;
+      const line = data.lines[row.lineIndex];
+      const problem = earmarkedBulkProblem(
+        quantities[row.key] ?? row.quantity ?? '',
+        row.quantity ?? '0',
+        line.uom,
+      );
+      if (problem) {
+        setError(`${line.item_name}: ${problem}`);
+        return;
+      }
+    }
+    setError(null);
+    onAdd(earmarkedToLines(data.lines, ticked, quantities, existing).lines);
+  }
+
+  return (
+    <section className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3">
+      <h2 className="text-sm font-semibold text-slate-900">Waiting for {siteName}</h2>
+      {error ? <Banner tone="error">{error}</Banner> : null}
+      <ul className="flex flex-col gap-2">
+        {data.lines.map((line, lineIndex) => (
+          <li key={`${line.item_type}-${lineIndex}`} className="flex flex-col gap-1 text-sm">
+            <p className="font-medium break-words text-slate-900">
+              {line.item_name}
+              <span className="font-normal text-slate-600">
+                {line.owner_client ? ' · client stock' : ''}
+              </span>
+            </p>
+            {rows
+              .filter((row) => row.lineIndex === lineIndex)
+              .map((row) =>
+                row.kind === 'bulk' ? (
+                  <div key={row.key} className="flex flex-col gap-1">
+                    <Checkbox
+                      label={`${row.quantity} ${line.uom} earmarked`}
+                      checked={ticked.has(row.key)}
+                      onChange={() => toggle(row.key)}
+                    />
+                    {ticked.has(row.key) ? (
+                      <Field label="How much of it" htmlFor={`go-earmark-qty-${lineIndex}`}>
+                        <Input
+                          id={`go-earmark-qty-${lineIndex}`}
+                          inputMode="decimal"
+                          value={quantities[row.key] ?? row.quantity ?? ''}
+                          onChange={(event) =>
+                            setQuantities((current) => ({
+                              ...current,
+                              [row.key]: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                    ) : null}
+                  </div>
+                ) : (
+                  <Checkbox
+                    key={row.key}
+                    label={row.label}
+                    checked={ticked.has(row.key)}
+                    onChange={() => toggle(row.key)}
+                  />
+                ),
+              )}
+          </li>
+        ))}
+      </ul>
+      {data.excluded.length > 0 ? <ExcludedList rows={data.excluded} /> : null}
+      <div className="flex gap-2">
+        <Button block onClick={addTicked} disabled={ticked.size === 0}>
+          Add ticked
+        </Button>
+        <Button block variant="secondary" onClick={onDismiss}>
+          Not now
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function ExcludedList({ rows }: { rows: EarmarkedResult['excluded'] }) {
+  return (
+    <Banner tone="warning">
+      <div className="flex flex-col gap-1">
+        <p className="font-medium">{rows.length} cannot go</p>
+        <ul className="flex flex-col gap-1">
+          {rows.map((row, index) => (
+            <li key={`${row.serial_number || row.drum_number}-${index}`}>{row.message}</li>
+          ))}
+        </ul>
+      </div>
+    </Banner>
   );
 }

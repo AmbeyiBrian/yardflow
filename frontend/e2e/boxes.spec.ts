@@ -90,7 +90,7 @@ test.describe('A box from the gate to the truck', () => {
     await chooseFirst(page.getByLabel('A site'));
     await chooseFirst(page.getByLabel('Who is taking it'));
 
-    await page.getByRole('button', { name: 'Add' }).click();
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
     const sheet = page.getByRole('dialog');
     await sheet.getByLabel('Scan a serial or a drum').fill(boxCode);
     await sheet.getByRole('button', { name: /^add$/i }).first().click();
@@ -104,6 +104,7 @@ test.describe('A box from the gate to the truck', () => {
     }
 
     await page.getByRole('button', { name: /send for approval/i }).click();
+    await expect(page).toHaveURL(/\/gate-out\/\d+$/, { timeout: 30_000 });
     await expect(page.getByText(/GP-\d+/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
     passId = page.url().match(/gate-out\/(\d+)/)?.[1] ?? '';
     expect(passId).not.toBe('');
