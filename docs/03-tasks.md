@@ -1240,7 +1240,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* the refusal is tested, and the **whole** backend suite passes unchanged, proving no
   existing caller relied on the gap.
 
-- [ ] **T11.4 `[B]` Ledger hooks for boxes**
+- [x] **T11.4 `[B]` Ledger hooks for boxes**
   Refs: §4.15.3 · P5, P7, P9, P10
   `MovementRequest.from_box` and `moving_box`. A moving unit leaves its box; bulk draws on a named
   box's claim or on loose stock; `BoxedStockOnly` for issue-like movements when loose is short;
