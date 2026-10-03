@@ -1249,7 +1249,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* each rule has a test, including a pallet emptied by one release closing at every
   level, and the whole backend suite passes.
 
-- [ ] **T11.5 `[B]` Box services**
+- [x] **T11.5 `[B]` Box services**
   Refs: §4.15.4 · P1, P7, P9, P10, E4
   `stock/boxes.py`: `create_box` (with generated codes), `put_units`, `put_bulk`, `put_box`,
   `take_out`, `empty_box`, `move_box`, `box_tree`, `issuable_contents`. Locks parent before child;
