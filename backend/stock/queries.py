@@ -13,11 +13,19 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from django.db.models import Q, QuerySet, Sum
+from django.db.models import Count, IntegerField, OuterRef, Q, QuerySet, Subquery, Sum
+from django.db.models.functions import Coalesce
 
 from locations.models import UNAVAILABLE_NODE_TYPES, LocationType, StockNode
 from stock.labels import read_label
-from stock.models import Reel, SerialUnit, StockBalance, StockMovement
+from stock.models import (
+    Box,
+    BoxBulkContent,
+    Reel,
+    SerialUnit,
+    StockBalance,
+    StockMovement,
+)
 
 
 def stock_on_hand(
@@ -192,6 +200,44 @@ def _find_exact(identifier: str) -> dict | None:
     return None
 
 
+def _find_box(code: str) -> dict | None:
+    box = Box.objects.filter(code__iexact=code).select_related("current_node").first()
+    if box is not None:
+        return {"kind": "box", "object": box}
+    return None
+
+
+def annotated_boxes() -> QuerySet[Box]:
+    """Boxes with their live counts, in one query (P4).
+
+    ``units_now`` and ``bulk_lines_now`` cover the box and everything inside it
+    (boxes nest three deep at most, P10), the same "now" as ``box_tree``. They
+    are subqueries rather than joins: three joined counts multiply each other.
+    """
+
+    def within(model, path: str):  # type: ignore[no-untyped-def]
+        return (
+            model.objects.filter(
+                Q(**{path: OuterRef("pk")})
+                | Q(**{f"{path}__parent": OuterRef("pk")})
+                | Q(**{f"{path}__parent__parent": OuterRef("pk")})
+            )
+            .order_by()
+            .values("organization_id")
+            .annotate(n=Count("pk"))
+            .values("n")
+        )
+
+    return Box.objects.select_related("current_node", "parent").annotate(
+        units_now=Coalesce(
+            Subquery(within(SerialUnit, "box"), output_field=IntegerField()), 0
+        ),
+        bulk_lines_now=Coalesce(
+            Subquery(within(BoxBulkContent, "box"), output_field=IntegerField()), 0
+        ),
+    )
+
+
 def find_by_identifier(identifier: str) -> dict | None:
     """Resolve a scanned or typed identifier to whatever it is (E1, E2, D7, P2).
 
@@ -202,24 +248,28 @@ def find_by_identifier(identifier: str) -> dict | None:
     The value as given is tried first, so a plain serial behaves exactly as it
     always did. Only if that finds nothing is the label read (§4.15.6) and each
     serial in it tried in turn — a GS1 barcode or a product link then finds the
-    unit it names. Box codes and gate-pass tokens are not resolved here.
+    unit it names. A box code is resolved last; gate-pass tokens are not resolved here.
     """
     scanned = identifier or ""
     identifier = scanned.strip()
     if not identifier:
         return None
 
-    found = _find_exact(identifier)
+    found = _find_exact(identifier) or _find_box(identifier)
     if found is not None:
         return found
 
     # The unstripped value: a GS1 string can end in a separator that strip() eats.
-    for serial in read_label(scanned).serials:
+    reading = read_label(scanned)
+    for serial in reading.serials:
         if serial == identifier:
             continue
         found = _find_exact(serial)
         if found is not None:
             return found
+
+    if reading.box_code and reading.box_code != identifier:
+        return _find_box(reading.box_code)
 
     return None
 

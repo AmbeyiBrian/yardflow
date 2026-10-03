@@ -93,6 +93,8 @@ from reporting.views import (
     RetentionReviewView,
 )
 from stock.views import (
+    BoxIssuableView,
+    BoxViewSet,
     ClientPositionView,
     CustodyStockView,
     InstalledBaseView,
@@ -264,6 +266,7 @@ router.register("gate-ins", GateInViewSet, basename="gate-in")
 router.register("movements", MovementViewSet, basename="movement")
 router.register("serials", SerialUnitViewSet, basename="serial")
 router.register("drums", ReelViewSet, basename="drum")
+router.register("boxes", BoxViewSet, basename="box")
 router.register("stock-counts", StockCountViewSet, basename="stock-count")
 
 router.register("gate-outs", GateOutViewSet, basename="gate-out")
@@ -334,6 +337,7 @@ v1_patterns = [
         ReelHistoryView.as_view(),
         name="reel-history",
     ),
+    path("stock/boxes/<str:code>/issuable", BoxIssuableView.as_view(), name="box-issuable"),
     path("stock/low", LowStockView.as_view(), name="stock-low"),
     path("stock/client-position", ClientPositionView.as_view(), name="client-position"),
     path("stock/installed", InstalledBaseView.as_view(), name="installed-base"),

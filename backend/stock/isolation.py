@@ -16,6 +16,8 @@ def register() -> None:
     from locations.models import Location, LocationType
     from locations.nodes import external_node, node_for_location
     from stock.models import (
+        Box,
+        BoxSource,
         MovementType,
         OwnerType,
         Reel,
@@ -93,7 +95,16 @@ def register() -> None:
             counted_at=timezone.now(),
         )
 
+    def make_box(organization):
+        return Box.objects.create(
+            organization=organization,
+            code="ISO-BOX-1",
+            source=BoxSource.LABEL,
+            current_node=node_for_location(_yard(organization)),
+        )
+
     register_isolation_fixture("movement", make_movement)
     register_isolation_fixture("serial", make_serial)
     register_isolation_fixture("drum", make_reel)
+    register_isolation_fixture("box", make_box)
     register_isolation_fixture("stock-count", make_count, payload={"notes": "renamed"})

@@ -17,21 +17,39 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import django_filters
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import MethodNotAllowed
+from rest_framework.pagination import CursorPagination
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.api_permissions import HasPermission
 from accounts.permissions_registry import PERM
+from accounts.services import resolve_permissions
 from core.api import TenantScopedViewSet
 from core.api_permissions import OrganizationIsActive
 from core.pagination import OccurrenceCursorPagination
 from locations.models import NodeType
+from stock.box_hooks import EventContext
+from stock.boxes import (
+    _box_path,
+    _subtree,
+    box_tree,
+    empty_box,
+    issuable_contents,
+    move_box,
+    take_out,
+)
 from stock.counting import add_count_line, post_stock_count, transfer_stock
 from stock.models import (
+    Box,
+    BoxEvent,
+    BoxStatus,
     Condition,
     Reel,
     SerialUnit,
@@ -41,6 +59,7 @@ from stock.models import (
     StockMovement,
 )
 from stock.queries import (
+    annotated_boxes,
     below_minimum_stock,
     client_owned_position,
     custody_holdings,
@@ -323,6 +342,16 @@ class StockLookupView(APIView):
                 }
             )
 
+        if found["kind"] == "box":
+            box = annotated_boxes().get(pk=found["object"].pk)
+            return Response(
+                {
+                    "kind": "box",
+                    "resource": f"/stock/boxes/{box.code}",
+                    "object": BoxRowSerializer(box).data,
+                }
+            )
+
         reel = found["object"]
         return Response(
             {
@@ -592,6 +621,356 @@ class TransferView(APIView):
             request=request,
         )
         return Response(MovementSerializer(movement).data, status=201)
+
+
+# --------------------------------------------------------------------------
+# Boxes (design §4.15.9; P4, P6, P7, P8)
+# --------------------------------------------------------------------------
+
+
+class BoxRowSerializer(serializers.ModelSerializer):
+    """A box in a list: counts are annotated by ``annotated_boxes``, not per row."""
+
+    parent_code = serializers.CharField(source="parent.code", read_only=True, default=None)
+    node = serializers.IntegerField(source="current_node_id", read_only=True)
+    node_label = serializers.CharField(source="current_node.label", read_only=True)
+    # Plain strings, not choice fields: a second "status" or "action" enum would
+    # make the schema generator rename the existing ones.
+    status = serializers.CharField(read_only=True)
+    source = serializers.CharField(read_only=True)
+    units_now = serializers.IntegerField(read_only=True)
+    bulk_lines_now = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Box
+        fields = (
+            "id",
+            "code",
+            "status",
+            "source",
+            "depth",
+            "parent_code",
+            "node",
+            "node_label",
+            "units_now",
+            "bulk_lines_now",
+            "created_at",
+            "closed_at",
+        )
+        read_only_fields = fields
+
+
+class BoxFilter(django_filters.FilterSet):
+    node = django_filters.NumberFilter(field_name="current_node")
+    location = django_filters.NumberFilter(field_name="current_node__location")
+    gate_in = django_filters.NumberFilter(field_name="gate_in")
+    status = django_filters.ChoiceFilter(choices=BoxStatus.choices)
+
+    class Meta:
+        model = Box
+        fields = ["node", "location", "status", "gate_in"]
+
+
+class BoxEventSerializer(serializers.ModelSerializer):
+    action = serializers.CharField(read_only=True)
+    action_label = serializers.CharField(source="get_action_display", read_only=True)
+    box_code = serializers.CharField(source="box.code", read_only=True)
+    actor = serializers.CharField(source="actor.full_name", read_only=True, default="")
+    serial_number = serializers.CharField(
+        source="serial_unit.serial_number", read_only=True, default=""
+    )
+    child_box_code = serializers.CharField(source="child_box.code", read_only=True, default="")
+    item_name = serializers.CharField(source="item_type.name", read_only=True, default="")
+    owner_client = serializers.CharField(source="owner_client.name", read_only=True, default="")
+
+    class Meta:
+        model = BoxEvent
+        fields = (
+            "id",
+            "occurred_at",
+            "action",
+            "action_label",
+            "box_code",
+            "actor",
+            "serial_number",
+            "child_box_code",
+            "item_name",
+            "owner_client",
+            "condition",
+            "quantity",
+            "document_type",
+            "document_id",
+            "document_number",
+            "note",
+        )
+        read_only_fields = fields
+
+
+class BoxEventPagination(CursorPagination):
+    """Newest first; ``id`` breaks ties, because one movement writes several
+    events with the same ``occurred_at``."""
+
+    ordering = ("-occurred_at", "-id")
+    page_size_query_param = "page_size"
+    max_page_size = 200
+
+
+class BoxBulkTakeSerializer(serializers.Serializer):
+    item_type = serializers.IntegerField()
+    owner_client = serializers.IntegerField(required=False, allow_null=True, default=None)
+    condition = serializers.ChoiceField(choices=Condition.choices)
+    quantity = serializers.DecimalField(max_digits=14, decimal_places=3)
+
+
+class BoxTakeOutSerializer(serializers.Serializer):
+    units = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+    bulk = BoxBulkTakeSerializer(many=True, required=False, default=list)
+    boxes = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+
+
+class BoxMoveSerializer(serializers.Serializer):
+    to_location = serializers.IntegerField()
+
+
+_BoxDetail = inline_serializer(
+    "BoxDetail",
+    {
+        "id": serializers.IntegerField(),
+        "code": serializers.CharField(),
+        "status": serializers.CharField(),
+        "source": serializers.CharField(),
+        "depth": serializers.IntegerField(),
+        "parent_code": serializers.CharField(allow_null=True),
+        "path": serializers.ListField(child=serializers.CharField()),
+        "node_id": serializers.IntegerField(),
+        "node_label": serializers.CharField(),
+        "gate_in": serializers.IntegerField(allow_null=True),
+        "gate_in_number": serializers.CharField(allow_null=True),
+        "created_at": serializers.DateTimeField(),
+        "closed_at": serializers.DateTimeField(allow_null=True),
+        "units": serializers.ListField(child=serializers.DictField()),
+        "bulk": serializers.ListField(child=serializers.DictField()),
+        "children": serializers.ListField(child=serializers.DictField()),
+        "counts": serializers.DictField(),
+    },
+)
+
+
+class CanChangeBoxes(BasePermission):
+    """``stock.adjust`` or ``gate_in.post`` (§4.15.9): the storekeeper who
+    received the box and the one who corrects stock may both reorganise it."""
+
+    message = "You do not have permission to change boxes."
+
+    def has_permission(self, request, view) -> bool:  # type: ignore[no-untyped-def]
+        granted = resolve_permissions(request.user)
+        return granted.has(PERM.STOCK_ADJUST) or granted.has(PERM.GATE_IN_POST)
+
+
+def box_detail(box: Box) -> dict:
+    """The tree (P4) plus where the box sits, how it got here and its path."""
+    box = Box.objects.select_related("current_node", "parent", "gate_in").get(pk=box.pk)
+    payload = box_tree(box)
+    payload.update(
+        {
+            "source": box.source,
+            "parent_code": box.parent.code if box.parent else None,
+            "path": _box_path(box, {}),
+            "node_id": box.current_node_id,
+            "node_label": box.current_node.label,
+            "gate_in": box.gate_in_id,
+            "gate_in_number": box.gate_in.number if box.gate_in else None,
+            "created_at": box.created_at,
+            "closed_at": box.closed_at,
+        }
+    )
+    return payload
+
+
+class BoxViewSet(TenantScopedViewSet):
+    """``/api/v1/boxes`` (P4, P7, P8).
+
+    Addressed by **code**, case-insensitively: the code is what is printed on
+    the carton in the storekeeper's hands. ``lookup_value_regex`` accepts
+    anything but ``/`` (a supplier code or a GS1 SSCC is letters, digits and
+    punctuation, and may contain ``.``); a code containing ``/`` cannot be put in
+    a path, so it is found through ``/stock/lookup?q=`` instead. A trailing
+    ``.json`` is therefore part of the code, not a format suffix.
+
+    Reads need only a signed-in user, as ``/stock`` does. Changing a box needs
+    ``stock.adjust`` or ``gate_in.post``.
+    """
+
+    serializer_class = BoxRowSerializer
+    model = Box
+    filterset_class = BoxFilter
+    search_fields = ["code"]
+    ordering_fields = ["code", "created_at"]
+    lookup_field = "code"
+    lookup_value_regex = "[^/]+"
+
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        return annotated_boxes()
+
+    def get_permissions(self):  # type: ignore[no-untyped-def]
+        if getattr(self, "action", None) in ("take_out", "empty", "move"):
+            return [IsAuthenticated(), OrganizationIsActive(), CanChangeBoxes()]
+        return [IsAuthenticated(), OrganizationIsActive(), HasPermission()]
+
+    def get_object(self):  # type: ignore[no-untyped-def]
+        box = get_object_or_404(self.get_queryset(), code__iexact=self.kwargs["code"])
+        self.check_object_permissions(self.request, box)
+        return box
+
+    @extend_schema(exclude=True)
+    def create(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise MethodNotAllowed(request.method)
+
+    @extend_schema(responses={200: _BoxDetail})
+    def retrieve(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return Response(box_detail(self.get_object()))
+
+    @extend_schema(responses={200: BoxEventSerializer(many=True)})
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="history",
+        pagination_class=BoxEventPagination,
+    )
+    def history(self, request, code=None):  # type: ignore[no-untyped-def]
+        """Events of this box **and every box inside it**, newest first (P8).
+
+        A pallet's history includes its cartons' events; each row says which box
+        it happened to (``box_code``).
+        """
+        box = self.get_object()
+        ids = [b.pk for b in _subtree(box)]
+        events = BoxEvent.objects.filter(box_id__in=ids).select_related(
+            "box", "actor", "serial_unit", "child_box", "item_type", "owner_client"
+        )
+        page = self.paginate_queryset(events)
+        return self.get_paginated_response(BoxEventSerializer(page, many=True).data)
+
+    @extend_schema(request=BoxTakeOutSerializer, responses={200: _BoxDetail})
+    @action(detail=True, methods=["post"], url_path="take-out")
+    def take_out(self, request, code=None):  # type: ignore[no-untyped-def]
+        """P7: contents leave the box and stay where they are."""
+        box = self.get_object()
+        serializer = BoxTakeOutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        units = _all_or_400(SerialUnit.objects.filter(pk__in=data["units"]), data["units"], "units")
+        child_codes = {c.strip().lower() for c in data["boxes"]}
+        children = [b for b in Box.objects.filter(parent=box) if b.code.lower() in child_codes]
+        if {c.code.lower() for c in children} != child_codes:
+            raise serializers.ValidationError(
+                {"boxes": ["A box named is not inside this box."]}
+            )
+
+        bulk = []
+        for index, entry in enumerate(data["bulk"]):
+            item = _one_or_400("catalogue.ItemType", entry["item_type"], f"bulk.{index}.item_type")
+            client = (
+                _one_or_400("network.Client", entry["owner_client"], f"bulk.{index}.owner_client")
+                if entry["owner_client"]
+                else None
+            )
+            bulk.append(
+                {
+                    "item_type": item,
+                    "owner_client": client,
+                    "condition": entry["condition"],
+                    "quantity": entry["quantity"],
+                }
+            )
+
+        take_out(
+            box,
+            units=units,
+            bulk=bulk,
+            boxes=children,
+            ctx=EventContext(actor=request.user),
+        )
+        return Response(box_detail(box))
+
+    @extend_schema(request=None, responses={200: _BoxDetail})
+    @action(detail=True, methods=["post"], url_path="empty")
+    def empty(self, request, code=None):  # type: ignore[no-untyped-def]
+        """P7: everything out, which closes the box."""
+        box = self.get_object()
+        empty_box(box, ctx=EventContext(actor=request.user))
+        return Response(box_detail(box))
+
+    @extend_schema(request=BoxMoveSerializer, responses={200: _BoxDetail})
+    @action(detail=True, methods=["post"], url_path="move")
+    def move(self, request, code=None):  # type: ignore[no-untyped-def]
+        """P7, E4: the box and everything in it to another place in the yard."""
+        box = self.get_object()
+        serializer = BoxMoveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        location = _one_or_400(
+            "locations.Location", serializer.validated_data["to_location"], "to_location"
+        )
+        move_box(box, location, actor=request.user, request=request)
+        return Response(box_detail(box))
+
+
+def _one_or_400(label, pk, field):  # type: ignore[no-untyped-def]
+    """An id inside the tenant, or a 400 naming the field (a body is not a path)."""
+    from django.apps import apps
+
+    obj = apps.get_model(label).objects.filter(pk=pk).first()
+    if obj is None:
+        raise serializers.ValidationError({field: ["Not found."]})
+    return obj
+
+
+def _all_or_400(queryset, ids, field):  # type: ignore[no-untyped-def]
+    found = list(queryset)
+    if {obj.pk for obj in found} != set(ids):
+        raise serializers.ValidationError({field: ["One of these is not found."]})
+    return found
+
+
+class BoxIssuableView(APIView):
+    """``/api/v1/stock/boxes/{code}/issuable?from_location=`` (P6, P9, P10).
+
+    What a gate-out for this box would carry from that place, and what could not
+    go and why.
+    """
+
+    permission_classes = [IsAuthenticated, OrganizationIsActive, HasPermission]
+    required_permissions = {"get": PERM.GATE_OUT_REQUEST}
+
+    @extend_schema(
+        parameters=[OpenApiParameter("from_location", required=True, type=int)],
+        responses={
+            200: inline_serializer(
+                "BoxIssuable",
+                {
+                    "lines": serializers.ListField(child=serializers.DictField()),
+                    "excluded": serializers.ListField(child=serializers.DictField()),
+                },
+            )
+        },
+    )
+    def get(self, request, code: str):  # type: ignore[no-untyped-def]
+        from locations.models import Location
+        from locations.nodes import node_for_location
+
+        box = get_object_or_404(Box.objects.all(), code__iexact=code)
+        raw = request.query_params.get("from_location")
+        location = None
+        if raw and raw.isdigit():
+            location = Location.objects.filter(pk=int(raw)).first()
+        if location is None:
+            raise serializers.ValidationError(
+                {"from_location": ["Name a location of yours to issue from."]}
+            )
+        return Response(issuable_contents(box, from_node=node_for_location(location)))
 
 
 class StockCountLineSerializer(serializers.Serializer):

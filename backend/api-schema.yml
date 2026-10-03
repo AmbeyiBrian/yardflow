@@ -1038,6 +1038,273 @@ paths:
               schema:
                 $ref: '#/components/schemas/EnrolledCredential'
           description: ''
+  /api/v1/boxes:
+    get:
+      operationId: boxes_list
+      description: |-
+        ``/api/v1/boxes`` (P4, P7, P8).
+
+        Addressed by **code**, case-insensitively: the code is what is printed on
+        the carton in the storekeeper's hands. ``lookup_value_regex`` accepts
+        anything but ``/`` (a supplier code or a GS1 SSCC is letters, digits and
+        punctuation, and may contain ``.``); a code containing ``/`` cannot be put in
+        a path, so it is found through ``/stock/lookup?q=`` instead. A trailing
+        ``.json`` is therefore part of the code, not a format suffix.
+
+        Reads need only a signed-in user, as ``/stock`` does. Changing a box needs
+        ``stock.adjust`` or ``gate_in.post``.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: gate_in
+        schema:
+          type: integer
+      - in: query
+        name: location
+        schema:
+          type: integer
+      - in: query
+        name: node
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - CLOSED
+          - OPEN
+        description: |-
+          * `OPEN` - Open
+          * `CLOSED` - Closed
+      tags:
+      - boxes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBoxRowList'
+          description: ''
+  /api/v1/boxes/{code}:
+    get:
+      operationId: boxes_retrieve
+      description: |-
+        ``/api/v1/boxes`` (P4, P7, P8).
+
+        Addressed by **code**, case-insensitively: the code is what is printed on
+        the carton in the storekeeper's hands. ``lookup_value_regex`` accepts
+        anything but ``/`` (a supplier code or a GS1 SSCC is letters, digits and
+        punctuation, and may contain ``.``); a code containing ``/`` cannot be put in
+        a path, so it is found through ``/stock/lookup?q=`` instead. A trailing
+        ``.json`` is therefore part of the code, not a format suffix.
+
+        Reads need only a signed-in user, as ``/stock`` does. Changing a box needs
+        ``stock.adjust`` or ``gate_in.post``.
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      tags:
+      - boxes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoxDetail'
+          description: ''
+  /api/v1/boxes/{code}/empty:
+    post:
+      operationId: boxes_empty_create
+      description: 'P7: everything out, which closes the box.'
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      tags:
+      - boxes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoxDetail'
+          description: ''
+  /api/v1/boxes/{code}/history:
+    get:
+      operationId: boxes_history_list
+      description: |-
+        Events of this box **and every box inside it**, newest first (P8).
+
+        A pallet's history includes its cartons' events; each row says which box
+        it happened to (``box_code``).
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: gate_in
+        schema:
+          type: integer
+      - in: query
+        name: location
+        schema:
+          type: integer
+      - in: query
+        name: node
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - CLOSED
+          - OPEN
+        description: |-
+          * `OPEN` - Open
+          * `CLOSED` - Closed
+      tags:
+      - boxes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBoxEventList'
+          description: ''
+  /api/v1/boxes/{code}/move:
+    post:
+      operationId: boxes_move_create
+      description: 'P7, E4: the box and everything in it to another place in the yard.'
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      tags:
+      - boxes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoxMoveRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BoxMoveRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BoxMoveRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoxDetail'
+          description: ''
+  /api/v1/boxes/{code}/take-out:
+    post:
+      operationId: boxes_take_out_create
+      description: 'P7: contents leave the box and stay where they are.'
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      tags:
+      - boxes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BoxTakeOutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BoxTakeOutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BoxTakeOutRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoxDetail'
+          description: ''
   /api/v1/category-custom-fields:
     get:
       operationId: category_custom_fields_list
@@ -7581,6 +7848,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/StockNode'
           description: ''
+  /api/v1/stock/boxes/{code}/issuable:
+    get:
+      operationId: stock_boxes_issuable_retrieve
+      description: |-
+        ``/api/v1/stock/boxes/{code}/issuable?from_location=`` (P6, P9, P10).
+
+        What a gate-out for this box would carry from that place, and what could not
+        go and why.
+      parameters:
+      - in: path
+        name: code
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: from_location
+        schema:
+          type: integer
+        required: true
+      tags:
+      - stock
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoxIssuable'
+          description: ''
   /api/v1/stock/client-position:
     get:
       operationId: stock_client_position_list
@@ -9040,6 +9337,271 @@ components:
     BlankEnum:
       enum:
       - ''
+    BoxBulkTakeRequest:
+      type: object
+      properties:
+        item_type:
+          type: integer
+        owner_client:
+          type: integer
+          nullable: true
+        condition:
+          $ref: '#/components/schemas/ConditionEnum'
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+      required:
+      - condition
+      - item_type
+      - quantity
+    BoxDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        status:
+          type: string
+        source:
+          type: string
+        depth:
+          type: integer
+        parent_code:
+          type: string
+          nullable: true
+        path:
+          type: array
+          items:
+            type: string
+        node_id:
+          type: integer
+        node_label:
+          type: string
+        gate_in:
+          type: integer
+          nullable: true
+        gate_in_number:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+        units:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        bulk:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        children:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        counts:
+          type: object
+          additionalProperties: {}
+      required:
+      - bulk
+      - children
+      - closed_at
+      - code
+      - counts
+      - created_at
+      - depth
+      - gate_in
+      - gate_in_number
+      - id
+      - node_id
+      - node_label
+      - parent_code
+      - path
+      - source
+      - status
+      - units
+    BoxEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        action:
+          type: string
+          readOnly: true
+        action_label:
+          type: string
+          readOnly: true
+        box_code:
+          type: string
+          readOnly: true
+        actor:
+          type: string
+          readOnly: true
+          default: ''
+        serial_number:
+          type: string
+          readOnly: true
+          default: ''
+        child_box_code:
+          type: string
+          readOnly: true
+          default: ''
+        item_name:
+          type: string
+          readOnly: true
+          default: ''
+        owner_client:
+          type: string
+          readOnly: true
+          default: ''
+        condition:
+          allOf:
+          - $ref: '#/components/schemas/ConditionEnum'
+          readOnly: true
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+          readOnly: true
+          nullable: true
+        document_type:
+          type: string
+          readOnly: true
+        document_id:
+          type: string
+          readOnly: true
+        document_number:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+      required:
+      - action
+      - action_label
+      - actor
+      - box_code
+      - child_box_code
+      - condition
+      - document_id
+      - document_number
+      - document_type
+      - id
+      - item_name
+      - note
+      - occurred_at
+      - owner_client
+      - quantity
+      - serial_number
+    BoxIssuable:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        excluded:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - excluded
+      - lines
+    BoxMoveRequest:
+      type: object
+      properties:
+        to_location:
+          type: integer
+      required:
+      - to_location
+    BoxRow:
+      type: object
+      description: 'A box in a list: counts are annotated by ``annotated_boxes``,
+        not per row.'
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        source:
+          type: string
+          readOnly: true
+        depth:
+          type: integer
+          readOnly: true
+        parent_code:
+          type: string
+          readOnly: true
+        node:
+          type: integer
+          readOnly: true
+        node_label:
+          type: string
+          readOnly: true
+        units_now:
+          type: integer
+          readOnly: true
+        bulk_lines_now:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - bulk_lines_now
+      - closed_at
+      - code
+      - created_at
+      - depth
+      - id
+      - node
+      - node_label
+      - parent_code
+      - source
+      - status
+      - units_now
+    BoxTakeOutRequest:
+      type: object
+      properties:
+        units:
+          type: array
+          items:
+            type: integer
+        bulk:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoxBulkTakeRequest'
+        boxes:
+          type: array
+          items:
+            type: string
+            minLength: 1
     CategoryCustomField:
       type: object
       properties:
@@ -12462,6 +13024,44 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Attachment'
+    PaginatedBoxEventList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoxEvent'
+    PaginatedBoxRowList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoxRow'
     PaginatedCategoryCustomFieldList:
       type: object
       required:
