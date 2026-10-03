@@ -326,6 +326,18 @@ large delivery can be entered over time.
 - Correcting a draft uses the capture screen itself, so the correction is the same work as the
   entry.
 
+**D9.** As a storekeeper, I want to change a line I have already added to a delivery, so that a
+mis-keyed quantity, the wrong item or a unit in the wrong box is fixed without removing the line
+and keying it again. *(Approved 2026-10-03.)*
+- Every line on a delivery not yet received has "Change", as gate-out lines already do. It reopens
+  the line sheet filled in: item, quantity, condition, owner, notes, the no-serial reason, every
+  serial with the box it is in, and drums. Saving replaces the line in place; Cancel leaves it as
+  it was.
+- Units can be added or removed and moved between boxes while changing a line.
+- The same applies to a saved draft opened for correction (D8).
+- A delivery that has been received is not editable: it has moved stock, and it is corrected by
+  voiding it (M4, M6).
+
 ---
 
 ### Epic E — Stock

@@ -1397,6 +1397,13 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
   *Done when:* the gate-in, gate-out and boxes specs pass on the phone project against the demo
   tenant.
 
+- [ ] **T12.4 `[F]` Change a gate-in line**
+  Refs: D9, D8, P1
+  "Change" on every gate-in line reopens the line sheet filled in, including serials with their
+  boxes and drums; Save replaces the line in place. Pure line ↔ sheet mapping unit-tested.
+  *Done when:* an E2E changes a line's quantity and moves a unit to another box before receiving,
+  and the received delivery shows the change.
+
 ---
 
 ## Milestones
