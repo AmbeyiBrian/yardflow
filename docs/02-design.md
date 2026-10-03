@@ -1121,6 +1121,30 @@ security.
 - Line entry uses a scan-or-search-then-quantity flow, optimised so a storekeeper can enter a
   multi-line delivery one-handed.
 
+### 7.3b Finding an item (C9)
+
+> **Status: approved 2026-10-03.**
+
+One component, `ItemPicker` (`src/components/ItemPicker.tsx`), replaces every item `<select>`. It is
+a combobox: a text input with a listbox under it (`role="combobox"` / `role="listbox"`, arrow keys
+and Enter on a keyboard, 44px rows on a phone).
+
+- **Online:** `GET /item-types?search=<text>&page_size=20&is_archived=false`, after a 250 ms pause,
+  latest request wins. The API orders a search so that names starting with the text come first,
+  then names containing it, then code and description matches, each alphabetically. The response's
+  `count` gives "20 of N shown".
+- **Offline:** the item list in the sync bundle (§8), read from IndexedDB with `readReference`, is
+  searched on the device by `rankItems(items, text)` — the same order as the server. The bundle
+  gains each item's `description` and `category_name` so both sides match on the same fields.
+- **Empty input:** the last 8 items picked on this phone, kept in `localStorage` per tenant; reads
+  and writes are wrapped so a blocked storage only loses the convenience.
+- **A value not in the matches** (an edited draft) is shown by name from `GET /item-types/{id}`,
+  or from the bundle offline.
+- **Add new item:** the quick-create entry for `item-types` (§7.3) as the last row, for people with
+  `catalogue.manage`; the created item is selected.
+- The pure parts — `rankItems`, the recent-items list, the "N of M" text — live in
+  `src/components/itemPicker.ts` with unit tests.
+
 ### 7.3a The product mark
 
 The name is set as a wordmark — Archivo Semi-Condensed Bold, converted to outlines — and lives in

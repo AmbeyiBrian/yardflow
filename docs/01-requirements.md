@@ -248,6 +248,25 @@ matches how we work.
 - Record retention period and whether admins may amend posted documents (see M4).
 - Notification channels and event matrix (see Epic L).
 
+**C9.** As a storekeeper on a phone, I want to find an item by typing part of its name, code or
+description, so that I can pick one item among thousands without scrolling a list.
+*(Approved 2026-10-03.)*
+- Every item picker works this way: the gate-in line, the gate-out line, and the stock, transfer
+  and count filters.
+- Search starts at the first character, after a short pause. It matches name, code and
+  description; names that start with what was typed come first. Archived items never appear.
+- At most 20 matches show, each with its name, code and category. When there are more, the picker
+  says so ("20 of 340 shown — keep typing").
+- With nothing typed, it shows the last 8 items picked on this phone.
+- "＋ Add new item" stays last for people allowed to add items (§7.3).
+- Offline, it searches the item list already saved on the phone, by the same rules.
+- Scanning a unit still fills the item by itself.
+- **Edge case:** a saved draft whose item is not among the current matches still shows that item
+  by name.
+- **Edge case:** nothing matches — the picker says so and offers "Add new item" where allowed.
+- **Why:** the pickers loaded one page of items, and the API caps a page at 200, so on a catalogue
+  larger than that some items could not be picked at all.
+
 ---
 
 ### Epic D — Gate-in (receiving)
