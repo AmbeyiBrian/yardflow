@@ -1340,7 +1340,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* scanning a box adds one line per item and lot with every unit named, and the excluded
   units are listed with why.
 
-- [ ] **T11.16 `[F]` Scan the load at release**
+- [x] **T11.16 `[F]` Scan the load at release**
   Refs: §4.15.8, §4.15.10 · P11, G1
   A shared `useLoadScan(pass)` over `matchScan`; "Scan the load" in the online and offline release
   sheets; ticks per unit and line, refusals listed, short lines from what is unticked, hand
