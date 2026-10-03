@@ -20,8 +20,10 @@
  * button that does nothing is worse than no button in a dark yard.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
+import { readLabel, type LabelReading } from '../features/boxes/readLabel';
+import { valueToPass } from './scanValue';
 import { Button, Field, Input } from './ui';
 import { cn } from './ui/cn';
 
@@ -44,6 +46,7 @@ const FORMATS = ['code_128', 'code_39', 'ean_13', 'qr_code', 'data_matrix', 'itf
 
 export function BarcodeScanner({
   onScan,
+  onRead,
   onDraft,
   label = 'Scan or type a code',
   hint,
@@ -51,7 +54,16 @@ export function BarcodeScanner({
   continuous = false,
   scannedCount,
 }: {
+  /**
+   * One string, as ever: the single serial a label holds, else the trimmed raw
+   * text (P3, §4.15.6). See `valueToPass`.
+   */
   onScan: (value: string) => void;
+  /**
+   * The whole reading (serials, box code, pass token) for every result, called
+   * before `onScan`, for screens that act on more than one serial.
+   */
+  onRead?: (reading: LabelReading) => void;
   /**
    * What is typed but not yet added.
    *
@@ -89,6 +101,12 @@ export function BarcodeScanner({
   const [hasTorch, setHasTorch] = useState(false);
   const [manual, setManual] = useState('');
   const [note, setNote] = useState<string | null>(null);
+  //: What the label said, when it said more than the value passed on (P3).
+  const [rawShown, setRawShown] = useState<string | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
+  // Two scanners can mount on one screen, so the input id is per instance.
+  const manualId = useId();
+  const scanNoteRef = useRef(false);
   //: The last code accepted, so the same label under the lens is read once.
   const lastValueRef = useRef<{ value: string; at: number }>({ value: '', at: 0 });
 
@@ -156,10 +174,37 @@ export function BarcodeScanner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [continuous]);
 
+  // Every result, camera or keyboard, is read the same way (P3, §4.15.6): the
+  // scanner reports what the label said, then passes on the serial it found.
+  const deliver = useCallback(
+    (value: string, continuousNote: boolean) => {
+      const reading = readLabel(value);
+      const passed = valueToPass(reading);
+      const raw = reading.raw.trim();
+      onRead?.(reading);
+      onScan(passed);
+      setShowRaw(false);
+      if (passed !== raw) {
+        setRawShown(raw);
+        setNote(`Scanned ${passed} from the label.`);
+      } else {
+        // A plain read leaves other notes (camera denied) alone; it only
+        // retires a "from the label" note that no longer describes the scan.
+        if (continuousNote) setNote(`Scanned ${passed}.`);
+        else if (scanNoteRef.current) setNote(null);
+        setRawShown(null);
+      }
+      scanNoteRef.current = passed !== raw || continuousNote;
+    },
+    [onRead, onScan],
+  );
+
   const handleResult = useCallback(
     (value: string) => {
-      const cleaned = value.trim();
-      if (!cleaned) return;
+      if (!value.trim()) return;
+      // Compare the extracted value, so the same label read twice is still one
+      // read however long its raw text.
+      const cleaned = valueToPass(readLabel(value));
 
       if (continuous) {
         // The same label sits in front of the lens for a second or two and
@@ -171,8 +216,7 @@ export function BarcodeScanner({
         if (last.value === cleaned && Date.now() - last.at < 2500) return;
         lastValueRef.current = { value: cleaned, at: Date.now() };
         navigator.vibrate?.(40);
-        setNote(`Scanned ${cleaned}.`);
-        onScan(cleaned);
+        deliver(value, true);
         return;
       }
 
@@ -180,9 +224,9 @@ export function BarcodeScanner({
       // feedback that lands.
       navigator.vibrate?.(40);
       stop();
-      onScan(cleaned);
+      deliver(value, false);
     },
-    [continuous, onScan, stop],
+    [continuous, deliver, stop],
   );
 
   useEffect(() => {
@@ -250,7 +294,28 @@ export function BarcodeScanner({
         )}
       </div>
 
-      {note ? <p className="text-sm text-amber-800">{note}</p> : null}
+      {note ? (
+        <div className="text-sm text-amber-800">
+          <p>{note}</p>
+          {rawShown !== null ? (
+            <>
+              <button
+                type="button"
+                className="mt-1 text-xs underline"
+                aria-expanded={showRaw}
+                onClick={() => setShowRaw((open) => !open)}
+              >
+                {showRaw ? 'Hide what the label said' : 'Show what the label said'}
+              </button>
+              {showRaw ? (
+                <pre className="mt-1 max-w-full whitespace-pre-wrap break-all rounded bg-slate-100 p-2 font-mono text-xs text-slate-800">
+                  {rawShown}
+                </pre>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Always present, never behind a fallback. */}
       <form
@@ -264,15 +329,17 @@ export function BarcodeScanner({
           // wrong for somebody typing. Typing the same code twice is a
           // statement, and the screen above should answer it.
           navigator.vibrate?.(40);
-          onScan(typed);
+          // A scanner gun types into this form and presses Enter, so it is
+          // read like a camera result (P3); only the repeat check is skipped.
+          deliver(typed, false);
           setManual('');
           onDraft?.('');
         }}
       >
         <div className="flex-1">
-          <Field label={label} htmlFor="scanner-manual" hint={hint}>
+          <Field label={label} htmlFor={manualId} hint={hint}>
             <Input
-              id="scanner-manual"
+              id={manualId}
               value={manual}
               autoComplete="off"
               // Not `type="number"`: serials contain letters, and a numeric
