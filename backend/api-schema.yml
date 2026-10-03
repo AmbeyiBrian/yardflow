@@ -10401,6 +10401,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GateInLine'
+        boxes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateInBox'
         created_at:
           type: string
           format: date-time
@@ -10421,6 +10425,45 @@ components:
       - to_location_name
       - void_reason
       - voided_at
+    GateInBox:
+      type: object
+      description: |-
+        A box on the draft (P1, P10). ``key`` is the client's own, stable across edits;
+        lines and serials refer to it by ``box_key`` and a child by ``parent_key``.
+      properties:
+        key:
+          type: string
+          maxLength: 64
+        code:
+          type: string
+          maxLength: 100
+        parent_key:
+          type: string
+          maxLength: 64
+        label_text:
+          type: string
+      required:
+      - key
+    GateInBoxRequest:
+      type: object
+      description: |-
+        A box on the draft (P1, P10). ``key`` is the client's own, stable across edits;
+        lines and serials refer to it by ``box_key`` and a child by ``parent_key``.
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 64
+        code:
+          type: string
+          maxLength: 100
+        parent_key:
+          type: string
+          maxLength: 64
+        label_text:
+          type: string
+      required:
+      - key
     GateInLine:
       type: object
       properties:
@@ -10470,6 +10513,9 @@ components:
           nullable: true
           description: The client's stated value per unit, excluding VAT. Client-owned
             lines only — leave it empty when the issue note gives no figure.
+        box_key:
+          type: string
+          maxLength: 64
         notes:
           type: string
           maxLength: 500
@@ -10527,6 +10573,9 @@ components:
           nullable: true
           description: The client's stated value per unit, excluding VAT. Client-owned
             lines only — leave it empty when the issue note gives no figure.
+        box_key:
+          type: string
+          maxLength: 64
         notes:
           type: string
           maxLength: 500
@@ -10613,6 +10662,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GateInLineRequest'
+        boxes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateInBoxRequest'
       required:
       - received_at
       - source_type
@@ -10631,6 +10684,9 @@ components:
           maxLength: 100
         source:
           $ref: '#/components/schemas/SourceEnum'
+        box_key:
+          type: string
+          maxLength: 64
       required:
       - id
       - serial_number
@@ -10646,6 +10702,9 @@ components:
           maxLength: 100
         source:
           $ref: '#/components/schemas/SourceEnum'
+        box_key:
+          type: string
+          maxLength: 64
       required:
       - serial_number
     GateInStatusEnum:
@@ -13323,6 +13382,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GateInLineRequest'
+        boxes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateInBoxRequest'
     PatchedGateOutRequest:
       type: object
       properties:

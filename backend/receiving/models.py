@@ -277,6 +277,10 @@ class GateInLine(TenantModel, TimeStampedModel):
     # from one that was always bulk.
     no_serial_reason = models.CharField(max_length=300, blank=True)
 
+    # P9: for a bulk line, the box the whole quantity goes in (a key into this
+    # gate-in's ``gate_in_boxes``, not an FK, so a wholesale rewrite keeps it).
+    box_key = models.CharField(max_length=64, blank=True)
+
     line_number = models.PositiveIntegerField(default=1)
     notes = models.CharField(max_length=500, blank=True)
 
@@ -316,6 +320,8 @@ class GateInSerial(TenantModel):
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.MANUFACTURER
     )
+    # P1: the box this unit goes in, by key (see ``GateInBox``).
+    box_key = models.CharField(max_length=64, blank=True)
 
     class Meta:
         constraints = [
@@ -351,3 +357,29 @@ class GateInReel(TenantModel):
 
     def __str__(self) -> str:
         return f"{self.drum_number} ({self.length})"
+
+
+class GateInBox(TenantModel, TimeStampedModel):
+    """A box, carton or pallet received on this gate-in (§4.15.5, P1, P10).
+
+    A draft's box. Lines and serials point at it by ``key``, which the client
+    makes and keeps stable across edits, because a draft's lines are rewritten
+    wholesale. Posting turns each into a ``stock.Box``.
+    """
+
+    # Not "boxes": ``stock.Box.gate_in`` already owns that reverse name.
+    gate_in = models.ForeignKey(GateIn, on_delete=models.CASCADE, related_name="gate_in_boxes")
+    key = models.CharField(max_length=64)
+    # Blank means "generate one at posting" (P1).
+    code = models.CharField(max_length=100, blank=True)
+    parent_key = models.CharField(max_length=64, blank=True)
+    label_text = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["gate_in", "key"], name="uniq_box_key_per_gate_in")
+        ]
+        ordering = ("id",)
+
+    def __str__(self) -> str:
+        return self.code or self.key

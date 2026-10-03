@@ -25,6 +25,7 @@ from core.idempotency import already_created
 from receiving.models import (
     DocumentStatus,
     GateIn,
+    GateInBox,
     GateInLine,
     GateInReel,
     GateInSerial,
@@ -35,7 +36,23 @@ from receiving.services import post_gate_in, void_gate_in
 class GateInSerialSerializer(serializers.ModelSerializer):
     class Meta:
         model = GateInSerial
-        fields = ("id", "serial_number", "asset_tag", "source")
+        fields = ("id", "serial_number", "asset_tag", "source", "box_key")
+
+
+class GateInBoxSerializer(serializers.ModelSerializer):
+    """A box on the draft (P1, P10). ``key`` is the client's own, stable across edits;
+    lines and serials refer to it by ``box_key`` and a child by ``parent_key``."""
+
+    class Meta:
+        model = GateInBox
+        fields = ("key", "code", "parent_key", "label_text")
+        extra_kwargs = {
+            "code": {"required": False, "allow_blank": True},
+            "parent_key": {"required": False, "allow_blank": True},
+            "label_text": {"required": False, "allow_blank": True},
+        }
+        # Uniqueness of the key is a posting-time rule with a field error, not a 400 here.
+        validators: list = []
 
 
 class GateInReelSerializer(serializers.ModelSerializer):
@@ -72,6 +89,7 @@ class GateInLineSerializer(serializers.ModelSerializer):
             "custom_field_values",
             "no_serial_reason",
             "declared_unit_value",
+            "box_key",
             "notes",
             "serials",
             "reels",
@@ -80,6 +98,7 @@ class GateInLineSerializer(serializers.ModelSerializer):
 
 class GateInSerializer(serializers.ModelSerializer):
     lines = GateInLineSerializer(many=True, required=False)
+    boxes = GateInBoxSerializer(many=True, required=False, source="gate_in_boxes")
     to_location_name = serializers.CharField(source="to_location.name", read_only=True)
     client_name = serializers.CharField(source="client.name", read_only=True, default="")
     returned_by_name = serializers.CharField(
@@ -114,6 +133,7 @@ class GateInSerializer(serializers.ModelSerializer):
             "voided_at",
             "notes",
             "lines",
+            "boxes",
             "created_at",
         )
         # D8: posting is what affects stock, and it is an action with its own
@@ -127,6 +147,15 @@ class GateInSerializer(serializers.ModelSerializer):
             "voided_at",
         )
 
+    def validate_boxes(self, boxes):  # type: ignore[no-untyped-def]
+        # The key is what lines and serials point at, so two boxes sharing one is
+        # ambiguous rather than merely untidy.
+        keys = [box["key"] for box in boxes]
+        for key in keys:
+            if keys.count(key) > 1:
+                raise serializers.ValidationError(f"Two boxes share the key {key}.")
+        return boxes
+
     @transaction.atomic
     def create(self, validated_data):  # type: ignore[no-untyped-def]
         # A second press of the same button, or a retry of a request whose
@@ -136,14 +165,21 @@ class GateInSerializer(serializers.ModelSerializer):
             return existing
 
         lines = validated_data.pop("lines", [])
+        boxes = validated_data.pop("gate_in_boxes", [])
         gate_in = GateIn.objects.create(**validated_data)
+        self._write_boxes(gate_in, boxes)
         self._write_lines(gate_in, lines)
         return gate_in
 
     @transaction.atomic
     def update(self, instance, validated_data):  # type: ignore[no-untyped-def]
         lines = validated_data.pop("lines", None)
+        boxes = validated_data.pop("gate_in_boxes", None)
         gate_in = super().update(instance, validated_data)
+        if boxes is not None:
+            # Wholesale, like the lines: lines refer to boxes by key, which survives.
+            gate_in.gate_in_boxes.all().delete()
+            self._write_boxes(gate_in, boxes)
         if lines is not None:
             # A draft's lines are replaced wholesale. Diffing them would mean
             # matching client-side ids that an offline device may not have yet
@@ -151,6 +187,12 @@ class GateInSerializer(serializers.ModelSerializer):
             gate_in.lines.all().delete()
             self._write_lines(gate_in, lines)
         return gate_in
+
+    def _write_boxes(self, gate_in, boxes) -> None:
+        for box in boxes:
+            GateInBox.objects.create(
+                organization_id=gate_in.organization_id, gate_in=gate_in, **box
+            )
 
     def _write_lines(self, gate_in, lines) -> None:
         for index, line_data in enumerate(lines, start=1):
@@ -194,6 +236,7 @@ class GateInViewSet(TenantScopedViewSet):
         "lines__item_type",
         "lines__serials",
         "lines__reels",
+        "gate_in_boxes",
     )
     filterset_fields = ["status", "source_type", "client", "to_location", "origin_site"]
     search_fields = [

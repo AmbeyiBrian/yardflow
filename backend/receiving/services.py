@@ -10,6 +10,7 @@ exists to end.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -28,8 +29,26 @@ from locations.nodes import (
     node_for_user,
     quarantine_location,
 )
-from receiving.models import DocumentStatus, GateIn, GateInLine, GateInSerial, GateInSource
-from stock.models import Condition, MovementType, OwnerType, Reel, SerialUnit, UnitCostSource
+from receiving.models import (
+    DocumentStatus,
+    GateIn,
+    GateInBox,
+    GateInLine,
+    GateInSerial,
+    GateInSource,
+)
+from stock.box_hooks import EventContext
+from stock.boxes import MAX_DEPTH, create_box, empty_box, put_bulk, put_units
+from stock.models import (
+    Box,
+    BoxStatus,
+    Condition,
+    MovementType,
+    OwnerType,
+    Reel,
+    SerialUnit,
+    UnitCostSource,
+)
 from stock.services import DuplicateSerial, MovementRequest, post_movement
 
 
@@ -198,6 +217,8 @@ def validate_for_posting(gate_in: GateIn) -> None:
                     "it is being received as bulk (D3)."
                 ]
 
+    _check_boxes(gate_in, lines, field_errors)
+
     # D6, C8: attachments may be mandatory.
     if settings.attachments_required_gate_in:
         from core.attachments import attachments_for
@@ -212,6 +233,157 @@ def validate_for_posting(gate_in: GateIn) -> None:
 
     if field_errors:
         raise GateInNotReady("This gate-in cannot be posted yet.", field_errors=field_errors)
+
+
+def _box_name(box) -> str:
+    return box.code or f"{box.key} (code to be generated)"
+
+
+def _box_depths(boxes_by_key: dict, field_errors: dict, index_of: dict) -> dict[str, int]:
+    """Depth of every box whose chain resolves; reports cycles and over-deep trees (P10)."""
+    depths: dict[str, int] = {}
+    for key, box in boxes_by_key.items():
+        chain: list[str] = []
+        current = box
+        cyclic = False
+        while True:
+            if current.key in chain:
+                cyclic = True
+                break
+            chain.append(current.key)
+            parent = boxes_by_key.get(current.parent_key) if current.parent_key else None
+            if parent is None:
+                break
+            current = parent
+        if cyclic:
+            field_errors.setdefault(f"boxes.{index_of[key]}.parent_key", []).append(
+                f"Box {_box_name(box)} sits inside itself (BOX_CYCLE). Nothing can be "
+                f"inside a box that is inside it."
+            )
+            continue
+        depths[key] = len(chain)
+        if len(chain) > MAX_DEPTH:
+            field_errors.setdefault(f"boxes.{index_of[key]}.parent_key", []).append(
+                f"Box {_box_name(box)} would be {len(chain)} deep (BOX_TOO_DEEP). "
+                f"Boxes nest {MAX_DEPTH} deep at most."
+            )
+    return depths
+
+
+def _check_boxes(gate_in: GateIn, lines: list[GateInLine], field_errors: dict) -> None:
+    """P1, P2, P9, P10: the draft's boxes must be sound before they become ``stock.Box``."""
+    boxes = list(gate_in.gate_in_boxes.all())
+    boxes_by_key: dict[str, GateInBox] = {}
+    index_of: dict[str, int] = {}
+    seen_codes: set[str] = set()
+
+    for index, box in enumerate(boxes):
+        prefix = f"boxes.{index}"
+        if not box.key:
+            field_errors[f"{prefix}.key"] = ["A box needs a key."]
+            continue
+        if box.key in boxes_by_key:
+            field_errors[f"{prefix}.key"] = [f"Two boxes share the key {box.key}."]
+            continue
+        boxes_by_key[box.key] = box
+        index_of[box.key] = index
+
+        code = box.code.strip()
+        if not code:
+            continue
+        if code.lower() in seen_codes:
+            field_errors[f"{prefix}.code"] = [
+                f"Box code {code} appears twice on this gate-in (BOX_CODE_IN_USE)."
+            ]
+            continue
+        seen_codes.add(code.lower())
+        existing = Box.objects.filter(code__iexact=code).select_related("current_node").first()
+        if existing is not None:
+            state = "closed" if existing.status == BoxStatus.CLOSED else "open"
+            tail = " A closed box's code is never reused." if state == "closed" else ""
+            field_errors[f"{prefix}.code"] = [
+                f"Box {existing.code} already exists (BOX_CODE_IN_USE): it is {state}, "
+                f"at {existing.current_node.label}.{tail}"
+            ]
+
+    for key, box in boxes_by_key.items():
+        if box.parent_key and box.parent_key not in boxes_by_key:
+            field_errors[f"boxes.{index_of[key]}.parent_key"] = [
+                f"Box {_box_name(box)} says it is inside {box.parent_key}, which is "
+                f"not a box on this gate-in."
+            ]
+
+    # What each box holds directly, and the node that lands on.
+    held: dict[str, list[StockNode]] = {key: [] for key in boxes_by_key}
+
+    def refer(key: str, error_key: str, node: StockNode, what: str) -> None:
+        if not key:
+            return
+        if key not in boxes_by_key:
+            field_errors[error_key] = [
+                f"{what} says it is in box {key}, which is not a box on this gate-in."
+            ]
+            return
+        held[key].append(node)
+
+    for line_index, line in enumerate(lines):
+        prefix = f"lines.{line_index}"
+        if line.tracking_mode == TrackingMode.REEL:
+            if line.box_key:
+                field_errors[f"{prefix}.box_key"] = [
+                    "A drum is not boxed. Receive it outside any box."
+                ]
+            continue
+        node = destination_node_for(gate_in, line)
+        if line.tracking_mode == TrackingMode.SERIALIZED:
+            if line.box_key:
+                field_errors[f"{prefix}.box_key"] = [
+                    "On a serialized line, name the box on each serial, not on the line."
+                ]
+            for serial_index, serial in enumerate(line.serials.all()):
+                refer(
+                    serial.box_key,
+                    f"{prefix}.serials.{serial_index}.box_key",
+                    node,
+                    f"Serial {serial.serial_number}",
+                )
+                # A returning unit still in some other box cannot be received.
+                unit = _existing_unit_for_return(gate_in, serial)
+                if unit is not None and unit.box is not None:
+                    field_errors[f"{prefix}.serials.{serial.serial_number}"] = [
+                        f"Serial {serial.serial_number} is still in box {unit.box.code}. "
+                        f"Take it out of that box before receiving it."
+                    ]
+        else:
+            refer(line.box_key, f"{prefix}.box_key", node, "This line")
+
+    depths = _box_depths(boxes_by_key, field_errors, index_of)
+
+    # Roll each box's contents up to every ancestor.
+    below: dict[str, list[StockNode]] = {key: list(nodes) for key, nodes in held.items()}
+    for key in boxes_by_key:
+        if key not in depths:
+            continue
+        current = boxes_by_key[key]
+        while current.parent_key in boxes_by_key:
+            current = boxes_by_key[current.parent_key]
+            below[current.key].extend(held[key])
+
+    for key, box in boxes_by_key.items():
+        if key not in depths:
+            continue
+        if not below[key]:
+            field_errors.setdefault(f"boxes.{index_of[key]}.code", []).append(
+                f"Box {_box_name(box)} holds nothing (BOX_EMPTY). Put something in it or "
+                f"remove it."
+            )
+        elif len({n.pk for n in below[key]}) > 1:
+            labels = ", ".join(sorted({n.label for n in below[key]}))
+            field_errors.setdefault(f"boxes.{index_of[key]}.code", []).append(
+                f"Box {_box_name(box)} would hold stock for different places ({labels}) "
+                f"(BOX_MIXED_DESTINATIONS). Serviceable and quarantined stock cannot share "
+                f"a box: receive them in separate boxes."
+            )
 
 
 def _check_serials_are_new(gate_in, serials, field_errors, prefix) -> None:
@@ -309,6 +481,10 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
 
     source = source_node_for(gate_in)
     settings = gate_in.organization.settings
+    # What the loop made or found, so the boxes can be filled without searching.
+    box_units: dict[str, list[SerialUnit]] = {}
+    box_bulk: dict[str, list[tuple[GateInLine, Decimal]]] = {}
+    box_nodes: dict[str, StockNode] = {}
 
     for line in gate_in.lines.select_related("item_type", "item_type__category").all():
         destination = destination_node_for(gate_in, line)
@@ -353,6 +529,9 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
                         from_condition=unit.condition,
                     )
                 )
+                if serial_entry.box_key:
+                    box_units.setdefault(serial_entry.box_key, []).append(unit)
+                    box_nodes[serial_entry.box_key] = destination
 
         elif line.tracking_mode == TrackingMode.REEL:
             for reel_entry in line.reels.all():
@@ -379,6 +558,11 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
                         from_condition=(held if from_node.type != NodeType.EXTERNAL else ""),
                     )
                 )
+            if line.box_key:
+                box_bulk.setdefault(line.box_key, []).append((line, line.quantity))
+                box_nodes[line.box_key] = destination
+
+    _create_boxes(gate_in, box_nodes, box_units, box_bulk, posted_by=posted_by)
 
     gate_in.save(update_fields=["number", "status", "posted_at", "posted_by", "updated_at"])
 
@@ -394,6 +578,69 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
     )
 
     return gate_in
+
+
+def _box_context(gate_in: GateIn, actor) -> EventContext:
+    return EventContext(
+        actor=actor,
+        occurred_at=gate_in.received_at,
+        document_type="receiving.GateIn",
+        document_id=str(gate_in.pk),
+        document_number=gate_in.number,
+    )
+
+
+def _create_boxes(gate_in, box_nodes, box_units, box_bulk, *, posted_by) -> None:
+    """Create the draft's boxes top-down at the node their contents landed on, then
+    fill them (P1, P9, P10). Validation has made each tree land on one node."""
+    drafts = {box.key: box for box in gate_in.gate_in_boxes.all()}
+    if not drafts:
+        return
+
+    def depth(box) -> int:
+        count = 1
+        while box.parent_key:
+            box = drafts[box.parent_key]
+            count += 1
+        return count
+
+    # A box's node is its own contents' node, or failing that its descendants'.
+    node_of: dict[str, StockNode] = {}
+    for key, node in box_nodes.items():
+        current = drafts[key]
+        node_of[current.key] = node
+        while current.parent_key:
+            current = drafts[current.parent_key]
+            node_of[current.key] = node
+
+    ctx = _box_context(gate_in, posted_by)
+    made: dict[str, Box] = {}
+    for draft in sorted(drafts.values(), key=lambda b: (depth(b), b.pk)):
+        box = create_box(
+            code=draft.code.strip(),
+            node=node_of[draft.key],
+            parent=made[draft.parent_key] if draft.parent_key else None,
+            gate_in=gate_in,
+            label_text=draft.label_text,
+            ctx=ctx,
+        )
+        made[draft.key] = box
+        if draft.code != box.code:
+            draft.code = box.code
+            draft.save(update_fields=["code", "updated_at"])
+
+    for key, units in box_units.items():
+        put_units(made[key], units, ctx=ctx)
+    for key, entries in box_bulk.items():
+        for line, quantity in entries:
+            put_bulk(
+                made[key],
+                item_type=line.item_type,
+                owner_client=line.owner_client,
+                condition=line.condition,
+                quantity=quantity,
+                ctx=ctx,
+            )
 
 
 def held_condition_for(gate_in: GateIn, line: GateInLine) -> str:
@@ -555,6 +802,18 @@ def void_gate_in(gate_in: GateIn, *, reason: str, voided_by=None, request=None) 
         raise GateInNotReady("Only a posted gate-in can be voided.")
     if not reason:
         raise GateInNotReady("Voiding a posted document requires a reason (M4).")
+
+    # P5: a box is not stock, so it is emptied and closed before the units go.
+    # Deepest first, so a parent is never asked to close around an open child.
+    ctx = replace(_box_context(gate_in, voided_by), note=f"Void of {gate_in.number}: {reason}")
+    for box_id in list(
+        Box.objects.filter(gate_in=gate_in, status=BoxStatus.OPEN)
+        .order_by("-depth", "pk")
+        .values_list("pk", flat=True)
+    ):
+        box = Box.objects.get(pk=box_id)
+        if box.status == BoxStatus.OPEN:
+            empty_box(box, ctx=ctx)
 
     movements = StockMovement.objects.filter(
         document_type="receiving.GateIn", document_id=str(gate_in.pk)
