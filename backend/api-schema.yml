@@ -7956,6 +7956,94 @@ paths:
                 items:
                   $ref: '#/components/schemas/Movement'
           description: ''
+  /api/v1/stock/earmarked:
+    get:
+      operationId: stock_earmarked_retrieve
+      description: |-
+        ``GET /api/v1/stock/earmarked?site=&from_location=`` (Q6, §4.16.8a).
+
+        What is earmarked for the site at that place, as proposed gate-out lines,
+        what could not go and why, and the site's open jobs.
+      parameters:
+      - in: query
+        name: from_location
+        schema:
+          type: integer
+        required: true
+      - in: query
+        name: site
+        schema:
+          type: integer
+        required: true
+      tags:
+      - stock
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EarmarkedForSite'
+          description: ''
+  /api/v1/stock/earmarks/change:
+    post:
+      operationId: stock_earmarks_change_create
+      description: '``POST /api/v1/stock/earmarks/change`` (Q4, §4.16.6).'
+      tags:
+      - stock
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EarmarkChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EarmarkChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EarmarkChangeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EarmarkChanged'
+          description: ''
+  /api/v1/stock/earmarks/history:
+    get:
+      operationId: stock_earmarks_history_list
+      description: '``GET /api/v1/stock/earmarks/history?serial_unit=|reel=|site=``
+        (Q4, Q2).'
+      parameters:
+      - in: query
+        name: reel
+        schema:
+          type: integer
+      - in: query
+        name: serial_unit
+        schema:
+          type: integer
+      - in: query
+        name: site
+        schema:
+          type: integer
+      tags:
+      - stock
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EarmarkEvent'
+          description: ''
   /api/v1/stock/installed:
     get:
       operationId: stock_installed_list
@@ -9002,18 +9090,6 @@ components:
           maxLength: 500
       required:
       - accepted
-    ActionEnum:
-      enum:
-      - INSTALLED
-      - CONSUMED
-      - RETURNING
-      - RECOVERED
-      type: string
-      description: |-
-        * `INSTALLED` - Installed at the site
-        * `CONSUMED` - Consumed on site
-        * `RETURNING` - Coming back to the yard
-        * `RECOVERED` - Recovered from the site
     ApprovalAction:
       type: object
       properties:
@@ -10795,6 +10871,227 @@ components:
         * `REJECTED` - Rejected
         * `POSTED` - Posted
         * `CANCELLED` - Cancelled
+    EarmarkChangeRequest:
+      type: object
+      description: 'Exactly one subject: ``serial_unit``, ``reel`` or a bulk lot (``node``
+        + item).'
+      properties:
+        serial_unit:
+          type: integer
+          nullable: true
+        reel:
+          type: integer
+          nullable: true
+        node:
+          type: integer
+          nullable: true
+        item_type:
+          type: integer
+          nullable: true
+        owner_client:
+          type: integer
+          nullable: true
+        condition:
+          $ref: '#/components/schemas/ConditionEnum'
+        from_site:
+          type: integer
+          nullable: true
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+        to_site:
+          type: integer
+          nullable: true
+        reason:
+          type: string
+      required:
+      - reason
+      - to_site
+    EarmarkChanged:
+      type: object
+      properties:
+        kind:
+          type: string
+        unit:
+          $ref: '#/components/schemas/SerialUnit'
+        drum:
+          $ref: '#/components/schemas/Reel'
+        bulk:
+          type: object
+          additionalProperties: {}
+      required:
+      - kind
+    EarmarkEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        action:
+          allOf:
+          - $ref: '#/components/schemas/EarmarkEventActionEnum'
+          readOnly: true
+        action_label:
+          type: string
+          readOnly: true
+        site:
+          type: integer
+          readOnly: true
+          nullable: true
+        site_name:
+          type: string
+          readOnly: true
+          default: ''
+        to_site:
+          type: integer
+          readOnly: true
+          nullable: true
+        to_site_name:
+          type: string
+          readOnly: true
+          default: ''
+        serial_unit:
+          type: integer
+          readOnly: true
+          nullable: true
+        serial_number:
+          type: string
+          readOnly: true
+          default: ''
+        reel:
+          type: integer
+          readOnly: true
+          nullable: true
+        drum_number:
+          type: string
+          readOnly: true
+          default: ''
+        node:
+          type: integer
+          readOnly: true
+          nullable: true
+        node_label:
+          type: string
+          readOnly: true
+          default: ''
+        item_type:
+          type: integer
+          readOnly: true
+          nullable: true
+        item_name:
+          type: string
+          readOnly: true
+          default: ''
+        owner_client:
+          type: integer
+          readOnly: true
+          nullable: true
+        owner_client_name:
+          type: string
+          readOnly: true
+          default: ''
+        condition:
+          allOf:
+          - $ref: '#/components/schemas/ConditionEnum'
+          readOnly: true
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+          readOnly: true
+          nullable: true
+        document_type:
+          type: string
+          readOnly: true
+        document_id:
+          type: string
+          readOnly: true
+        document_number:
+          type: string
+          readOnly: true
+        actor:
+          type: integer
+          readOnly: true
+          nullable: true
+        actor_name:
+          type: string
+          readOnly: true
+          default: ''
+        reason:
+          type: string
+          readOnly: true
+      required:
+      - action
+      - action_label
+      - actor
+      - actor_name
+      - condition
+      - document_id
+      - document_number
+      - document_type
+      - drum_number
+      - id
+      - item_name
+      - item_type
+      - node
+      - node_label
+      - occurred_at
+      - owner_client
+      - owner_client_name
+      - quantity
+      - reason
+      - reel
+      - serial_number
+      - serial_unit
+      - site
+      - site_name
+      - to_site
+      - to_site_name
+    EarmarkEventActionEnum:
+      enum:
+      - EARMARKED
+      - CHANGED
+      - CLEARED
+      - DELIVERED
+      - DIVERTED
+      - MOVED
+      - REDUCED
+      type: string
+      description: |-
+        * `EARMARKED` - Earmarked
+        * `CHANGED` - Earmark changed
+        * `CLEARED` - Earmark cleared
+        * `DELIVERED` - Delivered to its site
+        * `DIVERTED` - Diverted to another site
+        * `MOVED` - Moved inside the yard
+        * `REDUCED` - Reduced by a correction
+    EarmarkedForSite:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        excluded:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        jobs:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - excluded
+      - jobs
+      - lines
     EnrolledCredential:
       type: object
       properties:
@@ -12087,7 +12384,7 @@ components:
           type: integer
           readOnly: true
         action:
-          $ref: '#/components/schemas/ActionEnum'
+          $ref: '#/components/schemas/JobCloseoutLineActionEnum'
         item_type:
           type: integer
         item_name:
@@ -12129,11 +12426,23 @@ components:
       - quantity
       - serial_number
       - uom
+    JobCloseoutLineActionEnum:
+      enum:
+      - INSTALLED
+      - CONSUMED
+      - RETURNING
+      - RECOVERED
+      type: string
+      description: |-
+        * `INSTALLED` - Installed at the site
+        * `CONSUMED` - Consumed on site
+        * `RETURNING` - Coming back to the yard
+        * `RECOVERED` - Recovered from the site
     JobCloseoutLineRequest:
       type: object
       properties:
         action:
-          $ref: '#/components/schemas/ActionEnum'
+          $ref: '#/components/schemas/JobCloseoutLineActionEnum'
         item_type:
           type: integer
         serial_unit:
@@ -15168,10 +15477,17 @@ components:
           type: string
           readOnly: true
           default: ''
+        earmark_site:
+          type: integer
+          nullable: true
+        earmark_site_name:
+          type: string
+          readOnly: true
       required:
       - condition
       - current_node
       - drum_number
+      - earmark_site_name
       - id
       - initial_length
       - item_name
@@ -15546,11 +15862,18 @@ components:
           description: Codes outermost to the unit's own box; empty when loose (P4,
             P5).
           readOnly: true
+        earmark_site:
+          type: integer
+          nullable: true
+        earmark_site_name:
+          type: string
+          readOnly: true
       required:
       - box_code
       - box_path
       - condition
       - current_node
+      - earmark_site_name
       - id
       - item_name
       - item_type
@@ -15820,8 +16143,19 @@ components:
           pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
           readOnly: true
           nullable: true
+        earmarked:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        free:
+          type: string
+          readOnly: true
       required:
       - condition
+      - earmarked
+      - free
       - holder_id
       - id
       - item_code

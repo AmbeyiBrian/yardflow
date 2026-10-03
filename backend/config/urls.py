@@ -97,6 +97,9 @@ from stock.views import (
     BoxViewSet,
     ClientPositionView,
     CustodyStockView,
+    EarmarkChangeView,
+    EarmarkedForSiteView,
+    EarmarkHistoryView,
     InstalledBaseView,
     LowStockView,
     MovementViewSet,
@@ -343,6 +346,10 @@ v1_patterns = [
     path("stock/installed", InstalledBaseView.as_view(), name="installed-base"),
     path("stock/custody", CustodyStockView.as_view(), name="stock-custody"),
     path("stock/transfers", TransferView.as_view(), name="stock-transfer"),
+    # Q4, Q6: change an earmark, read its history, and what waits for a site.
+    path("stock/earmarks/change", EarmarkChangeView.as_view(), name="earmark-change"),
+    path("stock/earmarks/history", EarmarkHistoryView.as_view(), name="earmark-history"),
+    path("stock/earmarked", EarmarkedForSiteView.as_view(), name="earmarked-for-site"),
     # H4: the operator's question, answered for a site or a project.
     path("reconciliation", ReconciliationView.as_view(), name="reconciliation"),
     # L2: what a user will be told, and through which channel.

@@ -18,6 +18,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import django_filters
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers
@@ -46,11 +47,13 @@ from stock.boxes import (
     take_out,
 )
 from stock.counting import add_count_line, post_stock_count, transfer_stock
+from stock.earmarks import change_earmark, earmarked_for_site
 from stock.models import (
     Box,
     BoxEvent,
     BoxStatus,
     Condition,
+    EarmarkEvent,
     Reel,
     SerialUnit,
     StockBalance,
@@ -60,6 +63,7 @@ from stock.models import (
 )
 from stock.queries import (
     annotated_boxes,
+    attach_earmarks,
     below_minimum_stock,
     client_owned_position,
     custody_holdings,
@@ -103,6 +107,20 @@ class StockBalanceSerializer(serializers.ModelSerializer):
         max_digits=14, decimal_places=3, read_only=True, allow_null=True, default=None
     )
 
+    # §4.16.7, Q2: how a bulk quantity splits between sites and free. Set by
+    # ``attach_earmarks`` for the whole list; rows that were not annotated show
+    # the whole quantity free.
+    earmarked = serializers.SerializerMethodField()
+    free = serializers.SerializerMethodField()
+
+    def get_earmarked(self, obj) -> list[dict]:  # type: ignore[no-untyped-def]
+        return [
+            {**e, "quantity": f"{e['quantity']:.3f}"} for e in getattr(obj, "earmarked", [])
+        ]
+
+    def get_free(self, obj) -> str:  # type: ignore[no-untyped-def]
+        return f"{getattr(obj, 'free', obj.quantity):.3f}"
+
     class Meta:
         model = StockBalance
         fields = (
@@ -123,6 +141,8 @@ class StockBalanceSerializer(serializers.ModelSerializer):
             "uom",
             "on_drums",
             "loose",
+            "earmarked",
+            "free",
         )
 
 
@@ -183,6 +203,9 @@ class SerialUnitSerializer(serializers.ModelSerializer):
     # P4: the box the unit is in now, so a scan or a lookup can say "in CTN-1".
     box_code = serializers.CharField(source="box.code", read_only=True, default=None)
     box_path = serializers.SerializerMethodField()
+    earmark_site_name = serializers.CharField(
+        source="earmark_site.name", read_only=True, default=None
+    )
 
     def get_box_path(self, unit) -> list[str]:
         """Codes outermost to the unit's own box; empty when loose (P4, P5)."""
@@ -212,6 +235,8 @@ class SerialUnitSerializer(serializers.ModelSerializer):
             "origin_site_ref",
             "box_code",
             "box_path",
+            "earmark_site",
+            "earmark_site_name",
         )
 
 
@@ -220,6 +245,9 @@ class ReelSerializer(serializers.ModelSerializer):
     node_label = serializers.CharField(source="current_node.label", read_only=True)
     owner_client_name = serializers.CharField(
         source="owner_client.name", read_only=True, default=""
+    )
+    earmark_site_name = serializers.CharField(
+        source="earmark_site.name", read_only=True, default=None
     )
 
     class Meta:
@@ -239,6 +267,8 @@ class ReelSerializer(serializers.ModelSerializer):
             "owner_type",
             "owner_client",
             "owner_client_name",
+            "earmark_site",
+            "earmark_site_name",
         )
 
 
@@ -302,7 +332,9 @@ class StockOnHandView(APIView):
             condition=params.get("condition") or None,
             available_only=available_only,
         )
-        return Response({"results": StockBalanceSerializer(balances, many=True).data})
+        return Response(
+            {"results": StockBalanceSerializer(attach_earmarks(balances), many=True).data}
+        )
 
 
 def _lookup_item(value):  # type: ignore[no-untyped-def]
@@ -490,7 +522,9 @@ class ClientPositionView(APIView):
         balances = client_owned_position(
             client=_lookup(request.query_params.get("client"), "network.Client")
         )
-        return Response({"results": StockBalanceSerializer(balances, many=True).data})
+        return Response(
+            {"results": StockBalanceSerializer(attach_earmarks(balances), many=True).data}
+        )
 
 
 class InstalledBaseView(APIView):
@@ -590,7 +624,13 @@ class SerialUnitViewSet(HolderFilterMixin, TenantScopedViewSet):
 
     serializer_class = SerialUnitSerializer
     model = SerialUnit
-    select_related = ("item_type", "current_node", "owner_client", "origin_site")
+    select_related = (
+        "item_type",
+        "current_node",
+        "owner_client",
+        "origin_site",
+        "earmark_site",
+    )
     filterset_fields = ["status", "condition", "item_type", "current_node", "owner_client"]
     search_fields = ["serial_number", "asset_tag"]
     ordering_fields = ["serial_number", "created_at"]
@@ -607,7 +647,7 @@ class ReelViewSet(HolderFilterMixin, TenantScopedViewSet):
 
     serializer_class = ReelSerializer
     model = Reel
-    select_related = ("item_type", "current_node", "owner_client")
+    select_related = ("item_type", "current_node", "owner_client", "earmark_site")
     filterset_fields = ["status", "condition", "item_type", "current_node", "owner_client"]
     search_fields = ["drum_number"]
     ordering_fields = ["drum_number", "remaining_length", "created_at"]
@@ -1018,6 +1058,235 @@ class BoxIssuableView(APIView):
                 {"from_location": ["Name a location of yours to issue from."]}
             )
         return Response(issuable_contents(box, from_node=node_for_location(location)))
+
+
+# --------------------------------------------------------------------------
+# Earmarks (design §4.16.6–§4.16.8a; Q2, Q4, Q6)
+# --------------------------------------------------------------------------
+
+
+class EarmarkChangeSerializer(serializers.Serializer):
+    """Exactly one subject: ``serial_unit``, ``reel`` or a bulk lot (``node`` + item)."""
+
+    serial_unit = serializers.IntegerField(required=False, allow_null=True)
+    reel = serializers.IntegerField(required=False, allow_null=True)
+    node = serializers.IntegerField(required=False, allow_null=True)
+    item_type = serializers.IntegerField(required=False, allow_null=True)
+    owner_client = serializers.IntegerField(required=False, allow_null=True)
+    condition = serializers.ChoiceField(choices=Condition.choices, required=False)
+    from_site = serializers.IntegerField(required=False, allow_null=True)
+    quantity = serializers.DecimalField(max_digits=14, decimal_places=3, required=False)
+    to_site = serializers.IntegerField(allow_null=True)
+    reason = serializers.CharField(allow_blank=True)
+
+
+class EarmarkEventSerializer(serializers.ModelSerializer):
+    action_label = serializers.CharField(source="get_action_display", read_only=True)
+    site_name = serializers.CharField(source="site.name", read_only=True, default="")
+    to_site_name = serializers.CharField(source="to_site.name", read_only=True, default="")
+    serial_number = serializers.CharField(
+        source="serial_unit.serial_number", read_only=True, default=""
+    )
+    drum_number = serializers.CharField(source="reel.drum_number", read_only=True, default="")
+    node_label = serializers.CharField(source="node.label", read_only=True, default="")
+    item_name = serializers.CharField(source="item_type.name", read_only=True, default="")
+    owner_client_name = serializers.CharField(
+        source="owner_client.name", read_only=True, default=""
+    )
+    actor_name = serializers.CharField(source="actor.full_name", read_only=True, default="")
+
+    class Meta:
+        model = EarmarkEvent
+        fields = (
+            "id",
+            "occurred_at",
+            "action",
+            "action_label",
+            "site",
+            "site_name",
+            "to_site",
+            "to_site_name",
+            "serial_unit",
+            "serial_number",
+            "reel",
+            "drum_number",
+            "node",
+            "node_label",
+            "item_type",
+            "item_name",
+            "owner_client",
+            "owner_client_name",
+            "condition",
+            "quantity",
+            "document_type",
+            "document_id",
+            "document_number",
+            "actor",
+            "actor_name",
+            "reason",
+        )
+        read_only_fields = fields
+
+
+class EarmarkEventPagination(CursorPagination):
+    ordering = ("-occurred_at", "-id")
+    page_size_query_param = "page_size"
+    max_page_size = 200
+
+
+class EarmarkChangeView(APIView):
+    """``POST /api/v1/stock/earmarks/change`` (Q4, §4.16.6)."""
+
+    permission_classes = [IsAuthenticated, OrganizationIsActive, CanChangeBoxes]
+
+    @extend_schema(
+        request=EarmarkChangeSerializer,
+        responses={
+            200: inline_serializer(
+                "EarmarkChanged",
+                {
+                    "kind": serializers.CharField(),
+                    "unit": SerialUnitSerializer(required=False),
+                    "drum": ReelSerializer(required=False),
+                    "bulk": serializers.DictField(required=False),
+                },
+            )
+        },
+    )
+    def post(self, request):  # type: ignore[no-untyped-def]
+        serializer = EarmarkChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        def one(label, key):  # type: ignore[no-untyped-def]
+            return _one_or_400(label, data[key], key) if data.get(key) is not None else None
+
+        subject = {
+            "serial_unit": one("stock.SerialUnit", "serial_unit"),
+            "reel": one("stock.Reel", "reel"),
+            "node": one("locations.StockNode", "node"),
+            "item_type": one("catalogue.ItemType", "item_type"),
+            "owner_client": one("network.Client", "owner_client"),
+            "condition": data.get("condition"),
+            "from_site": one("network.Site", "from_site"),
+            "quantity": data.get("quantity"),
+        }
+        result = change_earmark(
+            subject=subject,
+            to_site=one("network.Site", "to_site"),
+            reason=data["reason"],
+            actor=request.user,
+            request=request,
+        )
+        kind, state = result["kind"], result["subject"]
+        if kind == "unit":
+            body = {"kind": kind, "unit": SerialUnitSerializer(state).data}
+        elif kind == "drum":
+            body = {"kind": kind, "drum": ReelSerializer(state).data}
+        else:
+            body = {
+                "kind": kind,
+                "bulk": {
+                    **state,
+                    "balance": f"{state['balance']:.3f}",
+                    "free": f"{state['free']:.3f}",
+                    "earmarked": [
+                        {**e, "quantity": f"{e['quantity']:.3f}"} for e in state["earmarked"]
+                    ],
+                },
+            }
+        return Response(body)
+
+
+class EarmarkHistoryView(APIView):
+    """``GET /api/v1/stock/earmarks/history?serial_unit=|reel=|site=`` (Q4, Q2)."""
+
+    permission_classes = [IsAuthenticated, OrganizationIsActive]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("serial_unit", required=False, type=int),
+            OpenApiParameter("reel", required=False, type=int),
+            OpenApiParameter("site", required=False, type=int),
+        ],
+        responses={200: EarmarkEventSerializer(many=True)},
+    )
+    def get(self, request):  # type: ignore[no-untyped-def]
+        params = request.query_params
+        events = EarmarkEvent.objects.select_related(
+            "site", "to_site", "serial_unit", "reel", "node", "item_type", "owner_client", "actor"
+        )
+        given = [k for k in ("serial_unit", "reel", "site") if params.get(k)]
+        if len(given) != 1:
+            raise serializers.ValidationError(
+                {"detail": ["Give one of serial_unit, reel or site."]}
+            )
+        key = given[0]
+        raw = params[key]
+        label = {"serial_unit": "stock.SerialUnit", "reel": "stock.Reel", "site": "network.Site"}[
+            key
+        ]
+        if not raw.isdigit():
+            raise serializers.ValidationError({key: ["Not found."]})
+        obj = _one_or_400(label, int(raw), key)
+        if key == "site":
+            events = events.filter(Q(site=obj) | Q(to_site=obj))
+        else:
+            events = events.filter(**{key: obj})
+        paginator = EarmarkEventPagination()
+        page = paginator.paginate_queryset(events, request, view=self)
+        return paginator.get_paginated_response(EarmarkEventSerializer(page, many=True).data)
+
+
+class EarmarkedForSiteView(APIView):
+    """``GET /api/v1/stock/earmarked?site=&from_location=`` (Q6, §4.16.8a).
+
+    What is earmarked for the site at that place, as proposed gate-out lines,
+    what could not go and why, and the site's open jobs.
+    """
+
+    permission_classes = [IsAuthenticated, OrganizationIsActive, HasPermission]
+    required_permissions = {"get": PERM.GATE_OUT_REQUEST}
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("site", required=True, type=int),
+            OpenApiParameter("from_location", required=True, type=int),
+        ],
+        responses={
+            200: inline_serializer(
+                "EarmarkedForSite",
+                {
+                    "lines": serializers.ListField(child=serializers.DictField()),
+                    "excluded": serializers.ListField(child=serializers.DictField()),
+                    "jobs": serializers.ListField(child=serializers.DictField()),
+                },
+            )
+        },
+    )
+    def get(self, request):  # type: ignore[no-untyped-def]
+        from locations.models import Location
+        from locations.nodes import node_for_location
+        from network.models import Site
+
+        params = request.query_params
+        site = (
+            Site.objects.filter(pk=int(params["site"])).first()
+            if params.get("site", "").isdigit()
+            else None
+        )
+        if site is None:
+            raise serializers.ValidationError({"site": ["Name a site of yours."]})
+        location = (
+            Location.objects.filter(pk=int(params["from_location"])).first()
+            if params.get("from_location", "").isdigit()
+            else None
+        )
+        if location is None:
+            raise serializers.ValidationError(
+                {"from_location": ["Name a location of yours to issue from."]}
+            )
+        return Response(earmarked_for_site(site, node_for_location(location)))
 
 
 class StockCountLineSerializer(serializers.Serializer):

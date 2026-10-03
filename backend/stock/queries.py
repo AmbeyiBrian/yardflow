@@ -35,6 +35,7 @@ from stock.labels import read_label
 from stock.models import (
     Box,
     BoxBulkContent,
+    BulkEarmark,
     Reel,
     ReelStatus,
     SerialUnit,
@@ -74,6 +75,35 @@ def stock_on_hand(
         balances = balances.filter(owner_client=owner_client)
 
     return with_drum_split(balances.select_related("item_type", "node", "owner_client"))
+
+
+def attach_earmarks(balances) -> list[StockBalance]:  # type: ignore[no-untyped-def]
+    """Evaluate ``balances`` and hang each row's site split on it (§4.16.7, Q2).
+
+    One extra query for the whole list, not one per row. Sets ``earmarked``
+    (``[{site, name, quantity}]`` by site name) and ``free`` (balance less the
+    claims) on every row.
+    """
+    rows = list(balances)
+    claims: dict[tuple, list[BulkEarmark]] = {}
+    if rows:
+        for claim in (
+            BulkEarmark.objects.filter(
+                node_id__in={r.node_id for r in rows},
+                item_type_id__in={r.item_type_id for r in rows},
+            )
+            .select_related("site")
+            .order_by("site__name", "pk")
+        ):
+            key = (claim.node_id, claim.item_type_id, claim.owner_client_id, claim.condition)
+            claims.setdefault(key, []).append(claim)
+    for row in rows:
+        mine = claims.get((row.node_id, row.item_type_id, row.owner_client_id, row.condition), [])
+        row.earmarked = [  # type: ignore[attr-defined]
+            {"site": c.site_id, "name": c.site.name, "quantity": c.quantity} for c in mine
+        ]
+        row.free = row.quantity - sum((c.quantity for c in mine), Decimal("0"))  # type: ignore[attr-defined]
+    return rows
 
 
 def with_drum_split(balances: QuerySet[StockBalance]) -> QuerySet[StockBalance]:
