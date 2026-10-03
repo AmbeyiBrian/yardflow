@@ -153,14 +153,21 @@ export function applyFieldErrors<T extends FieldValues>(
   // they are: a form may not draw an error under every field, and "The
   // submitted data is not valid." alone leaves the storekeeper guessing.
   if (entries.length > 0 && error.code === 'VALIDATION_ERROR') {
-    return entries.map(([, messages]) => messages.join(' ')).join(' ');
+    return describeFieldErrors(error.fieldErrors);
   }
   return error.message;
 }
 
 /** Human text for an error, for screens with no form to attach it to. */
 export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
+  if (error instanceof ApiError) {
+    // The same rule as forms: a generic headline over field messages is
+    // replaced by the messages themselves, so the reader learns what to fix.
+    if (error.code === 'VALIDATION_ERROR' && Object.keys(error.fieldErrors).length > 0) {
+      return describeFieldErrors(error.fieldErrors);
+    }
+    return error.message;
+  }
   if (error instanceof Error) {
     // `fetch` rejects with "Failed to fetch" when the request never left the
     // device — no signal, or the yard's wifi dropped mid-request. Showing the
@@ -174,4 +181,30 @@ export function errorMessage(error: unknown): string {
     return error.message;
   }
   return 'Something went wrong.';
+}
+
+/**
+ * Field messages as one readable sentence. A message that already explains
+ * itself ("A reel is measured, not counted…") is used as it is; one of the
+ * framework's stock phrases ("This field is required.") gets the field's name
+ * in front, because on its own it does not say which field.
+ */
+export function describeFieldErrors(fieldErrors: Record<string, string[]>): string {
+  return Object.entries(fieldErrors)
+    .map(([field, messages]) => {
+      const text = messages.join(' ');
+      if (!/^(this field|ensure this|enter a valid|a valid|this value|invalid)/i.test(text)) {
+        return text;
+      }
+      return `${fieldName(field)}: ${text}`;
+    })
+    .join(' ');
+}
+
+/** "lines.0.serials.1.serial_number" → "Serial number"; "non_field_errors" → "". */
+function fieldName(path: string): string {
+  const last = path.split('.').filter((part) => !/^\d+$/.test(part)).pop() ?? path;
+  if (last === 'non_field_errors') return 'This';
+  const words = last.replace(/_/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
