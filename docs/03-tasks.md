@@ -1309,7 +1309,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* `npm test` runs both suites green and CI runs them in the frontend job; the lockfile
   carries no platform-specific packages.
 
-- [ ] **T11.12 `[F]` The scanner says what it read**
+- [x] **T11.12 `[F]` The scanner says what it read**
   Refs: §4.15.10 · P3
   `BarcodeScanner` passes the read result, shows "Scanned X from the label" with the raw text on a
   tap, and stops hard-coding its manual input's `id`.
@@ -1349,7 +1349,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* scanning two of three units and a stranger refuses the stranger and releases short
   by one, online and from the offline release page.
 
-- [ ] **T11.17 `[F]` Scan a pass to open it**
+- [x] **T11.17 `[F]` Scan a pass to open it**
   Refs: §4.15.8 · P11, G5
   `/gate-out/scan`, with entries on the gate-out list and the offline release page. Online it
   resolves through `/qr/scan` and opens `/gate-out/{id}?release=1`; offline it matches the cached
