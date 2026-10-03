@@ -98,6 +98,11 @@ class GateOutLineSerializer(serializers.ModelSerializer):
         return box_path(line.box)
 
     def get_diversions(self, line) -> list[dict]:  # type: ignore[no-untyped-def]
+        # Up to eight queries a pass: worth it on one pass's page, not on a
+        # list of fifty that never shows diversions (§4.16.5).
+        view = self.context.get("view")
+        if view is not None and getattr(view, "action", None) == "list":
+            return []
         gate_out = line.gate_out
         cache = getattr(gate_out, "_diversions_by_line", None)
         if cache is None:
