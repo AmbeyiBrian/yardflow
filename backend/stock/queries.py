@@ -83,7 +83,7 @@ def with_drum_split(balances: QuerySet[StockBalance]) -> QuerySet[StockBalance]:
     item. ``loose`` is quantity less open drums' remaining length, as
     ``post_movement`` computes it.
     """
-    dec = DecimalField(max_digits=14, decimal_places=3)
+    dec: DecimalField = DecimalField(max_digits=14, decimal_places=3)
 
     def drums(owner_filter):  # type: ignore[no-untyped-def]
         return Subquery(
