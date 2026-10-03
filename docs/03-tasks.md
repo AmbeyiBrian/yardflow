@@ -1365,7 +1365,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   gate-out and see one line with three serials; release by scanning two units and a stranger.
   *Done when:* the spec passes against a seeded tenant.
 
-- [ ] **T11.19 `[I]` Ship and check on production**
+- [x] **T11.19 `[I]` Ship and check on production**
   Refs: §12.2
   Push, watch CI deploy, and confirm on Silvertech that a box can be received, looked up and sent
   out. The migrations are additive, so a rollback is the previous image.
