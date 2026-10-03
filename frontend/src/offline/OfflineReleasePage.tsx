@@ -19,10 +19,14 @@
  * authorisation, and the device cannot add to it.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { errorMessage } from '../api/hooks';
+import { useSession } from '../auth/session';
+import { buildOfflinePayload, buildReleaseBody, isScanned, isShort, linesNeedingScans, lineQuantity } from '../features/boxes/loadScan';
+import { ScanTheLoadPanel, UnitTicks } from '../features/boxes/ScanTheLoad';
+import { useLoadScan } from '../features/boxes/useLoadScan';
 import { Banner, Button, Card, Field, Input, Spinner } from '../components/ui';
 import { EmptyState, PageHeader } from '../components/ui/data';
 import { type ReleasablePass, readReleasable } from './db';
@@ -36,7 +40,17 @@ interface PassLine {
   released_qty: string;
   uom: string;
   tracking_mode: string;
-  serials: { serial_unit: number; serial_number: string }[];
+  box?: number | null;
+  box_code?: string | null;
+  box_path?: string[];
+  serials: {
+    id?: number;
+    serial_unit: number;
+    serial_number: string;
+    asset_tag?: string | null;
+    released?: boolean;
+    box_path?: string[];
+  }[];
   reels: { reel: number; drum_number: string; length_requested: string }[];
 }
 
@@ -209,27 +223,83 @@ function ReleaseSheet({
   onClose: () => void;
   onDone: () => void;
 }) {
+  // Keyed by pass so ticks never carry from one pass to the next.
+  if (!pass) return null;
+  return <ReleaseSheetBody key={pass.id} pass={pass} onClose={onClose} onDone={onDone} />;
+}
+
+function ReleaseSheetBody({
+  pass,
+  onClose,
+  onDone,
+}: {
+  pass: ReleasablePass;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { user } = useSession();
+  const scanRequired = Boolean(user?.organization?.settings?.release_scan_required);
+
   const [vehicle, setVehicle] = useState('');
   const [driver, setDriver] = useState('');
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!pass) return null;
+  const passLines = pass.lines as PassLine[];
+  const [actual, setActual] = useState<Record<string, string>>({});
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+
+  // P11, §4.15.8: the same hook as the online sheet, matching on the device
+  // against the bundle downloaded with the pass.
+  const lineNames = useMemo(
+    () => new Map(passLines.map((line) => [line.id, line.item_name])),
+    [passLines],
+  );
+  const scan = useLoadScan({
+    lines: passLines,
+    passId: pass.id,
+    lineName: (id) => lineNames.get(Number(id)) ?? 'a box',
+  });
+
+  const shortLines = scan.lines.filter((line) =>
+    isShort(line, scan.state, actual[String(line.id)]),
+  );
+  const needScans = linesNeedingScans(scan.lines, scan.state, actual, scanRequired);
+  const badQuantity = scan.lines.some(
+    (line) => lineQuantity(line, scan.state, actual[String(line.id)]) === null,
+  );
+  const missingReason = shortLines.some((line) => !reasons[String(line.id)]?.trim());
+
+  // A box scan ticks a bulk line at its full outstanding quantity; the
+  // quantity stays editable afterwards.
+  function onRead(reading: Parameters<typeof scan.read>[0]) {
+    const result = scan.read(reading);
+    const full = result.ticks.filter((tick) => tick.kind === 'line');
+    if (full.length > 0) {
+      setActual((current) => {
+        const next = { ...current };
+        for (const tick of full) next[String(tick.lineId)] = String(tick.qty);
+        return next;
+      });
+    }
+  }
 
   async function release() {
     setBanner(null);
     setBusy(true);
     try {
-      const payload = {
-        gate_out: pass.id,
-        vehicle_reg: vehicle,
-        driver_name: driver,
-      };
+      // Real quantities, reasons and named units: before this, an offline
+      // release carried none and so always released every line in full.
+      const body = buildReleaseBody(scan.lines, scan.state, actual, reasons);
+      const payload = buildOfflinePayload(pass.id, vehicle, driver, body);
       const outcome = await submitOrQueue('GATE_OUT_RELEASE', payload, async () => {
         const { api } = await import('../api/client');
         return api.post(`/gate-outs/${pass.id}/release`, {
           vehicle_reg: vehicle,
           driver_name: driver,
+          released_lines: body.released_lines,
+          variance_reasons: body.variance_reasons,
+          released_serials: body.released_serials,
         });
       });
 
@@ -254,7 +324,7 @@ function ReleaseSheet({
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-lg rounded-t-2xl bg-white p-4 md:rounded-2xl">
+      <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-4 md:rounded-2xl">
         <h2 className="mb-2 text-base font-semibold text-slate-900">
           Release {pass.number}
         </h2>
@@ -262,6 +332,91 @@ function ReleaseSheet({
         {banner ? <Banner tone="info">{banner}</Banner> : null}
 
         <div className="mt-3 flex flex-col gap-3">
+          <ScanTheLoadPanel scan={scan} required={scanRequired} onRead={onRead} />
+
+          <ul className="flex flex-col gap-2">
+            {passLines.map((line, index) => {
+              const key = String(line.id);
+              const loadLine = scan.lines[index];
+              const scanned = isScanned(loadLine, scan.state);
+              const lineShort = isShort(loadLine, scan.state, actual[key]);
+              const handBlocked = scanRequired && loadLine.serialized && !scanned;
+              const none = handBlocked && Number(actual[key] ?? loadLine.outstanding) === 0;
+              return (
+                <li key={key} className="rounded-lg border border-slate-200 p-3">
+                  <p className="text-sm font-medium text-slate-900">{line.item_name}</p>
+                  <p className="text-sm text-slate-600">
+                    approved {line.requested_qty} {line.uom}
+                    {Number(line.released_qty) > 0 ? ` · ${line.released_qty} already gone` : ''}
+                  </p>
+                  {loadLine.serialized ? <UnitTicks line={loadLine} scan={scan} /> : null}
+                  {scan.tickedLines.has(loadLine.id) ? (
+                    <p className="mt-2 flex items-center gap-2 text-sm text-emerald-700">
+                      Box scanned
+                      <button
+                        type="button"
+                        className="min-h-[44px] px-2 text-slate-700 underline"
+                        onClick={() => scan.untickLine(loadLine.id)}
+                      >
+                        Clear the tick
+                      </button>
+                    </p>
+                  ) : null}
+
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {scanned ? (
+                      <p className="text-sm text-slate-800">
+                        Loaded: {lineQuantity(loadLine, scan.state, undefined)} {line.uom}, counted
+                        from the scans
+                      </p>
+                    ) : handBlocked ? (
+                      <div className="text-sm text-slate-700">
+                        <p>
+                          Units must be scanned for this line. Scan them above, or load none of it.
+                        </p>
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            setActual({
+                              ...actual,
+                              [key]: none ? String(loadLine.outstanding) : '0',
+                            })
+                          }
+                        >
+                          {none ? 'Scan the units instead' : 'None of this was loaded'}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Field label={`Actually loaded (${line.uom})`} htmlFor={`offline-actual-${key}`}>
+                        <Input
+                          id={`offline-actual-${key}`}
+                          inputMode="decimal"
+                          value={actual[key] ?? String(loadLine.outstanding)}
+                          onChange={(event) => setActual({ ...actual, [key]: event.target.value })}
+                        />
+                      </Field>
+                    )}
+                    {lineShort ? (
+                      <Field
+                        label="Why short"
+                        htmlFor={`offline-reason-${key}`}
+                        error={!reasons[key]?.trim() ? 'Required for a short line.' : undefined}
+                      >
+                        <Input
+                          id={`offline-reason-${key}`}
+                          value={reasons[key] ?? ''}
+                          onChange={(event) =>
+                            setReasons({ ...reasons, [key]: event.target.value })
+                          }
+                        />
+                      </Field>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
           {/* G2: the load has to be attributable, offline as much as online. */}
           <Field label="Vehicle" htmlFor="offline-vehicle">
             <Input
@@ -282,8 +437,13 @@ function ReleaseSheet({
             <Button variant="secondary" block onClick={onClose}>
               Close
             </Button>
-            <Button block loading={busy} onClick={() => void release()}>
-              Release it
+            <Button
+              block
+              loading={busy}
+              disabled={missingReason || needScans.length > 0 || badQuantity}
+              onClick={() => void release()}
+            >
+              {shortLines.length > 0 ? 'Release short' : 'Release it'}
             </Button>
           </div>
         </div>

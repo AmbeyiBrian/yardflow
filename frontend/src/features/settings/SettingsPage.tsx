@@ -87,6 +87,11 @@ const GROUPS: { title: string; blurb: string; switches: Switch[] }[] = [
         label: 'Require a signature at the gate',
         hint: 'The driver signs for what they took.',
       },
+      {
+        key: 'release_scan_required',
+        label: 'Require every unit to be scanned at release',
+        hint: 'A serialized line can then only be released by scanning its units. Without this, the storekeeper can still confirm a line by hand.',
+      },
     ],
   },
   {

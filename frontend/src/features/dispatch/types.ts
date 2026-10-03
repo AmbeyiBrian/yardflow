@@ -23,7 +23,10 @@ export interface GateOutLineSerial {
   id?: number;
   serial_unit: number;
   serial_number?: string;
+  asset_tag?: string | null;
   released?: boolean;
+  /** The unit's current box chain, outermost first; empty when loose (§4.15.8). */
+  box_path?: string[];
 }
 
 export interface GateOutLineReel {
@@ -59,6 +62,10 @@ export interface GateOutLine {
    * can identify — see the gate-out line's own validation.
    */
   no_serial_reason?: string;
+  /** Box the line was picked from, and its chain outermost first (§4.15.8). */
+  box?: number | null;
+  box_code?: string | null;
+  box_path?: string[];
   serials?: GateOutLineSerial[];
   reels?: GateOutLineReel[];
 }

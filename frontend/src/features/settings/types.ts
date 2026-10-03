@@ -166,6 +166,7 @@ export interface OrganizationSettingsPayload {
   attachments_required_gate_in: boolean;
   attachments_required_gate_out: boolean;
   signature_required_on_release: boolean;
+  release_scan_required: boolean;
   gate_pass_expiry_hours: number;
   allow_self_approval: boolean;
   approval_escalation_hours: number;

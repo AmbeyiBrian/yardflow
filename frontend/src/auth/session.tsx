@@ -37,6 +37,8 @@ export interface OrganizationSettings {
   attachments_required_gate_in: boolean;
   attachments_required_gate_out: boolean;
   signature_required_on_release: boolean;
+  /** P11: serialized lines must be released by naming scanned units. */
+  release_scan_required: boolean;
   client_waybill_enabled: boolean;
   timezone: string;
   currency: string;

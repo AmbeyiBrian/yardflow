@@ -35,6 +35,15 @@ import {
   Textarea,
 } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
+import {
+  buildReleaseBody,
+  isScanned,
+  isShort,
+  linesNeedingScans,
+  lineQuantity,
+} from '../boxes/loadScan';
+import { ScanTheLoadPanel, UnitTicks } from '../boxes/ScanTheLoad';
+import { useLoadScan } from '../boxes/useLoadScan';
 import type { GateOut } from './types';
 
 const OPEN_STATUSES = 'DRAFT,PENDING_APPROVAL,APPROVED,PARTIALLY_RELEASED';
@@ -551,13 +560,26 @@ function ReleaseSheet({
     invalidates: ['gate-outs', 'stock', 'movements', 'custody-expectations', 'notifications'],
   });
 
+  // P11, §4.15.8: scans tick units and box lines; the quantity of a line that
+  // has scanned units is the tick count. Everything else stays by hand (G1).
+  const lineNames = useMemo(
+    () => new Map(gateOut.lines.map((line) => [line.id, line.item_name ?? 'a box'])),
+    [gateOut.lines],
+  );
+  const scan = useLoadScan({
+    lines: gateOut.lines,
+    passId: gateOut.id,
+    lineName: (id) => lineNames.get(Number(id)) ?? 'a box',
+  });
+  const scanRequired = Boolean(settings?.release_scan_required);
+
   const shortLines = useMemo(
-    () =>
-      gateOut.lines.filter((line) => {
-        const outstanding = Number(line.outstanding_qty ?? line.requested_qty);
-        return Number(actual[String(line.id)] ?? outstanding) < outstanding;
-      }),
-    [gateOut.lines, actual],
+    () => scan.lines.filter((line) => isShort(line, scan.state, actual[String(line.id)])),
+    [scan.lines, scan.state, actual],
+  );
+  const needScans = linesNeedingScans(scan.lines, scan.state, actual, scanRequired);
+  const badQuantity = scan.lines.some(
+    (line) => lineQuantity(line, scan.state, actual[String(line.id)]) === null,
   );
 
   const missingReason = shortLines.some((line) => !reasons[String(line.id)]?.trim());
@@ -566,15 +588,33 @@ function ReleaseSheet({
   async function submit() {
     setBanner(null);
     try {
+      const body = buildReleaseBody(scan.lines, scan.state, actual, reasons);
       await release.mutateAsync({
         vehicle_reg: vehicle,
         driver_name: driver,
-        released_lines: actual,
-        variance_reasons: reasons,
+        released_lines: body.released_lines,
+        variance_reasons: body.variance_reasons,
+        released_serials: body.released_serials,
       });
       onDone();
     } catch (error) {
       setBanner(errorMessage(error));
+    }
+  }
+
+  // A box scan ticks a bulk line at its full outstanding quantity; the
+  // quantity stays editable afterwards.
+  function onRead(reading: Parameters<typeof scan.read>[0]) {
+    const result = scan.read(reading);
+    const full = result.ticks.filter((tick) => tick.kind === 'line');
+    if (full.length > 0) {
+      setActual((current) => {
+        const next = { ...current };
+        for (const tick of full) {
+          next[String(tick.lineId)] = String(tick.qty);
+        }
+        return next;
+      });
     }
   }
 
@@ -591,7 +631,7 @@ function ReleaseSheet({
           <Button
             block
             loading={release.isPending}
-            disabled={missingReason}
+            disabled={missingReason || needScans.length > 0 || badQuantity}
             onClick={submit}
           >
             {shortLines.length > 0 ? 'Release short' : 'Release'}
@@ -608,11 +648,19 @@ function ReleaseSheet({
           recorded as a variance.
         </p>
 
+        <ScanTheLoadPanel scan={scan} required={scanRequired} onRead={onRead} />
+
         <ul className="flex flex-col gap-2">
-          {gateOut.lines.map((line) => {
+          {gateOut.lines.map((line, index) => {
             const key = String(line.id);
             const outstanding = line.outstanding_qty ?? line.requested_qty;
-            const isShort = Number(actual[key] ?? outstanding) < Number(outstanding);
+            const loadLine = scan.lines[index];
+            const scanned = isScanned(loadLine, scan.state);
+            const lineShort = isShort(loadLine, scan.state, actual[key]);
+            // §4.15.8: with the setting on, a serialized line is never
+            // confirmed by hand; the only hand choice is "none of it".
+            const handBlocked = scanRequired && loadLine.serialized && !scanned;
+            const none = handBlocked && Number(actual[key] ?? outstanding) === 0;
             return (
               <li key={key} className="rounded-lg border border-slate-200 p-3">
                 <label className="flex min-h-[44px] items-start gap-3">
@@ -632,7 +680,7 @@ function ReleaseSheet({
                         ? ` · ${line.released_qty} already gone`
                         : ''}
                     </span>
-                    {line.serials?.length ? (
+                    {line.serials?.length && !loadLine.serialized ? (
                       // "2 RRUs" checks nothing; the serial numbers check the load.
                       <span className="block font-mono text-xs text-slate-700">
                         {line.serials.map((serial) => serial.serial_number).join(', ')}
@@ -657,16 +705,51 @@ function ReleaseSheet({
                   </span>
                 </label>
 
+                {loadLine.serialized ? <UnitTicks line={loadLine} scan={scan} /> : null}
+                {scan.tickedLines.has(loadLine.id) ? (
+                  <p className="mt-2 flex items-center gap-2 text-sm text-emerald-700">
+                    Box scanned
+                    <button
+                      type="button"
+                      className="min-h-[44px] px-2 text-slate-700 underline"
+                      onClick={() => scan.untickLine(loadLine.id)}
+                    >
+                      Clear the tick
+                    </button>
+                  </p>
+                ) : null}
+
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <Field label={`Actually loaded (${line.uom})`} htmlFor={`actual-${key}`}>
-                    <Input
-                      id={`actual-${key}`}
-                      inputMode="decimal"
-                      value={actual[key] ?? ''}
-                      onChange={(event) => setActual({ ...actual, [key]: event.target.value })}
-                    />
-                  </Field>
-                  {isShort ? (
+                  {scanned ? (
+                    <p className="text-sm text-slate-800">
+                      Loaded: {lineQuantity(loadLine, scan.state, undefined)} {line.uom}, counted
+                      from the scans
+                    </p>
+                  ) : handBlocked ? (
+                    <div className="text-sm text-slate-700">
+                      <p>
+                        Units must be scanned for this line. Scan them above, or load none of it.
+                      </p>
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          setActual({ ...actual, [key]: none ? String(outstanding) : '0' })
+                        }
+                      >
+                        {none ? 'Scan the units instead' : 'None of this was loaded'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Field label={`Actually loaded (${line.uom})`} htmlFor={`actual-${key}`}>
+                      <Input
+                        id={`actual-${key}`}
+                        inputMode="decimal"
+                        value={actual[key] ?? ''}
+                        onChange={(event) => setActual({ ...actual, [key]: event.target.value })}
+                      />
+                    </Field>
+                  )}
+                  {lineShort ? (
                     <Field
                       label="Why short"
                       htmlFor={`reason-${key}`}
