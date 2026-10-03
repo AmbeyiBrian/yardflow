@@ -16,6 +16,7 @@ from decimal import Decimal
 from django.db.models import Q, QuerySet, Sum
 
 from locations.models import UNAVAILABLE_NODE_TYPES, LocationType, StockNode
+from stock.labels import read_label
 from stock.models import Reel, SerialUnit, StockBalance, StockMovement
 
 
@@ -169,17 +170,7 @@ def item_history(item_type, *, node=None) -> QuerySet[StockMovement]:
     return movements.select_related("from_node", "to_node", "owner_client", "posted_by")
 
 
-def find_by_identifier(identifier: str) -> dict | None:
-    """Resolve a scanned or typed identifier to whatever it is (E1, E2, D7).
-
-    A storekeeper with a barcode does not know whether it is a serial number, an
-    internal asset tag or a drum number — and should not have to choose a search
-    mode before scanning. One lookup covers all three.
-    """
-    identifier = (identifier or "").strip()
-    if not identifier:
-        return None
-
+def _find_exact(identifier: str) -> dict | None:
     unit = (
         SerialUnit.objects.filter(
             Q(serial_number__iexact=identifier) | Q(asset_tag__iexact=identifier)
@@ -197,6 +188,38 @@ def find_by_identifier(identifier: str) -> dict | None:
     )
     if reel is not None:
         return {"kind": "reel", "object": reel}
+
+    return None
+
+
+def find_by_identifier(identifier: str) -> dict | None:
+    """Resolve a scanned or typed identifier to whatever it is (E1, E2, D7, P2).
+
+    A storekeeper with a barcode does not know whether it is a serial number, an
+    internal asset tag or a drum number — and should not have to choose a search
+    mode before scanning. One lookup covers all three.
+
+    The value as given is tried first, so a plain serial behaves exactly as it
+    always did. Only if that finds nothing is the label read (§4.15.6) and each
+    serial in it tried in turn — a GS1 barcode or a product link then finds the
+    unit it names. Box codes and gate-pass tokens are not resolved here.
+    """
+    scanned = identifier or ""
+    identifier = scanned.strip()
+    if not identifier:
+        return None
+
+    found = _find_exact(identifier)
+    if found is not None:
+        return found
+
+    # The unstripped value: a GS1 string can end in a separator that strip() eats.
+    for serial in read_label(scanned).serials:
+        if serial == identifier:
+            continue
+        found = _find_exact(serial)
+        if found is not None:
+            return found
 
     return None
 

@@ -375,6 +375,19 @@ class TestStockApi:
         assert response.json()["kind"] == "reel"
         assert response.json()["object"]["remaining_length"] == "500.000"
 
+    def test_a_scanned_label_resolves_to_the_serial_it_carries(self, signed_in, received):
+        """P2: a GS1 barcode and a product link find the unit without being told."""
+        http, token, _organization, _owner = signed_in
+
+        for label in (
+            "(01)09506000134352(21)LOOKUP-RRU-7",
+            "https://vendor.example/p?sn=LOOKUP-RRU-7",
+        ):
+            response = http.get(reverse("v1:stock-lookup"), {"q": label}, **auth(token))
+
+            assert response.status_code == 200, (label, response.content)
+            assert response.json()["resource"] == "/stock/serials/LOOKUP-RRU-7"
+
     def test_an_unknown_identifier_is_404(self, signed_in, received):
         """§2.4: indistinguishable from another tenant's identifier."""
         http, token, _organization, _owner = signed_in

@@ -1,0 +1,432 @@
+[
+  {
+    "name": "plain serial",
+    "raw": "RRU-0001",
+    "serials": [
+      "RRU-0001"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "whitespace padded serial",
+    "raw": "  RRU-0001 \n",
+    "serials": [
+      "RRU-0001"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "empty",
+    "raw": "",
+    "serials": [],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "whitespace only",
+    "raw": " \n\t ",
+    "serials": [],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "numeric serial",
+    "raw": "1234567890123",
+    "serials": [
+      "1234567890123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gate pass relative path",
+    "raw": "/api/v1/qr/scan?token=abc123",
+    "serials": [],
+    "box_code": null,
+    "document_token": "abc123"
+  },
+  {
+    "name": "gate pass full url",
+    "raw": "https://silvertech.yardflow.buniva.co.ke/api/v1/qr/scan?token=eyJ0.x-y_z",
+    "serials": [],
+    "box_code": null,
+    "document_token": "eyJ0.x-y_z"
+  },
+  {
+    "name": "gate pass token among params",
+    "raw": "https://y.example/qr/scan?foo=1&token=T-9&bar=2",
+    "serials": [],
+    "box_code": null,
+    "document_token": "T-9"
+  },
+  {
+    "name": "scan url without token falls back to path",
+    "raw": "https://y.example/qr/scan?foo=1",
+    "serials": [
+      "scan"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "json object serial",
+    "raw": "{\"serial\":\"SN123\"}",
+    "serials": [
+      "SN123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "json serialNumber mixed case",
+    "raw": "{\"SerialNumber\":\"SN-77\"}",
+    "serials": [
+      "SN-77"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "json serial_number",
+    "raw": "{\"serial_number\": \"ZX9\"}",
+    "serials": [
+      "ZX9"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "json sn with box",
+    "raw": "{\"sn\":\"A1\",\"box\":\"BX-001\"}",
+    "serials": [
+      "A1"
+    ],
+    "box_code": "BX-001",
+    "document_token": null
+  },
+  {
+    "name": "json serials and carton",
+    "raw": "{\"serials\":[\"S1\",\"S2\",\"S3\"],\"carton\":\"CT-9\"}",
+    "serials": [
+      "S1",
+      "S2",
+      "S3"
+    ],
+    "box_code": "CT-9",
+    "document_token": null
+  },
+  {
+    "name": "json pallet only",
+    "raw": "{\"pallet\":\"PL-5\"}",
+    "serials": [],
+    "box_code": "PL-5",
+    "document_token": null
+  },
+  {
+    "name": "json array of strings",
+    "raw": "[\"S1\",\"S2\",\"S1\",\" S3 \"]",
+    "serials": [
+      "S1",
+      "S2",
+      "S3"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "json unusable falls through to raw",
+    "raw": "{\"foo\":\"bar\"}",
+    "serials": [
+      "{\"foo\":\"bar\"}"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gs1 with group separator",
+    "raw": "0109506000134352\u001d21ABC123\u001d10LOT9",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gs1 symbology C1 serial last",
+    "raw": "]C1010950600013435221XYZ789",
+    "serials": [
+      "XYZ789"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gs1 serial before lot with separator",
+    "raw": "01095060001343522155X\u001d17261231",
+    "serials": [
+      "55X"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gs1 symbology C1",
+    "raw": "]C10109506000134352\u001d21ABC123",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gs1 symbology d2",
+    "raw": "]d20109506000134352\u001d21DM-42",
+    "serials": [
+      "DM-42"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gs1 symbology Q3 with sscc",
+    "raw": "]Q300003456780000000018\u001d21K7",
+    "serials": [
+      "K7"
+    ],
+    "box_code": "003456780000000018",
+    "document_token": null
+  },
+  {
+    "name": "gs1 bracketed",
+    "raw": "(01)09506000134352(21)ABC123",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gs1 bracketed with lot",
+    "raw": "(01)09506000134352(10)LOT1(21)ABC123",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "gs1 sscc only",
+    "raw": "(00)003456780000000018",
+    "serials": [],
+    "box_code": "003456780000000018",
+    "document_token": null
+  },
+  {
+    "name": "gs1 unbracketed sscc with separator",
+    "raw": "00003456780000000018\u001d",
+    "serials": [],
+    "box_code": "003456780000000018",
+    "document_token": null
+  },
+  {
+    "name": "digits only are not gs1",
+    "raw": "0109506000134352",
+    "serials": [
+      "0109506000134352"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "url with sn param",
+    "raw": "https://example.com/p?sn=AB-12&x=1",
+    "serials": [
+      "AB-12"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "url with serial param",
+    "raw": "http://example.com/p?Serial=Q9",
+    "serials": [
+      "Q9"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "url with s param",
+    "raw": "https://example.com/p?s=ZZ1",
+    "serials": [
+      "ZZ1"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "url with path serial",
+    "raw": "https://example.com/units/RRU-0042",
+    "serials": [
+      "RRU-0042"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "url path serial trailing slash and encoding",
+    "raw": "https://example.com/units/RRU%2F7/",
+    "serials": [
+      "RRU/7"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "url without path falls back to raw",
+    "raw": "https://example.com",
+    "serials": [
+      "https://example.com"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "labelled SN",
+    "raw": "SN: ABC123",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "labelled S/N colon",
+    "raw": "S/N: ABC123",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "labelled S/N no colon",
+    "raw": "s/n ABC123",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "labelled Serial",
+    "raw": "Serial: ABC123",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "labelled Serial No",
+    "raw": "SERIAL NO: ABC123",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "labelled amid other lines",
+    "raw": "Model: RRU5502\nSN: ABC123\nMade in X",
+    "serials": [
+      "ABC123"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "multiple S/N lines",
+    "raw": "S/N: A1\nS/N: A2\r\nS/N: A3",
+    "serials": [
+      "A1",
+      "A2",
+      "A3"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "multiple SN lines duplicate",
+    "raw": "SN: A1\nSN: A1\nSN: A2",
+    "serials": [
+      "A1",
+      "A2"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "comma list",
+    "raw": "A1, A2,A3",
+    "serials": [
+      "A1",
+      "A2",
+      "A3"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "newline list",
+    "raw": "A1\nA2\r\nA3\n",
+    "serials": [
+      "A1",
+      "A2",
+      "A3"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "semicolon list",
+    "raw": "A1;A2; A3;",
+    "serials": [
+      "A1",
+      "A2",
+      "A3"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "list with duplicates and blanks",
+    "raw": "A1,,A2,\n,A1",
+    "serials": [
+      "A1",
+      "A2"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "single token with spaces is one serial",
+    "raw": "RRU 0001 B",
+    "serials": [
+      "RRU 0001 B"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "garbage falls back to raw",
+    "raw": "@@##!!  ??",
+    "serials": [
+      "@@##!!  ??"
+    ],
+    "box_code": null,
+    "document_token": null
+  }
+]

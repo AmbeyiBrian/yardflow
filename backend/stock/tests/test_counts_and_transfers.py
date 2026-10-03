@@ -312,6 +312,50 @@ class TestScanningAnIdentifier:
     def test_an_unknown_identifier_returns_nothing(self, tenant, yard):
         assert find_by_identifier("NOTHING-LIKE-THIS") is None
 
+    def test_a_gs1_label_finds_the_unit_its_serial_names(self, tenant, yard):
+        """P2: the barcode carries the GTIN and serial; the serial is what we hold."""
+        unit = SerialUnitFactory(serial_number="ABC123", current_node=yard.node)
+
+        found = find_by_identifier("]C10109506000134352\x1d21ABC123")
+
+        assert found["object"] == unit
+
+    def test_a_bracketed_gs1_label_finds_the_unit(self, tenant, yard):
+        unit = SerialUnitFactory(serial_number="ABC123", current_node=yard.node)
+
+        assert find_by_identifier("(01)09506000134352(21)ABC123")["object"] == unit
+
+    def test_a_url_label_finds_the_unit_its_serial_names(self, tenant, yard):
+        unit = SerialUnitFactory(serial_number="RRU-0042", current_node=yard.node)
+
+        assert find_by_identifier("https://vendor.example/p?sn=RRU-0042")["object"] == unit
+        assert find_by_identifier("https://vendor.example/units/RRU-0042")["object"] == unit
+
+    def test_an_sn_label_finds_the_unit_its_serial_names(self, tenant, yard):
+        unit = SerialUnitFactory(serial_number="RRU-0042", current_node=yard.node)
+
+        assert find_by_identifier("Model: X\nSN: RRU-0042")["object"] == unit
+
+    def test_a_list_label_finds_the_first_serial_we_hold(self, tenant, yard):
+        unit = SerialUnitFactory(serial_number="B2", current_node=yard.node)
+
+        assert find_by_identifier("A1, B2, C3")["object"] == unit
+
+    def test_an_unreadable_label_is_still_looked_up_whole(self, tenant, yard):
+        unit = SerialUnitFactory(serial_number="@@##!! ??", current_node=yard.node)
+
+        assert find_by_identifier("  @@##!! ??  ")["object"] == unit
+
+    def test_a_whole_value_wins_over_what_a_reading_would_make_of_it(self, tenant, yard):
+        """P2: a serial that looks like a list is still found as itself first."""
+        whole = SerialUnitFactory(serial_number="A1,B2", current_node=yard.node)
+        SerialUnitFactory(serial_number="A1", current_node=yard.node)
+
+        assert find_by_identifier("A1,B2")["object"] == whole
+
+    def test_a_label_naming_nothing_we_hold_returns_nothing(self, tenant, yard):
+        assert find_by_identifier("(01)09506000134352(21)NOPE") is None
+
 
 class TestInternalTransfers:
     """E4: material moving inside the yard stays visible; leaving needs a pass."""
