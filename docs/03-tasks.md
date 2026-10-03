@@ -1282,7 +1282,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* API tests cover each endpoint and its permission; another tenant's box is a 404;
   scanning a box code on the lookup returns the box; schema regenerated.
 
-- [ ] **T11.9 `[B]` Gate-out by box**
+- [x] **T11.9 `[B]` Gate-out by box**
   Refs: §4.15.7 · P5, P6, P9, P10
   `GateOutLine.box`; submit refuses a unit that is elsewhere or on another open pass
   (`UNIT_NOT_AVAILABLE`) and a box line beyond its claim; `_release_line` draws bulk with
