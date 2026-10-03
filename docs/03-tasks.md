@@ -1391,7 +1391,7 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
   value-by-id, Add new item. Pure helpers unit-tested against the same ranking cases as T12.1.
   *Done when:* unit tests pass; typecheck, lint and build are clean.
 
-- [ ] **T12.3 `[F]` Every item picker uses it**
+- [x] **T12.3 `[F]` Every item picker uses it**
   Refs: §7.3b · C9
   Gate-in line, gate-out line, stock filter, transfers, counts. The E2E specs pick items by typing.
   *Done when:* the gate-in, gate-out and boxes specs pass on the phone project against the demo
