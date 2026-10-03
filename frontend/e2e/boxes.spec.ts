@@ -13,7 +13,7 @@
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { PASSWORD, PEOPLE, open, pickItem, signIn, unique } from './fixtures';
+import { chooseFirst, open, PASSWORD, PEOPLE, pickItem, signIn, unique } from './fixtures';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -87,8 +87,8 @@ test.describe('A box from the gate to the truck', () => {
     await open(page, '/gate-out/new');
     await page.getByLabel('Out of').selectOption({ label: 'Main yard' });
     await page.getByLabel('Where it is going').selectOption({ label: 'A site' });
-    await page.getByLabel('A site').selectOption({ index: 1 });
-    await page.getByLabel('Who is taking it').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('A site'));
+    await chooseFirst(page.getByLabel('Who is taking it'));
 
     await page.getByRole('button', { name: 'Add' }).click();
     const sheet = page.getByRole('dialog');

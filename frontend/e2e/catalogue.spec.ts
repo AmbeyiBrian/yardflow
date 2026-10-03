@@ -7,7 +7,7 @@
 
 import { expect, test } from '@playwright/test';
 
-import { PEOPLE, open, pickItem, signIn, unique } from './fixtures';
+import { chooseFirst, open, PEOPLE, pickItem, signIn, unique } from './fixtures';
 
 test.describe('catalogue item editing', () => {
   test('an item is renamed and found by its new name at gate-in', async ({ page }) => {
@@ -17,7 +17,7 @@ test.describe('catalogue item editing', () => {
 
     await page.getByRole('button', { name: 'New item type' }).first().click();
     const sheet = page.getByRole('dialog');
-    await sheet.getByLabel('Category').selectOption({ index: 1 });
+    await chooseFirst(sheet.getByLabel('Category'));
     await sheet.getByLabel('Name').fill(name);
     await sheet.getByLabel('Unit').fill('ea');
     await sheet.getByLabel('How it is tracked').selectOption('BULK');
@@ -66,7 +66,7 @@ test.describe('catalogue item editing', () => {
 
     await page.getByRole('button', { name: 'New item type' }).first().click();
     const sheet = page.getByRole('dialog');
-    await sheet.getByLabel('Category').selectOption({ index: 1 });
+    await chooseFirst(sheet.getByLabel('Category'));
     await sheet.getByLabel('Name').fill(name);
     await expect(sheet.getByLabel('Unit')).toHaveValue('ea');
     await sheet.getByLabel('How it is tracked').selectOption('REEL');
@@ -76,7 +76,7 @@ test.describe('catalogue item editing', () => {
 
     // Typed back to "ea" by hand, the refusal names the unit, not a generic line.
     await page.getByRole('button', { name: 'New item type' }).first().click();
-    await sheet.getByLabel('Category').selectOption({ index: 1 });
+    await chooseFirst(sheet.getByLabel('Category'));
     await sheet.getByLabel('Name').fill(unique('Earthing cable'));
     await sheet.getByLabel('How it is tracked').selectOption('REEL');
     await sheet.getByLabel('Unit').fill('ea');

@@ -15,7 +15,7 @@
 
 import { expect, test } from '@playwright/test';
 
-import { PEOPLE, open, pickItem, receiveCriticalStock, signIn } from './fixtures';
+import { chooseFirst, open, PEOPLE, pickItem, receiveCriticalStock, signIn } from './fixtures';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -40,10 +40,10 @@ test.describe('The gate-out loop', () => {
     // "Out of" is not pre-filled when a tenant has more than one yard, and a
     // request with no source cannot be filled — which is why the button stays
     // disabled until it is answered.
-    await page.getByLabel('Out of').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Out of'));
     await page.getByLabel('Where it is going').selectOption({ label: 'A site' });
-    await page.getByLabel('A site').selectOption({ index: 1 });
-    await page.getByLabel('Who is taking it').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('A site'));
+    await chooseFirst(page.getByLabel('Who is taking it'));
 
     await page.getByRole('button', { name: 'Add' }).click();
     const sheet = page.getByRole('dialog');
@@ -87,10 +87,10 @@ test.describe('The gate-out loop', () => {
     await signIn(page, PEOPLE.owner);
     await open(page, '/gate-out/new');
 
-    await page.getByLabel('Out of').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Out of'));
     await page.getByLabel('Where it is going').selectOption({ label: 'A site' });
-    await page.getByLabel('A site').selectOption({ index: 1 });
-    await page.getByLabel('Who is taking it').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('A site'));
+    await chooseFirst(page.getByLabel('Who is taking it'));
 
     await page.getByRole('button', { name: 'Add' }).click();
     const sheet = page.getByRole('dialog');

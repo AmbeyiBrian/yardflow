@@ -12,7 +12,7 @@
 
 import { type Locator, expect, test } from '@playwright/test';
 
-import { PEOPLE, itemOptions, open, pickItem, signIn, unique } from './fixtures';
+import { chooseFirst, itemOptions, open, PEOPLE, pickItem, signIn, unique } from './fixtures';
 
 /**
  * Pick an item the sheet treats as a reel.
@@ -53,7 +53,7 @@ test.describe('Receiving a delivery', () => {
     // The header: where it came from and where it is going (D1).
     await page.getByLabel('Source').selectOption('PURCHASE');
     await page.getByLabel('Supplier').fill('Huawei Kenya');
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -99,7 +99,7 @@ test.describe('Receiving a delivery', () => {
      */
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -133,7 +133,7 @@ test.describe('Receiving a delivery', () => {
      */
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -155,7 +155,7 @@ test.describe('Receiving a delivery', () => {
     /** D10: a coil or a cut length has no drum number, and nobody is asked for one. */
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -188,7 +188,7 @@ test.describe('Receiving a delivery', () => {
      * the drum and asks for the one thing it needs. */
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -220,7 +220,7 @@ test.describe('Receiving a delivery', () => {
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
     await page.getByLabel('Supplier').fill(supplier);
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -262,7 +262,7 @@ test.describe('Receiving a delivery', () => {
      */
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -336,7 +336,7 @@ test.describe('Correcting a draft', () => {
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
     await page.getByLabel('Supplier').fill(supplier);
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -385,7 +385,7 @@ test.describe('Correcting a draft', () => {
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
     await page.getByLabel('Supplier').fill('Huawei Kenya');
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
@@ -419,7 +419,7 @@ test.describe('Correcting a draft', () => {
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
     await page.getByLabel('Supplier').fill('Huawei Kenya');
-    await page.getByLabel('Received into').selectOption({ index: 1 });
+    await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');

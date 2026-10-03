@@ -192,3 +192,16 @@ export async function itemOptions(
   }
   return (await scope.getByRole('option').allTextContents()).map((t) => t.trim());
 }
+
+/**
+ * Choose the first real option of a select: not the placeholder, and never
+ * "＋ Add new …". Waits for one to appear, because a list still loading holds
+ * only those two, and picking "the first option" then opens a create sheet.
+ */
+export async function chooseFirst(select: import('@playwright/test').Locator): Promise<string> {
+  const real = select.locator('option:not([value=""]):not([data-add-new])');
+  await real.first().waitFor({ state: 'attached', timeout: 20_000 });
+  const value = (await real.first().getAttribute('value')) ?? '';
+  await select.selectOption(value);
+  return value;
+}
