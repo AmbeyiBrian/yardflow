@@ -1467,11 +1467,11 @@ gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes t
 - [x] **T13.5a `[B]` What is waiting for a site** — Refs: §4.16.8a · Q6
   *Done when:* the endpoint lists a site's earmarked units, drums and bulk at a location, and its
   open jobs by project.
-- [ ] **T13.8 `[F]` Site-first gate-out, diversions, approval** — Refs: Q3, Q6
+- [x] **T13.8 `[F]` Site-first gate-out, diversions, approval** — Refs: Q3, Q6
   No project destination; choosing a site preloads its earmarked material ticked; job picker when
   needed; diversion reasons; the approver sees diversions.
 - [x] **T13.9 `[F]` Earmarks on stock screens, and changing one** — Refs: Q2, Q4
-- [ ] **T13.10 `[T]` Earmarks end to end, and ship** — Refs: §4.16.10
+- [x] **T13.10 `[T]` Earmarks end to end, and ship** — Refs: §4.16.10
   *Done when:* the phone E2E in §4.16.10 passes against the demo tenant, CI is green, and production
   serves it.
 
