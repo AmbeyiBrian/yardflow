@@ -951,6 +951,17 @@ sent to (DELIVERED, plus released gate-out lines to that site that used free sto
 yard (current earmarks), diverted away (DIVERTED). Quantities in the item's unit; units counted.
 Exports through the existing Excel and PDF paths.
 
+#### 4.16.8a Site-first gate-out (Q6)
+
+- `GET /stock/earmarked?site=<id>&from_location=<id>` returns what is earmarked for the site at
+  that location, in the proposal shape `issuable_contents` uses (§4.15.4): one line per item and lot,
+  units and drums named, bulk with its earmarked quantity; plus the site's open jobs with their
+  projects. Permission `gate_out.request`.
+- The request screen drops "A project" from "Where it is going". On choosing a site it calls the
+  endpoint and shows the list ticked; Confirm turns ticked rows into lines through the same builder
+  the box proposal uses. The job picker appears when the open jobs span more than one project.
+- The backend still accepts a project destination, so passes raised before keep their meaning.
+
 #### 4.16.9 Errors
 
 `EARMARK_DIVERSION_NEEDS_REASON` (409) — names the site, item and quantity, and says to give a reason

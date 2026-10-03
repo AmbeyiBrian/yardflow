@@ -1131,6 +1131,19 @@ still waiting in the yard for it, and what went elsewhere.
   by item, for a chosen period; filterable by client and by project (the sites of a project).
 - In the reports catalogue with the other stock reports, exportable like them.
 
+**Q6.** As a storekeeper, I want a gate-out to start from the site, with the material waiting for it
+already listed, so that sending a site's material is a confirmation, not a hunt.
+*(Approved 2026-10-03.)*
+- "Where it is going" offers a site, a person, a client or another store — **not a project**. The
+  project is worked out from the site's job, so project approvals and costing still find it.
+- Choosing a site lists everything earmarked for it at the chosen store, **all ticked**: each unit,
+  each drum, each bulk quantity. Untick what is not going, lower a bulk quantity to take part of it,
+  then Confirm adds them as lines. More can still be added by hand.
+- If the site has open jobs in more than one project, the screen asks which job; with one, it is
+  chosen automatically; with none, the pass carries no job, as today.
+- If nothing is earmarked for the site, the list says so and the request is built by hand.
+- Passes already addressed to a project keep working; only new requests lose the option.
+
 **Edge cases.**
 - A stock count or a correction that lowers a quantity below what is earmarked reduces the
   earmarks and records it, as it does for boxes.
