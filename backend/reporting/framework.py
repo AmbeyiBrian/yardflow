@@ -371,6 +371,7 @@ def _load_reports() -> None:
     from commercials import reports_finance  # noqa: F401
     from reporting import (
         reports,  # noqa: F401
+        reports_material_by_site,  # noqa: F401
         reports_valuation,  # noqa: F401
     )
 
