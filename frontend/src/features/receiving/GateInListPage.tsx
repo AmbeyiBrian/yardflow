@@ -14,7 +14,8 @@ import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
 import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Spinner } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
-import type { GateIn } from './types';
+import { boxLabel, buildTree, describeCounts, type BoxNode, type DraftBox } from './gateInBoxes';
+import type { GateIn, GateInLineInput } from './types';
 
 export default function GateInListPage() {
   const navigate = useNavigate();
@@ -104,6 +105,9 @@ export function GateInDetailPage() {
 
   const document = gateIn.data!;
   const isDraft = document.status === 'DRAFT';
+  // Boxes come back with their generated codes once posted (P10, 4.15.5).
+  const boxes = document.boxes ?? [];
+  const tree = buildTree(boxes, document.lines);
 
   return (
     <div className="flex flex-col gap-4">
@@ -187,6 +191,22 @@ export function GateInDetailPage() {
         ) : null}
       </Card>
 
+      {boxes.length > 0 ? (
+        <Card className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">Boxes</h2>
+          <p className="text-sm text-slate-600">
+            {isDraft
+              ? 'A box with no code gets one when this is received.'
+              : 'Write each code on its box, so it can be found by scanning it later.'}
+          </p>
+          <ul className="flex flex-col gap-1">
+            {tree.roots.map((node) => (
+              <BoxOutline key={node.box.key} node={node} depth={0} />
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
       <Card className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-900">Lines</h2>
         <DataList
@@ -203,6 +223,12 @@ export function GateInDetailPage() {
                   {row.is_unserviceable ? ' · quarantined' : ''}
                 </span>
               ),
+            },
+            {
+              header: 'Box',
+              // Said on the line itself (P10): where the generated codes get
+              // read off, to be written on the carton.
+              cell: (row) => linePlacement(row, boxes),
             },
             {
               header: 'Owner',
@@ -327,6 +353,40 @@ export function GateInDetailPage() {
         </div>
       </Sheet>
     </div>
+  );
+}
+
+/** Where a line's contents went: its box, or the boxes its units are spread over. */
+function linePlacement(line: GateInLineInput, boxes: DraftBox[]): string {
+  if (line.tracking_mode === 'BULK') {
+    return line.box_key ? boxLabel(boxes, line.box_key) : 'Loose';
+  }
+  if (line.tracking_mode === 'SERIALIZED' && line.serials?.length) {
+    const counts = new Map<string, number>();
+    for (const serial of line.serials) {
+      const name = serial.box_key ? boxLabel(boxes, serial.box_key) : 'Loose';
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts].map(([name, count]) => `${name} (${count})`).join(', ');
+  }
+  return 'Loose';
+}
+
+/** A box and what is in it, indented under the box it sits in. */
+function BoxOutline({ node, depth }: { node: BoxNode; depth: number }) {
+  return (
+    <li>
+      <p className="break-words text-sm text-slate-900" style={{ paddingLeft: depth * 16 }}>
+        <span className="font-mono font-medium">{node.label}</span> · {describeCounts(node)}
+      </p>
+      {node.children.length > 0 ? (
+        <ul className="flex flex-col gap-1">
+          {node.children.map((child) => (
+            <BoxOutline key={child.box.key} node={child} depth={depth + 1} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
   );
 }
 

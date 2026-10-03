@@ -20,6 +20,22 @@ export interface GateInSerialInput {
   serial_number: string;
   asset_tag?: string;
   source?: string;
+  /** The box this unit went into (P1, P10). Blank or absent: loose. */
+  box_key?: string;
+}
+
+/**
+ * A box on the delivery (§4.15.5). `key` is made on the device and never changes,
+ * so lines and units can point at it before the server has seen it. A blank
+ * `code` means "make one when this is received"; reads return the generated one.
+ */
+export interface GateInBoxInput {
+  key: string;
+  code: string;
+  /** The box this one sits inside. Blank: on the pallet floor, so to speak. */
+  parent_key: string;
+  /** What the label said, kept so a bad read can be looked at later. */
+  label_text: string;
 }
 
 export interface GateInReelInput {
@@ -44,6 +60,8 @@ export interface GateInLineInput {
   custom_field_values?: Record<string, unknown>;
   no_serial_reason?: string;
   notes?: string;
+  /** BULK lines only: the whole quantity is in this box. Serialized units carry their own. */
+  box_key?: string;
   serials?: GateInSerialInput[];
   reels?: GateInReelInput[];
 }
@@ -70,6 +88,7 @@ export interface GateIn {
   voided_at: string | null;
   notes: string;
   lines: GateInLineInput[];
+  boxes?: GateInBoxInput[];
   created_at: string;
 }
 

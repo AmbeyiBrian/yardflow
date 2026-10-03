@@ -24,7 +24,7 @@
  * stored draft is left alone: it belongs to a different, unsaved delivery.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '../../api/client';
@@ -33,6 +33,7 @@ import { useOffline } from '../../offline/OfflineProvider';
 import { newUuid } from '../../offline/db';
 import { submitOrQueue } from '../../offline/sync';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
+import type { LabelReading } from '../boxes/readLabel';
 import {
   ActionBar,
   Banner,
@@ -47,7 +48,29 @@ import {
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Client, ItemType, Location, Site } from '../settings/types';
-import type { Condition, GateIn, GateInLineInput, SourceType } from './types';
+import {
+  boxErrorMessages,
+  boxLabel,
+  boxPath,
+  buildTree,
+  describeCounts,
+  findByCode,
+  linesForPayload,
+  normaliseBoxes,
+  parentChoices,
+  removalBlock,
+  withoutBox,
+  type BoxEntry,
+  type BoxNode,
+  type DraftBox,
+} from './gateInBoxes';
+import type {
+  Condition,
+  GateIn,
+  GateInLineInput,
+  GateInSerialInput,
+  SourceType,
+} from './types';
 
 const DRAFT_KEY = 'yardflow.gate-in.draft';
 
@@ -95,6 +118,14 @@ interface Draft {
   header: DraftHeader;
   lines: GateInLineInput[];
   /**
+   * The boxes on this delivery (P1, P10; §4.15.5).
+   *
+   * Kept in the draft, not in the line sheet, so that a pallet started and
+   * half-filled survives a reload like everything else here. Lines and units
+   * point at a box by `key`; a blank `code` means one is made at receiving.
+   */
+  boxes: DraftBox[];
+  /**
    * This delivery's identity, decided here and sent with it (N2, §8.2).
    *
    * A storekeeper pressed "Save as draft" three times on a slow connection and
@@ -129,6 +160,7 @@ function emptyDraft(): Draft {
       notes: '',
     },
     lines: [],
+    boxes: [],
     client_uuid: newUuid(),
   };
 }
@@ -141,8 +173,13 @@ function readDraft(): Draft {
     // A stored shape from an older build must not break the screen: a
     // storekeeper cannot fix a bad draft, they can only give up on the app.
     if (!parsed?.header || !Array.isArray(parsed.lines)) return emptyDraft();
-    // A draft stored before this field existed still deserves one.
-    return parsed.client_uuid ? parsed : { ...parsed, client_uuid: newUuid() };
+    // A draft stored before this field existed still deserves one, and one
+    // stored before boxes existed simply has none (§4.15.5).
+    return {
+      ...parsed,
+      boxes: normaliseBoxes((parsed as { boxes?: unknown }).boxes),
+      client_uuid: parsed.client_uuid || newUuid(),
+    };
   } catch {
     return emptyDraft();
   }
@@ -198,6 +235,7 @@ export default function GateInCapturePage() {
         notes: document.notes ?? '',
       },
       lines: document.lines ?? [],
+      boxes: normaliseBoxes(document.boxes),
       // Its identity is its id now; the uuid guards a *create*.
       client_uuid: document.client_uuid ?? newUuid(),
       received_at: document.received_at,
@@ -263,6 +301,22 @@ export default function GateInCapturePage() {
     }));
   }
 
+  function addBox(box: DraftBox) {
+    setDraft((current) => ({ ...current, boxes: [...current.boxes, box] }));
+  }
+
+  function removeBox(key: string) {
+    // Refused while anything is in it: dropping a box would lose its units or
+    // quietly put them somewhere the storekeeper did not choose.
+    const blocked = removalBlock(draft.boxes, draft.lines, key);
+    if (blocked) {
+      setBanner(blocked);
+      return;
+    }
+    setBanner(null);
+    setDraft((current) => ({ ...current, boxes: withoutBox(current.boxes, key) }));
+  }
+
   function clearDraft() {
     if (editingId) return;
     // A fresh identity with the fresh form: the next delivery is a different
@@ -289,7 +343,10 @@ export default function GateInCapturePage() {
       client_delivery_note_ref: header.client_delivery_note_ref,
       notes: header.notes,
       client_uuid: draft.client_uuid,
-      lines: draft.lines,
+      // Boxes travel with the lines that point at them (§4.15.5); blank
+      // `box_key`s and a box on a serialized line itself are stripped here.
+      boxes: draft.boxes,
+      lines: linesForPayload(draft.lines),
     };
   }
 
@@ -340,13 +397,23 @@ export default function GateInCapturePage() {
       // A validation failure on posting (a missing custom field, a duplicate
       // serial) leaves the draft saved on the server, which is the right
       // outcome — nothing is lost and it can be fixed and posted again.
-      setBanner(
+      // A refusal about a box is named by its code, or "Unlabelled box 2" —
+      // never by the position the server counted it at (P10).
+      const boxProblems =
         error instanceof ApiError
-          ? `${error.message} The delivery has been saved as a draft.`
-          : errorMessage(error),
+          ? boxErrorMessages(error.fieldErrors, draft.boxes, draft.lines)
+          : [];
+      setBanner(
+        boxProblems.length > 0
+          ? `${boxProblems.join(' ')} The delivery has been saved as a draft.`
+          : error instanceof ApiError
+            ? `${error.message} The delivery has been saved as a draft.`
+            : errorMessage(error),
       );
     }
   }
+
+  const tree = useMemo(() => buildTree(draft.boxes, draft.lines), [draft.boxes, draft.lines]);
 
   const canSubmit = Boolean(draft.header.to_location) && draft.lines.length > 0;
   // The button says what is actually going to happen. "Receive it" when there is
@@ -380,11 +447,14 @@ export default function GateInCapturePage() {
         }
       />
 
-      {restored && draft.lines.length > 0 ? (
+      {restored && (draft.lines.length > 0 || draft.boxes.length > 0) ? (
         <Banner tone="info">
           Picked up where you left off — {draft.lines.length}{' '}
-          {draft.lines.length === 1 ? 'line' : 'lines'} were still unsaved on this
-          device.
+          {draft.lines.length === 1 ? 'line' : 'lines'}
+          {draft.boxes.length > 0
+            ? ` and ${draft.boxes.length} ${draft.boxes.length === 1 ? 'box' : 'boxes'}`
+            : ''}{' '}
+          were still unsaved on this device.
         </Banner>
       ) : null}
 
@@ -530,49 +600,80 @@ export default function GateInCapturePage() {
           <Button onClick={() => setLineSheet(true)}>Add a line</Button>
         </div>
 
-        {draft.lines.length === 0 ? (
+        {draft.lines.length === 0 && draft.boxes.length === 0 ? (
           <EmptyState
             title="Nothing on this delivery yet."
             hint="Serialized, bulk and reel lines can all go on the same document."
           />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {draft.lines.map((line, index) => {
-              const quarantines = CONDITIONS.find(
-                (entry) => entry.value === line.condition,
-              )?.quarantines;
-              return (
-                <li
-                  key={`${line.item_type}-${index}`}
-                  className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 p-3"
-                >
-                  <div className="text-sm">
-                    <p className="font-medium text-slate-900">
-                      {line.quantity} {line.uom} · {line.item_name}
-                    </p>
-                    <p className="text-slate-600">
-                      {line.condition.replaceAll('_', ' ').toLowerCase()}
-                      {line.owner_client ? ` · ${clientName(line.owner_client)} owns this` : ''}
-                      {line.serials?.length ? ` · ${line.serials.length} serials` : ''}
-                      {line.reels?.length ? ` · ${line.reels.length} drums` : ''}
-                    </p>
-                    {quarantines ? (
-                      // J1: said here, at entry, because this is the decision
-                      // point — not discovered later when it cannot be issued.
-                      <p className="text-amber-800">Goes to quarantine, not to free stock.</p>
-                    ) : null}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    className="min-h-0 px-2 py-1 text-sm text-red-700"
-                    onClick={() => removeLine(index)}
+          <>
+            {tree.roots.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {tree.roots.map((node) => (
+                  <BoxBranch
+                    key={node.box.key}
+                    node={node}
+                    depth={0}
+                    onRemoveBox={removeBox}
+                    onRemoveLine={removeLine}
+                  />
+                ))}
+              </ul>
+            ) : null}
+            {tree.roots.length > 0 && tree.loose.length > 0 ? (
+              <p className="text-sm font-medium text-slate-700">Loose, in no box</p>
+            ) : null}
+            <ul className="flex flex-col gap-2">
+              {draft.lines.map((line, index) => {
+                // A line that is wholly in boxes is shown there, once. A line
+                // with some loose units, or none in a box, is listed here.
+                if (!tree.loose.some((entry) => entry.lineIndex === index)) return null;
+                const quarantines = CONDITIONS.find(
+                  (entry) => entry.value === line.condition,
+                )?.quarantines;
+                // Some of a serialized line's units may be in boxes and shown
+                // there; say how many are left here so the counts add up.
+                const looseEntry = tree.loose.find((entry) => entry.lineIndex === index);
+                const looseUnits =
+                  line.tracking_mode === 'SERIALIZED' &&
+                  looseEntry &&
+                  looseEntry.units !== (line.serials?.length ?? 0)
+                    ? looseEntry.units
+                    : null;
+                return (
+                  <li
+                    key={`${line.item_type}-${index}`}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 p-3"
                   >
-                    Remove
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
+                    <div className="text-sm">
+                      <p className="font-medium text-slate-900">
+                        {line.quantity} {line.uom} · {line.item_name}
+                      </p>
+                      <p className="text-slate-600">
+                        {line.condition.replaceAll('_', ' ').toLowerCase()}
+                        {line.owner_client ? ` · ${clientName(line.owner_client)} owns this` : ''}
+                        {line.serials?.length ? ` · ${line.serials.length} serials` : ''}
+                        {looseUnits !== null ? ` (${looseUnits} loose)` : ''}
+                        {line.reels?.length ? ` · ${line.reels.length} drums` : ''}
+                      </p>
+                      {quarantines ? (
+                        // J1: said here, at entry, because this is the decision
+                        // point — not discovered later when it cannot be issued.
+                        <p className="text-amber-800">Goes to quarantine, not to free stock.</p>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="min-h-0 px-2 py-1 text-sm text-red-700"
+                      onClick={() => removeLine(index)}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </Card>
 
@@ -611,6 +712,8 @@ export default function GateInCapturePage() {
         open={lineSheet}
         onClose={() => setLineSheet(false)}
         onAdd={addLine}
+        boxes={draft.boxes}
+        onStartBox={addBox}
         items={items.data?.results ?? []}
         clients={clients.data?.results ?? []}
         defaultClient={needsClient ? draft.header.client : ''}
@@ -627,6 +730,8 @@ function LineSheet({
   open,
   onClose,
   onAdd,
+  boxes,
+  onStartBox,
   items,
   clients,
   defaultClient,
@@ -634,6 +739,9 @@ function LineSheet({
   open: boolean;
   onClose: () => void;
   onAdd: (line: GateInLineInput) => void;
+  /** The delivery's boxes so far, and how to start another (P1, 4.15.5). */
+  boxes: DraftBox[];
+  onStartBox: (box: DraftBox) => void;
   items: ItemType[];
   clients: Client[];
   defaultClient: string;
@@ -642,7 +750,23 @@ function LineSheet({
   const [quantity, setQuantity] = useState('');
   const [condition, setCondition] = useState<Condition>('NEW');
   const [ownerClient, setOwnerClient] = useState(defaultClient);
-  const [serials, setSerials] = useState<string[]>([]);
+  /** Each unit with the box that was open when it was scanned (P10). */
+  const [serials, setSerials] = useState<GateInSerialInput[]>([]);
+  /**
+   * The box the next units or quantity go into; '' is loose.
+   *
+   * Switching it mid-scan changes only what is scanned afterwards, because each
+   * unit takes the box at the moment it is read. The ref is what the scanner
+   * handlers read: they run in the same tick as a box being started from a
+   * label, before React has re-rendered with the new state.
+   */
+  const [intoKey, setIntoKey] = useState('');
+  const intoRef = useRef('');
+  /** Set when a label was acted on as a box, so onScan does not also add it as a unit. */
+  const skipScan = useRef(false);
+  /** The "Start a box" panel, when open (P1, P2). */
+  const [starting, setStarting] = useState<BoxStart | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
   const [drums, setDrums] = useState<{ drum_number: string; length: string }[]>([]);
   const [noSerialReason, setNoSerialReason] = useState('');
   const [notes, setNotes] = useState('');
@@ -663,6 +787,113 @@ function LineSheet({
 
   const item = items.find((row) => String(row.id) === itemId);
   const mode = item?.default_tracking_mode ?? 'BULK';
+  /** Units are identified one by one, so they are what a box holds. */
+  const serialised = mode === 'SERIALIZED' && !noSerialReason;
+  /** Everything but drums can go in a box (4.15.5). */
+  const boxable = Boolean(item) && mode !== 'REEL';
+  // A box removed behind the sheet's back must not stay selected.
+  const activeKey = boxes.some((box) => box.key === intoKey) ? intoKey : '';
+
+  function chooseBox(key: string) {
+    intoRef.current = key;
+    setIntoKey(key);
+  }
+
+  /** Add one unit to the line, into whichever box is open right now. */
+  function takeSerial(value: string, boxKey: string) {
+    setSerials((current) => {
+      if (current.some((entry) => entry.serial_number === value)) {
+        // Scanning the same unit twice is an ordinary slip when
+        // working down a box. Saying so is the difference between
+        // a count that is wrong and one that is short by a unit
+        // still sitting in the carton.
+        setDuplicate(value);
+        return current;
+      }
+      setDuplicate(null);
+      return [...current, { serial_number: value, box_key: boxKey }];
+    });
+    setPendingSerial('');
+  }
+
+  /**
+   * Start a box, or reuse the one with that code, and open it.
+   *
+   * A code already on the delivery means "this one": scanning a carton's label
+   * twice must not make two cartons.
+   */
+  function startBox(code: string, parentKey: string, labelText: string): string {
+    const existing = findByCode(boxes, code);
+    if (existing) {
+      chooseBox(existing.key);
+      return existing.key;
+    }
+    const box: DraftBox = {
+      key: newUuid(),
+      code: code.trim(),
+      parent_key: parentKey,
+      label_text: labelText,
+    };
+    onStartBox(box);
+    chooseBox(box.key);
+    return box.key;
+  }
+
+  /**
+   * A label read by the unit scanner (P1, P2).
+   *
+   * Plain serials fall through to onScan as ever. A label that names a box
+   * starts it and keeps the camera on the units (P1). A label that lists several
+   * serials is not added blindly: it opens the box panel so the list can be
+   * checked first (P2). Either way the label is not also added as a unit.
+   */
+  function readUnitLabel(reading: LabelReading) {
+    const list = reading.serials.length >= 2;
+    if (!reading.boxCode && !list) return;
+    skipScan.current = true;
+    if (list) {
+      setStartError(null);
+      setStarting({
+        code: reading.boxCode ?? '',
+        parent_key: '',
+        label_text: reading.raw.trim(),
+        serials: reading.serials,
+      });
+      return;
+    }
+    const key = startBox(reading.boxCode ?? '', '', reading.raw.trim());
+    if (reading.serials.length === 1) takeSerial(reading.serials[0], key);
+  }
+
+  /** A label read by the box panel's own scanner. */
+  function readBoxLabel(reading: LabelReading) {
+    const list = reading.serials.length >= 2;
+    setStartError(null);
+    setStarting((current) => ({
+      code: reading.boxCode ?? (list ? '' : (reading.serials[0] ?? reading.raw.trim())),
+      parent_key: current?.parent_key ?? '',
+      label_text: reading.raw.trim(),
+      serials: list ? reading.serials : [],
+    }));
+  }
+
+  function confirmStart() {
+    if (!starting) return;
+    const parent = starting.parent_key;
+    if (parent && !parentChoices(boxes).some((entry) => entry.key === parent)) {
+      setStartError('That box is already as deep as boxes go. Pick another, or none.');
+      return;
+    }
+    const key = startBox(starting.code, parent, starting.label_text);
+    // The listed units are the ones left in the list after the storekeeper
+    // removed any that did not belong; they are units of this line's item and
+    // all go into the box just started.
+    if (serialised) {
+      for (const serial of starting.serials) takeSerial(serial, key);
+    }
+    setStarting(null);
+    setStartError(null);
+  }
 
   useEffect(() => {
     if (open) setOwnerClient(defaultClient);
@@ -673,6 +904,8 @@ function LineSheet({
     setQuantity('');
     setCondition('NEW');
     setSerials([]);
+    setStarting(null);
+    setStartError(null);
     setDrums([]);
     setPendingSerial('');
     setDuplicate(null);
@@ -695,8 +928,17 @@ function LineSheet({
     // Anything typed and not yet added still counts: pressing this button is
     // as clear a statement of intent as pressing the one beside the field.
     const typedSerial = pendingSerial.trim();
-    const allSerials =
-      typedSerial && !serials.includes(typedSerial) ? [...serials, typedSerial] : serials;
+    // A unit still typed in the box takes the box that is open now, like one
+    // added with the button beside it. A unit whose box has since been removed
+    // is loose rather than pointing at nothing.
+    const withBox = serials.map((entry) => ({
+      serial_number: entry.serial_number,
+      box_key: boxes.some((box) => box.key === entry.box_key) ? entry.box_key : '',
+    }));
+    const allSerials: GateInSerialInput[] =
+      typedSerial && !serials.some((entry) => entry.serial_number === typedSerial)
+        ? [...withBox, { serial_number: typedSerial, box_key: activeKey }]
+        : withBox;
 
     const typedDrum = pendingDrum.trim();
     const typedLength = pendingLength.trim();
@@ -747,8 +989,11 @@ function LineSheet({
       owner_client: ownerClient ? Number(ownerClient) : null,
       no_serial_reason: noSerialReason,
       notes,
-      serials: allSerials.map((serial_number) => ({ serial_number })),
+      serials: allSerials,
       reels: allDrums,
+      // Bulk only: the whole quantity is in that box. Serialized units carry
+      // their own box_key, and drums take none (4.15.5).
+      box_key: trackingMode === 'BULK' ? activeKey : '',
     });
     reset();
   }
@@ -796,6 +1041,29 @@ function LineSheet({
           </ControlledReferenceSelect>
         </Field>
 
+        {boxable ? (
+          <IntoBox
+            boxes={boxes}
+            value={activeKey}
+            onChange={chooseBox}
+            serialised={serialised}
+            onStart={() => {
+              setStartError(null);
+              setStarting({ code: '', parent_key: '', label_text: '', serials: [] });
+            }}
+            starting={starting}
+            onStartingChange={setStarting}
+            onReadLabel={readBoxLabel}
+            onConfirm={confirmStart}
+            onCancel={() => {
+              setStarting(null);
+              setStartError(null);
+            }}
+            error={startError}
+            alreadyOnLine={(serial) => serials.some((entry) => entry.serial_number === serial)}
+          />
+        ) : null}
+
         {mode === 'SERIALIZED' && !noSerialReason ? (
           <>
             <BarcodeScanner
@@ -805,20 +1073,13 @@ function LineSheet({
               continuous
               scannedCount={serials.length}
               onDraft={setPendingSerial}
+              onRead={readUnitLabel}
               onScan={(value) => {
-                setSerials((current) => {
-                  if (current.includes(value)) {
-                    // Scanning the same unit twice is an ordinary slip when
-                    // working down a box. Saying so is the difference between
-                    // a count that is wrong and one that is short by a unit
-                    // still sitting in the carton.
-                    setDuplicate(value);
-                    return current;
-                  }
-                  setDuplicate(null);
-                  return [...current, value];
-                });
-                setPendingSerial('');
+                if (skipScan.current) {
+                  skipScan.current = false;
+                  return;
+                }
+                takeSerial(value, intoRef.current);
               }}
             />
             {duplicate ? (
@@ -834,18 +1095,27 @@ function LineSheet({
             ) : null}
             {serials.length > 0 ? (
               <ul className="flex flex-wrap gap-2">
-                {serials.map((serial) => (
+                {serials.map((entry) => (
                   <li
-                    key={serial}
+                    key={entry.serial_number}
                     className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm"
                   >
-                    <span className="font-mono">{serial}</span>
+                    <span className="font-mono">{entry.serial_number}</span>
+                    {entry.box_key && boxes.some((box) => box.key === entry.box_key) ? (
+                      // Which box each unit went into (P10), so a slip of the
+                      // selector mid-scan is visible while it can still be fixed.
+                      <span className="text-xs text-slate-500">
+                        in {boxLabel(boxes, entry.box_key)}
+                      </span>
+                    ) : null}
                     <button
                       type="button"
-                      aria-label={`Remove ${serial}`}
+                      aria-label={`Remove ${entry.serial_number}`}
                       className="text-slate-500"
                       onClick={() =>
-                        setSerials((current) => current.filter((entry) => entry !== serial))
+                        setSerials((current) =>
+                          current.filter((other) => other.serial_number !== entry.serial_number),
+                        )
                       }
                     >
                       ×
@@ -1050,5 +1320,288 @@ function DrumEntry({
         </ul>
       ) : null}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Boxes                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** A box being started: what the label said, and units it listed (P1, P2). */
+interface BoxStart {
+  code: string;
+  parent_key: string;
+  label_text: string;
+  /** Serials a label listed, for confirmation before they are added. */
+  serials: string[];
+}
+
+/**
+ * Which box the next units go into, and starting one (P1, P2, P10; 4.15.5).
+ *
+ * A compact selector rather than a step of its own: a storekeeper working down
+ * a pallet switches cartons without leaving the scan. The panel below it is where
+ * a box's label is read, or its code typed, or left blank for the server to make.
+ */
+function IntoBox({
+  boxes,
+  value,
+  onChange,
+  serialised,
+  onStart,
+  starting,
+  onStartingChange,
+  onReadLabel,
+  onConfirm,
+  onCancel,
+  error,
+  alreadyOnLine,
+}: {
+  boxes: DraftBox[];
+  value: string;
+  onChange: (key: string) => void;
+  serialised: boolean;
+  onStart: () => void;
+  starting: BoxStart | null;
+  onStartingChange: (next: BoxStart | null) => void;
+  onReadLabel: (reading: LabelReading) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  error: string | null;
+  alreadyOnLine: (serial: string) => boolean;
+}) {
+  const choices = starting ? parentChoices(boxes) : [];
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+      <Field
+        label="Into a box"
+        htmlFor="line-into-box"
+        hint={
+          serialised
+            ? 'Units you scan from here on go into this box. Change it any time; units already scanned stay where they are.'
+            : 'The whole quantity on this line goes into this box.'
+        }
+      >
+        <Select
+          id="line-into-box"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">Loose (no box)</option>
+          {boxes.map((box) => (
+            <option key={box.key} value={box.key}>
+              {boxPath(boxes, box.key)}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      {starting ? (
+        <div className="flex flex-col gap-3 rounded-lg bg-slate-50 p-3">
+          <p className="text-sm font-medium text-slate-700">Start a box</p>
+          {error ? <Banner tone="error">{error}</Banner> : null}
+
+          <BarcodeScanner
+            label="Scan the box label"
+            hint="It fills the box code below. You can also type the code there."
+            onRead={onReadLabel}
+            onScan={() => undefined}
+          />
+
+          <Field
+            label="Box code"
+            htmlFor="line-box-code"
+            hint="Leave blank and a code will be made when you receive it."
+          >
+            <Input
+              id="line-box-code"
+              value={starting.code}
+              onChange={(event) => onStartingChange({ ...starting, code: event.target.value })}
+            />
+          </Field>
+
+          {choices.length > 0 ? (
+            <Field
+              label="Inside"
+              htmlFor="line-box-parent"
+              hint="A pallet can hold cartons, and a carton boxes. Three levels at most."
+            >
+              <Select
+                id="line-box-parent"
+                value={starting.parent_key}
+                onChange={(event) =>
+                  onStartingChange({ ...starting, parent_key: event.target.value })
+                }
+              >
+                <option value="">Not inside another box</option>
+                {choices.map((box) => (
+                  <option key={box.key} value={box.key}>
+                    {boxPath(boxes, box.key)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
+
+          {starting.serials.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {serialised ? (
+                <>
+                  <p className="text-sm text-slate-700">
+                    This label lists {starting.serials.length} serials. Take out any that are
+                    not in the box; the rest are added to this line and go into the new box.
+                  </p>
+                  <ul className="flex flex-wrap gap-2">
+                    {starting.serials.map((serial) => (
+                      <li
+                        key={serial}
+                        className="flex items-center gap-2 rounded-full bg-white px-3 py-1 text-sm"
+                      >
+                        <span className="font-mono">{serial}</span>
+                        {alreadyOnLine(serial) ? (
+                          <span className="text-xs text-amber-800">already on this line</span>
+                        ) : null}
+                        <button
+                          type="button"
+                          aria-label={`Leave out ${serial}`}
+                          className="text-slate-500"
+                          onClick={() =>
+                            onStartingChange({
+                              ...starting,
+                              serials: starting.serials.filter((entry) => entry !== serial),
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="text-sm text-amber-800">
+                  This label lists {starting.serials.length} serials. Choose a serialized item
+                  to add them as units; the box can still be started without them.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          <div className="flex gap-2">
+            <Button variant="secondary" block onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button block onClick={onConfirm}>
+              {serialised && starting.serials.length > 0
+                ? `Start box with ${starting.serials.length} ${
+                    starting.serials.length === 1 ? 'unit' : 'units'
+                  }`
+                : 'Start box'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="secondary" onClick={onStart}>
+          Start a box
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One box in the Lines card, with what is in it and the boxes inside it (P9, P10).
+ *
+ * Counts sit beside the name ("CTN-1 · 10 units", "PAL-7 · 2 boxes, 20 units")
+ * so a pallet can be checked against its paperwork without opening anything.
+ */
+function BoxBranch({
+  node,
+  depth,
+  onRemoveBox,
+  onRemoveLine,
+}: {
+  node: BoxNode;
+  depth: number;
+  onRemoveBox: (key: string) => void;
+  onRemoveLine: (index: number) => void;
+}) {
+  return (
+    <li className="rounded-lg border border-slate-200 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 break-words text-sm font-medium text-slate-900">
+          {node.label} · {describeCounts(node)}
+          {node.box.code.trim() ? null : (
+            <span className="block font-normal text-slate-600">
+              A code will be made when you receive it.
+            </span>
+          )}
+        </p>
+        <Button
+          variant="ghost"
+          className="px-2 text-sm text-red-700"
+          aria-label={`Remove box ${node.label}`}
+          onClick={() => onRemoveBox(node.box.key)}
+        >
+          Remove box
+        </Button>
+      </div>
+
+      {node.entries.length > 0 || node.children.length > 0 ? (
+        <ul className={`mt-2 flex flex-col gap-2 ${depth < 2 ? 'pl-3' : 'pl-1'}`}>
+          {node.entries.map((entry) => (
+            <BoxContents
+              key={`${entry.lineIndex}-${entry.serials[0] ?? 'line'}`}
+              entry={entry}
+              onRemoveLine={onRemoveLine}
+            />
+          ))}
+          {node.children.map((child) => (
+            <BoxBranch
+              key={child.box.key}
+              node={child}
+              depth={depth + 1}
+              onRemoveBox={onRemoveBox}
+              onRemoveLine={onRemoveLine}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+function BoxContents({
+  entry,
+  onRemoveLine,
+}: {
+  entry: BoxEntry;
+  onRemoveLine: (index: number) => void;
+}) {
+  const bulk = entry.line.tracking_mode === 'BULK';
+  return (
+    <li className="flex items-start justify-between gap-3 text-sm">
+      <div className="min-w-0">
+        <p className="break-words text-slate-900">
+          {bulk
+            ? `${entry.line.quantity} ${entry.line.uom} · ${entry.line.item_name}`
+            : `${entry.units} ${entry.units === 1 ? 'unit' : 'units'} · ${entry.line.item_name}`}
+        </p>
+        {entry.serials.length > 0 ? (
+          <p className="break-all font-mono text-xs text-slate-600">
+            {entry.serials.join(', ')}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        variant="ghost"
+        className="px-2 text-sm text-red-700"
+        aria-label={`Remove the ${entry.line.item_name ?? 'item'} line`}
+        onClick={() => onRemoveLine(entry.lineIndex)}
+      >
+        Remove line
+      </Button>
+    </li>
   );
 }
