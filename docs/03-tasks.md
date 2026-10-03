@@ -1433,7 +1433,7 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
 
 ## Phase 13 — Material earmarked for a site
 
-Epic Q, design §4.16. Proposed 2026-10-03, awaiting approval. Backend first; the two ledger and
+Epic Q, design §4.16. Approved 2026-10-03; nothing ships until T13.10 passes. Backend first; the two ledger and
 gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes through them.
 
 - [ ] **T13.1 `[B]` Earmark models** — Refs: §4.16.2 · Q1, Q2

@@ -873,7 +873,7 @@ message naming the thing involved. Codes are upper case, as every `DomainError` 
 
 ### 4.16 Site earmarks (Epic Q)
 
-> **Status: proposed 2026-10-03, awaiting approval** with Epic Q.
+> **Status: approved 2026-10-03** with Epic Q.
 
 #### 4.16.1 The decision: an earmark is a projection, like a box
 

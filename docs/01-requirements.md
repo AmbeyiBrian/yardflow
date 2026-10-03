@@ -1084,7 +1084,7 @@ is loaded, so that the load is checked against the pass by the scanner rather th
 
 ### Epic Q — Material earmarked for a site
 
-> **Status: proposed 2026-10-03, awaiting approval.** Decisions already taken: earmark (not label,
+> **Status: approved 2026-10-03.** Decisions taken: earmark (not label,
 > not reservation); a diversion is allowed with a reason; a site's own earmark is used first;
 > earmarks can be changed with a reason; the report is a per-site summary.
 
