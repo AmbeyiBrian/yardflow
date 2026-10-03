@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { api } from '../../api/client';
+import { api, ApiError } from '../../api/client';
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
 import { useSession } from '../../auth/session';
 import { newUuid } from '../../offline/db';
@@ -42,6 +42,22 @@ import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Reel, SerialUnit, StockBalance } from '../receiving/types';
 import type { Client, ItemType, Location, Site, Project } from '../settings/types';
+import {
+  boxHeading,
+  bulkQuantityProblem,
+  exclusionText,
+  groupLinesByBox,
+  matchProblems,
+  normaliseDraftLine,
+  proposalSummary,
+  proposalToLines,
+  removeSerial,
+  submitRefusal,
+  trimQuantity,
+  unitBoxText,
+  type IssuableResult,
+  type LookedUpBox,
+} from './gateOutBoxes';
 import type { GateOut, GateOutLine, GateOutPurpose } from './types';
 
 const DRAFT_KEY = 'yardflow.gate-out.draft';
@@ -116,7 +132,12 @@ export default function GateOutRequestPage() {
         const parsed = JSON.parse(stored) as Draft;
         if (parsed?.lines && Array.isArray(parsed.lines)) {
           // A draft stored before this field existed still deserves one.
-          return parsed.client_uuid ? parsed : { ...parsed, client_uuid: newUuid() };
+          // P6: a draft from before boxes has no box fields on its lines; they
+          // are filled in rather than the draft being thrown away.
+          const lines = parsed.lines.map(normaliseDraftLine);
+          return parsed.client_uuid
+            ? { ...parsed, lines }
+            : { ...parsed, lines, client_uuid: newUuid() };
         }
       }
     } catch {
@@ -128,6 +149,9 @@ export default function GateOutRequestPage() {
   /** Which line is open for correction, or null when a new one is being added. */
   const [editingLine, setEditingLine] = useState<number | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  // P10: the server's refusal of a unit or a box claim, kept apart from the
+  // generic banner so each unit it names can be taken off the request.
+  const [refusal, setRefusal] = useState<{ message: string; problems: string[] } | null>(null);
 
   // Skipped while editing: that draft lives on the server, and writing it here
   // would overwrite an unsaved request the same person may have in progress.
@@ -164,7 +188,7 @@ export default function GateOutRequestPage() {
       from_location: document.from_location ? String(document.from_location) : '',
       custody_holder: document.custody_holder ? String(document.custody_holder) : holderId,
       notes: document.notes ?? '',
-      lines: document.lines ?? [],
+      lines: (document.lines ?? []).map(normaliseDraftLine),
       client_uuid: document.client_uuid ?? newUuid(),
     });
     setLoaded(true);
@@ -262,6 +286,7 @@ export default function GateOutRequestPage() {
 
   async function saveThenSubmit(alsoSubmit: boolean) {
     setBanner(null);
+    setRefusal(null);
     try {
       const created = editingId
         ? await update.mutateAsync(payload())
@@ -275,9 +300,31 @@ export default function GateOutRequestPage() {
       clearDraft();
       navigate(`/gate-out/${created.id}`);
     } catch (error) {
-      setBanner(errorMessage(error));
+      const refused = error instanceof ApiError ? submitRefusal(error) : null;
+      if (refused) setRefusal(refused);
+      else setBanner(errorMessage(error));
     }
   }
+
+  function removeLine(index: number) {
+    setDraft((current) => ({
+      ...current,
+      lines: current.lines.filter((_line, position) => position !== index),
+    }));
+  }
+
+  /** P9: a bulk box line may take part of what the box holds. */
+  function setLineQuantity(index: number, quantity: string) {
+    setDraft((current) => ({
+      ...current,
+      lines: current.lines.map((line, position) =>
+        position === index ? { ...line, requested_qty: quantity } : line,
+      ),
+    }));
+  }
+
+  const problems = refusal ? matchProblems(refusal.problems, draft.lines) : [];
+  const lineGroups = groupLinesByBox(draft.lines);
 
   const destinations: { kind: DestinationKind; label: string; options: { id: number; label: string }[] }[] = [
     {
@@ -344,6 +391,44 @@ export default function GateOutRequestPage() {
       />
 
       {banner ? <Banner tone="error">{banner}</Banner> : null}
+
+      {refusal ? (
+        <Banner tone="error">
+          <div className="flex flex-col gap-2">
+            <p>{refusal.message}</p>
+            {problems.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {problems.map((problem) => (
+                  <li
+                    key={problem.message}
+                    className="flex flex-wrap items-center justify-between gap-2"
+                  >
+                    <span>{problem.message}</span>
+                    {problem.serial_unit !== null && problem.lineIndex !== null ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          const unit = problem.serial_unit as number;
+                          const at = problem.lineIndex as number;
+                          setDraft((current) => ({
+                            ...current,
+                            lines: removeSerial(current.lines, at, unit),
+                          }));
+                          setRefusal(null);
+                        }}
+                      >
+                        Remove {problem.serial_number}
+                      </Button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>Lower the quantity on the box line below, or remove it.</p>
+            )}
+          </div>
+        </Banner>
+      ) : null}
 
       <Card className="flex flex-col gap-3">
         <Field label="What for" htmlFor="go-purpose" hint={purpose?.hint}>
@@ -488,62 +573,93 @@ export default function GateOutRequestPage() {
             hint="Scan a serial or a drum, or search the catalogue."
           />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {draft.lines.map((line, index) => (
-              <li
-                key={`${line.item_type}-${index}`}
-                className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 p-3 text-sm"
-              >
-                <div>
-                  <p className="font-medium text-slate-900">
-                    {line.requested_qty} {line.uom} · {line.item_name}
-                  </p>
-                  <p className="text-slate-600">
-                    {line.serials?.length
-                      ? line.serials.map((serial) => serial.serial_number).join(', ')
-                      : line.reels?.length
-                        ? line.reels
-                            .map((reel) => `${reel.drum_number} (${reel.length_requested})`)
-                            .join(', ')
-                        : 'bulk'}
-                    {' · '}
-                    {/* Which lot this takes. Two lines that look identical can
-                        be asking for two different piles of the same item, and
-                        only one of them may exist. */}
-                    {line.owner_client
-                      ? `${clientName(line.owner_client)}’s stock`
-                      : 'your own stock'}
-                  </p>
-                  {line.is_returnable ? (
-                    <p className="text-amber-800">
-                      Expected back{line.expected_return_date ? ` by ${line.expected_return_date}` : ''}.
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  variant="ghost"
-                  className="min-h-0 px-2 py-1 text-sm"
-                  onClick={() => setEditingLine(index)}
-                >
-                  Change
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="min-h-0 px-2 py-1 text-sm text-red-700"
-                  onClick={() =>
-                    setDraft((current) => ({
-                      ...current,
-                      lines: current.lines.filter((_line, position) => position !== index),
-                    }))
-                  }
-                >
-                  Remove
-                </Button>
-                </div>
-              </li>
+          // §4.15.7: lines from one box sit under that box's heading, loose
+          // lines after them, so a carton reads as one thing on the request.
+          <div className="flex flex-col gap-3">
+            {lineGroups.map((group) => (
+              <section key={group.key} className="flex flex-col gap-2">
+                {group.heading ? (
+                  <h3 className="text-xs font-semibold tracking-wide text-slate-600 uppercase">
+                    {group.heading}
+                  </h3>
+                ) : lineGroups.length > 1 ? (
+                  <h3 className="text-xs font-semibold tracking-wide text-slate-600 uppercase">
+                    Loose
+                  </h3>
+                ) : null}
+                <ul className="flex flex-col gap-2">
+                  {group.lines.map(({ line, index }) => {
+                    const fromBox = Boolean(boxHeading(line));
+                    const bulkFromBox = fromBox && line.tracking_mode !== 'SERIALIZED';
+                    return (
+                      <li
+                        key={`${line.item_type}-${index}`}
+                        className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-200 p-3 text-sm"
+                      >
+                        <div className="min-w-0 break-words">
+                          <p className="font-medium text-slate-900">
+                            {line.requested_qty} {line.uom} · {line.item_name}
+                          </p>
+                          <p className="text-slate-600">
+                            {line.serials?.length
+                              ? line.serials.map((serial) => serial.serial_number).join(', ')
+                              : line.reels?.length
+                                ? line.reels
+                                    .map((reel) => `${reel.drum_number} (${reel.length_requested})`)
+                                    .join(', ')
+                                : 'bulk'}
+                            {' · '}
+                            {/* Which lot this takes. Two lines that look identical can
+                                be asking for two different piles of the same item, and
+                                only one of them may exist. */}
+                            {line.owner_client
+                              ? `${clientName(line.owner_client)}’s stock`
+                              : 'your own stock'}
+                          </p>
+                          {bulkFromBox ? (
+                            // P9: part of a box's bulk can go. The server checks the
+                            // box's claim at submit; this is the edit.
+                            <Field label="How much of it" htmlFor={`go-line-qty-${index}`}>
+                              <Input
+                                id={`go-line-qty-${index}`}
+                                inputMode="decimal"
+                                value={line.requested_qty}
+                                onChange={(event) => setLineQuantity(index, event.target.value)}
+                              />
+                            </Field>
+                          ) : null}
+                          {line.is_returnable ? (
+                            <p className="text-amber-800">
+                              Expected back
+                              {line.expected_return_date ? ` by ${line.expected_return_date}` : ''}.
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {fromBox ? null : (
+                            <Button
+                              variant="ghost"
+                              className="min-h-0 px-2 py-1 text-sm"
+                              onClick={() => setEditingLine(index)}
+                            >
+                              Change
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            className="min-h-0 px-2 py-1 text-sm text-red-700"
+                            onClick={() => removeLine(index)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
       </Card>
 
@@ -601,6 +717,12 @@ export default function GateOutRequestPage() {
             (row) => String(row.id) === draft.from_location,
           )?.node_id ?? null
         }
+        // P6, §4.15.7: a scanned box adds all its proposed lines at once.
+        onAddMany={(lines) => {
+          setDraft((current) => ({ ...current, lines: [...current.lines, ...lines] }));
+          setLineSheet(false);
+          setEditingLine(null);
+        }}
         onAdd={(line) => {
           setDraft((current) => ({
             ...current,
@@ -644,6 +766,7 @@ function LineSheet({
   initial,
   onClose,
   onAdd,
+  onAddMany,
   fromLocation,
   fromLocationName,
   fromNodeId,
@@ -653,6 +776,7 @@ function LineSheet({
   initial?: GateOutLine;
   onClose: () => void;
   onAdd: (line: GateOutLine) => void;
+  onAddMany: (lines: GateOutLine[]) => void;
   fromLocation: string;
   fromLocationName: string;
   fromNodeId: number | null;
@@ -661,7 +785,19 @@ function LineSheet({
   const [quantity, setQuantity] = useState('');
   const [returnable, setReturnable] = useState(false);
   const [returnDate, setReturnDate] = useState('');
-  const [scanned, setScanned] = useState<{ unit?: SerialUnit; reel?: Reel } | null>(null);
+  const [scanned, setScanned] = useState<{
+    // `box_path` is read if the lookup ever sends it; today's serial-unit
+    // serializer does not, and then nothing is shown (P6).
+    unit?: SerialUnit & { box_path?: string[] | null };
+    reel?: Reel;
+  } | null>(null);
+  // P5, P6: what a scanned box (or pallet) would send from the chosen location.
+  const [proposal, setProposal] = useState<{
+    box: LookedUpBox;
+    result: IssuableResult;
+    /** Bulk quantities as typed, by position in `result.lines` (P9). */
+    quantities: Record<number, string>;
+  } | null>(null);
   // D3: a serialized item can only go out as a quantity if the yard holds
   // untagged units, and then the reason is part of the record. The server
   // refuses the line without it, so the reason is asked for here rather than
@@ -707,6 +843,7 @@ function LineSheet({
     setReturnable(false);
     setReturnDate('');
     setScanned(null);
+    setProposal(null);
     setNoSerialReason('');
     setHoldingKey('');
     setError(null);
@@ -715,10 +852,32 @@ function LineSheet({
   /** D7, G1: a scanned identifier names the exact unit that is going. */
   async function lookup(value: string) {
     setError(null);
+    setProposal(null);
     try {
-      const found = await api.get<{ kind: string; object: SerialUnit | Reel }>(
+      const found = await api.get<{ kind: string; object: SerialUnit | Reel | LookedUpBox }>(
         `/stock/lookup?q=${encodeURIComponent(value)}`,
       );
+      if (found.kind === 'box') {
+        // P5: a carton or pallet goes out as the units and bulk it holds, so the
+        // server expands it — but only from a place, since "what is in it" is
+        // only issuable where it is.
+        const box = found.object as LookedUpBox;
+        if (!fromLocation) {
+          setError('Choose where it is going out from first.');
+          return;
+        }
+        try {
+          const result = await api.get<IssuableResult>(
+            `/stock/boxes/${encodeURIComponent(box.code)}/issuable?from_location=${encodeURIComponent(fromLocation)}`,
+          );
+          setScanned(null);
+          setItemId('');
+          setProposal({ box, result, quantities: {} });
+        } catch (failure) {
+          setError(errorMessage(failure));
+        }
+        return;
+      }
       if (found.kind === 'serial_unit') {
         const unit = found.object as SerialUnit;
         setScanned({ unit });
@@ -819,6 +978,26 @@ function LineSheet({
     reset();
   }
 
+  /** P6: every proposed line goes onto the draft at once, units named. */
+  function addProposal() {
+    if (!proposal) return;
+    for (const [index, line] of proposal.result.lines.entries()) {
+      if (line.tracking_mode === 'SERIALIZED') continue;
+      // P9: the quantity may be lowered to take part of the box, never raised.
+      const problem = bulkQuantityProblem(
+        proposal.quantities[index] ?? trimQuantity(line.requested_qty),
+        line.requested_qty,
+        line.uom,
+      );
+      if (problem) {
+        setError(`${line.item_name}: ${problem}`);
+        return;
+      }
+    }
+    onAddMany(proposalToLines(proposal.result.lines, proposal.quantities));
+    reset();
+  }
+
   useEffect(() => {
     if (item?.is_returnable) setReturnable(true);
   }, [item]);
@@ -856,9 +1035,17 @@ function LineSheet({
           >
             Cancel
           </Button>
-          <Button block onClick={add}>
-            {initial ? 'Save the line' : 'Add'}
-          </Button>
+          {proposal ? (
+            proposal.result.lines.length > 0 ? (
+              <Button block onClick={addProposal}>
+                Add all
+              </Button>
+            ) : null
+          ) : (
+            <Button block onClick={add}>
+              {initial ? 'Save the line' : 'Add'}
+            </Button>
+          )}
         </>
       }
     >
@@ -877,6 +1064,9 @@ function LineSheet({
               {scanned.unit.serial_number} · {scanned.unit.item_name} · at{' '}
               {scanned.unit.node_label}
               <OwnershipBadge client={scanned.unit.owner_client_name || null} />
+              {/* P6: a unit taken out of a box goes alone, with quantity 1 and
+                  no box on its line — but the person should see where it sat. */}
+              {unitBoxText(scanned.unit) ? <span>{unitBoxText(scanned.unit)}</span> : null}
             </span>
           </Banner>
         ) : null}
@@ -888,6 +1078,19 @@ function LineSheet({
           </Banner>
         ) : null}
 
+        {proposal ? (
+          <BoxProposalPanel
+            proposal={proposal}
+            onQuantity={(index, value) =>
+              setProposal((current) =>
+                current
+                  ? { ...current, quantities: { ...current.quantities, [index]: value } }
+                  : current,
+              )
+            }
+          />
+        ) : (
+          <>
         {!scanned ? (
           <Field label="Or choose an item" htmlFor="gol-item">
             <ControlledReferenceSelect resource="item-types"
@@ -991,7 +1194,98 @@ function LineSheet({
             />
           </Field>
         ) : null}
+          </>
+        )}
       </div>
     </Sheet>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* A scanned box                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a scanned box or pallet would send, and what it would not (P5, P6, P10).
+ *
+ * The exclusions are listed with the server's own words, because "why is RRU-3
+ * not in the list" is the first thing a storekeeper asks and the answer (it is
+ * on another open pass) is something only they can act on.
+ */
+function BoxProposalPanel({
+  proposal,
+  onQuantity,
+}: {
+  proposal: { box: LookedUpBox; result: IssuableResult; quantities: Record<number, string> };
+  onQuantity: (index: number, value: string) => void;
+}) {
+  const { box, result, quantities } = proposal;
+  return (
+    <div className="flex flex-col gap-3">
+      <Banner tone="info">{proposalSummary(box, result)}</Banner>
+
+      {result.lines.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {result.lines.map((line, index) => {
+            const serialized = line.tracking_mode === 'SERIALIZED';
+            return (
+              <li
+                key={`${line.box}-${line.item_type}-${line.owner_client ?? 'own'}-${line.condition}-${index}`}
+                className="rounded-lg border border-slate-200 p-3 text-sm"
+              >
+                <p className="font-medium break-words text-slate-900">
+                  {serialized
+                    ? `${line.units.length} ${line.units.length === 1 ? 'unit' : 'units'}`
+                    : `${trimQuantity(line.requested_qty)} ${line.uom}`}{' '}
+                  · {line.item_name}
+                </p>
+                <p className="text-slate-600">
+                  {line.owner_client ? 'Client stock' : 'Your own stock'} ·{' '}
+                  {line.condition.replaceAll('_', ' ').toLowerCase()}
+                  {line.box_path.length > 1 || line.box_code !== box.code
+                    ? ` · in ${line.box_path.join(' › ') || line.box_code}`
+                    : ''}
+                </p>
+                {serialized ? (
+                  <p className="break-words text-slate-600">
+                    {line.units.map((unit) => unit.serial_number).join(', ')}
+                  </p>
+                ) : (
+                  <Field
+                    label="How much of it"
+                    htmlFor={`gol-box-qty-${index}`}
+                    hint={`The box holds ${trimQuantity(line.requested_qty)} ${line.uom}. Lower it to take part.`}
+                  >
+                    <Input
+                      id={`gol-box-qty-${index}`}
+                      inputMode="decimal"
+                      value={quantities[index] ?? trimQuantity(line.requested_qty)}
+                      onChange={(event) => onQuantity(index, event.target.value)}
+                    />
+                  </Field>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {result.excluded.length > 0 ? (
+        <Banner tone="warning">
+          <div className="flex flex-col gap-1">
+            <p className="font-medium">
+              {result.excluded.length} cannot go
+            </p>
+            <ul className="flex flex-col gap-1">
+              {result.excluded.map((row, index) => (
+                <li key={`${row.box}-${row.serial_unit ?? row.item_type}-${index}`}>
+                  {exclusionText(row)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Banner>
+      ) : null}
+    </div>
   );
 }

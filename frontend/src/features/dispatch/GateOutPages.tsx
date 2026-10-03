@@ -44,6 +44,7 @@ import {
 } from '../boxes/loadScan';
 import { ScanTheLoadPanel, UnitTicks } from '../boxes/ScanTheLoad';
 import { useLoadScan } from '../boxes/useLoadScan';
+import { groupLinesByBox } from './gateOutBoxes';
 import type { GateOut } from './types';
 
 const OPEN_STATUSES = 'DRAFT,PENDING_APPROVAL,APPROVED,PARTIALLY_RELEASED';
@@ -224,6 +225,7 @@ export function GateOutDetailPage() {
   if (pass.isError) return <Banner tone="error">{errorMessage(pass.error)}</Banner>;
 
   const document = pass.data!;
+  const lineGroups = groupLinesByBox(document.lines);
   const isRequester = document.requested_by === user?.id;
 
   async function run(
@@ -327,8 +329,21 @@ export function GateOutDetailPage() {
 
       <Card className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-900">What is on the pass</h2>
+        {/* §4.15.7: lines taken from a box sit under that box's heading; every
+            unit is still named in "Identified". */}
+        {lineGroups.map((group) => (
+          <div key={group.key} className="flex flex-col gap-1">
+            {group.heading ? (
+              <h3 className="text-xs font-semibold tracking-wide text-slate-600 uppercase">
+                {group.heading}
+              </h3>
+            ) : lineGroups.length > 1 ? (
+              <h3 className="text-xs font-semibold tracking-wide text-slate-600 uppercase">
+                Loose
+              </h3>
+            ) : null}
         <DataList
-          rows={document.lines}
+          rows={group.lines.map((entry) => entry.line)}
           rowKey={(row) => String(row.id)}
           columns={[
             { header: 'Item', cell: (row) => row.item_name },
@@ -366,6 +381,8 @@ export function GateOutDetailPage() {
             },
           ]}
         />
+          </div>
+        ))}
       </Card>
 
       {document.notes ? (
