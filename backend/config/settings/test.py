@@ -7,7 +7,7 @@ guarantees went unverified.
 """
 
 from config.settings.base import *
-from config.settings.base import env  # noqa: F401
+from config.settings.base import env
 
 DEBUG = False
 
