@@ -718,16 +718,39 @@ export function ItemTypeSheet({
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Code" htmlFor="item-code">
+          <Field label="Code" htmlFor="item-code" error={form.formState.errors.code?.message}>
             <Input id="item-code" {...form.register('code')} />
           </Field>
-          <Field label="Unit" htmlFor="item-uom" hint="ea, m, box.">
+          <Field
+            label="Unit"
+            htmlFor="item-uom"
+            hint={trackingMode === 'REEL' ? 'A length, such as m.' : 'ea, m, box.'}
+            error={form.formState.errors.uom?.message}
+          >
             <Input id="item-uom" disabled={locked} {...form.register('uom', { required: true })} />
           </Field>
         </div>
 
-        <Field label="How it is tracked" htmlFor="item-tracking" hint={selectedMode?.hint}>
-          <Select id="item-tracking" disabled={locked} {...form.register('default_tracking_mode')}>
+        <Field
+          label="How it is tracked"
+          htmlFor="item-tracking"
+          hint={selectedMode?.hint}
+          error={form.formState.errors.default_tracking_mode?.message}
+        >
+          <Select
+            id="item-tracking"
+            disabled={locked}
+            {...form.register('default_tracking_mode', {
+              // A reel is measured, not counted (D12), and the server refuses a
+              // reel in "ea". Switch the obvious default rather than let the
+              // storekeeper meet the refusal.
+              onChange: (event) => {
+                if (event.target.value === 'REEL' && form.getValues('uom').trim() === 'ea') {
+                  form.setValue('uom', 'm', { shouldDirty: true });
+                }
+              },
+            })}
+          >
             {TRACKING_MODES.map((mode) => (
               <option key={mode.value} value={mode.value}>
                 {mode.label}

@@ -148,8 +148,14 @@ export function applyFieldErrors<T extends FieldValues>(
   }
 
   // A message with no field still has to be shown: "only 340 m remaining on
-  // drum D-0007" is the most useful thing on the screen (§6.1).
-  return entries.length === 0 ? error.message : error.message;
+  // drum D-0007" is the most useful thing on the screen (§6.1). And when the
+  // server sent field messages under a generic headline, the banner says what
+  // they are: a form may not draw an error under every field, and "The
+  // submitted data is not valid." alone leaves the storekeeper guessing.
+  if (entries.length > 0 && error.code === 'VALIDATION_ERROR') {
+    return entries.map(([, messages]) => messages.join(' ')).join(' ');
+  }
+  return error.message;
 }
 
 /** Human text for an error, for screens with no form to attach it to. */

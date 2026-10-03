@@ -55,4 +55,32 @@ test.describe('catalogue item editing', () => {
     await expect(sheet.getByLabel('Unit')).toBeDisabled();
     await expect(sheet.getByText(/Fixed: this item has stock history/)).toBeVisible();
   });
+
+  test('a reel item gets a length unit instead of being refused', async ({ page }) => {
+    // Reported 2026-10-03: a reel created with the default unit "ea" met a bare
+    // "The submitted data is not valid." Choosing Reel now switches "ea" to "m",
+    // and a refusal says what it refuses.
+    const name = unique('Earthing cable');
+    await signIn(page, PEOPLE.owner);
+    await open(page, '/settings/catalogue');
+
+    await page.getByRole('button', { name: 'New item type' }).first().click();
+    const sheet = page.getByRole('dialog');
+    await sheet.getByLabel('Category').selectOption({ index: 1 });
+    await sheet.getByLabel('Name').fill(name);
+    await expect(sheet.getByLabel('Unit')).toHaveValue('ea');
+    await sheet.getByLabel('How it is tracked').selectOption('REEL');
+    await expect(sheet.getByLabel('Unit')).toHaveValue('m');
+    await sheet.getByRole('button', { name: 'Create' }).click();
+    await expect(sheet).toBeHidden();
+
+    // Typed back to "ea" by hand, the refusal names the unit, not a generic line.
+    await page.getByRole('button', { name: 'New item type' }).first().click();
+    await sheet.getByLabel('Category').selectOption({ index: 1 });
+    await sheet.getByLabel('Name').fill(unique('Earthing cable'));
+    await sheet.getByLabel('How it is tracked').selectOption('REEL');
+    await sheet.getByLabel('Unit').fill('ea');
+    await sheet.getByRole('button', { name: 'Create' }).click();
+    await expect(sheet.getByText(/A reel is measured, not counted/).first()).toBeVisible();
+  });
 });
