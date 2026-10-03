@@ -1416,6 +1416,19 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
   with the reason; read-only for those without `catalogue.manage`.
   *Done when:* an E2E renames an item and finds it by its new name in the gate-in picker.
 
+
+- [ ] **T12.7 `[B]` Loose cable length beside drums**
+  Refs: §7.3c · D10
+  `post_movement` refuses a BULK movement of a reel item beyond the loose length (`ON_DRUMS_ONLY`,
+  naming the drums); the stock API carries `on_drums` and `loose` for reel items.
+  *Done when:* tests receive 1,000 m on two drums and 240 m loose, issue 200 m loose, refuse 100 m
+  more naming the drums, and `verify_ledger` stays clean.
+
+- [ ] **T12.8 `[F]` "Not on a drum" and "Loose length"**
+  Refs: §7.3c · D10
+  Gate-in cable lines offer "Not on a drum"; gate-out cable lines offer "Loose length"; stock on
+  hand shows the split.
+  *Done when:* an E2E receives a coil of cable with no drum number and sends part of it out.
 ---
 
 ## Milestones

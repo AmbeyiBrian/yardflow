@@ -352,6 +352,18 @@ and keying it again. *(Approved 2026-10-03.)*
 - A delivery that has been received is not editable: it has moved stock, and it is corrected by
   voiding it (M4, M6).
 
+**D10.** As a storekeeper, I want to receive cable that is not on a drum as a plain length, so that
+a coil or a cut length is recorded without inventing a drum number. *(Approved 2026-10-03.)*
+- A cable line (an item tracked by drum) offers "Not on a drum". The quantity is a length in the
+  item's unit; there is no drum number and no reason is asked for, because coils and cut lengths
+  are ordinary.
+- The same cable can be held on drums and loose at once. Stock on hand shows both: "1,240 m — 1,000 m
+  on 2 drums, 240 m loose".
+- At gate-out a cable line either names a drum, as today, or takes loose length.
+- **Edge case:** taking loose length can never draw on metres that are on a drum. If the loose
+  length is short, the line is refused and names the drums holding the rest, so the storekeeper
+  can take it from one of them instead.
+
 ---
 
 ### Epic E — Stock

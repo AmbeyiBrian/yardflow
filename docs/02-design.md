@@ -1145,6 +1145,22 @@ and Enter on a keyboard, 44px rows on a phone).
 - The pure parts — `rankItems`, the recent-items list, the "N of M" text — live in
   `src/components/itemPicker.ts` with unit tests.
 
+### 7.3c Cable not on a drum (D10)
+
+> **Status: approved 2026-10-03.**
+
+A reel-tracked item may also move as BULK: the ledger already allows a BULK movement of any item, and
+gate-in already accepts a BULK line for a reel item. What D10 adds is the rule that keeps the two
+honest, in `post_movement` beside the box rules (§4.15.3):
+
+- **Loose length** at a node, for a lot, is `balance − Σ remaining_length of OPEN drums there for
+  that lot`. A BULK movement **out** of an internal node for an item whose `default_tracking_mode`
+  is REEL may take at most the loose length; beyond it, `ON_DRUMS_ONLY` (409) names the drums.
+  ADJUST and REVERSAL are exempt, as corrections are for boxes.
+- The stock API gives each balance row of a reel item `on_drums` and `loose` beside `quantity`.
+- Gate-in: "Not on a drum" sets the line's tracking to BULK. Gate-out: "Loose length" does the
+  same, and the existing lot choice applies.
+
 ### 7.3a The product mark
 
 The name is set as a wordmark — Archivo Semi-Condensed Bold, converted to outlines — and lives in
