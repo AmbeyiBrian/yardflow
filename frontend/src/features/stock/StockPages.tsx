@@ -81,6 +81,12 @@ export default function StockPage() {
         actions={
           <>
             <Link
+              to="/stock/boxes"
+              className="flex min-h-[44px] items-center px-2 text-sm text-slate-700"
+            >
+              Boxes
+            </Link>
+            <Link
               to="/stock/transfers"
               className="flex min-h-[44px] items-center px-2 text-sm text-slate-700"
             >
@@ -99,7 +105,7 @@ export default function StockPage() {
       <Card className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-900">Find a unit or a drum</h2>
         <p className="text-sm text-slate-600">
-          Scan or type a serial number, an asset tag or a drum number. It goes
+          Scan or type a serial number, an asset tag, a drum number or a box code. It goes
           straight to that item's history.
         </p>
         <BarcodeScanner label="Serial, asset tag or drum" onScan={lookup} />
@@ -214,7 +220,7 @@ export function SerialHistoryPage() {
   const { serialNumber } = useParams();
   // A serial is its own name, so there is nothing to wait for.
   useCrumb(serialNumber);
-  const history = useResource<{ unit: SerialUnit; movements: Movement[] }>(
+  const history = useResource<{ unit: SerialUnit & { box_code?: string | null }; movements: Movement[] }>(
     `stock/serials/${encodeURIComponent(serialNumber ?? '')}/history`,
   );
 
@@ -258,6 +264,16 @@ export function SerialHistoryPage() {
         <Stat label="Condition" value={unit.condition.replaceAll('_', ' ').toLowerCase()} />
         <Stat label="Asset tag" value={unit.asset_tag || '—'} />
       </div>
+
+      {unit.box_code ? (
+        <Banner tone="info">
+          In box{' '}
+          <Link to={`/stock/boxes/${encodeURIComponent(unit.box_code)}`} className="underline">
+            {unit.box_code}
+          </Link>
+          .
+        </Banner>
+      ) : null}
 
       {unit.origin_site_ref ? (
         <Banner tone="info">

@@ -74,6 +74,8 @@ const TRAIL: Record<string, Step> = {
   '/expenses/new': { label: 'Record an expense', parent: '/projects' },
 
   '/stock': { label: 'Stock', parent: null },
+  '/stock/boxes': { label: 'Boxes', parent: '/stock' },
+  '/stock/boxes/:code': { label: null, parent: '/stock/boxes' },
   '/stock/drums': { label: 'Drums', parent: '/stock' },
   '/stock/drums/:drumNumber': { label: null, parent: '/stock/drums' },
   '/stock/serials/:serialNumber': { label: null, parent: '/stock' },

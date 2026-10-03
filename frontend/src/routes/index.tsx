@@ -62,6 +62,12 @@ const DrumHistoryPage = lazyRoute(() =>
 const DrumsPage = lazyRoute(() =>
   import('../features/stock/StockPages').then((m) => ({ default: m.DrumsPage })),
 );
+const BoxesPage = lazyRoute(() =>
+  import('../features/stock/BoxPages').then((m) => ({ default: m.BoxesPage })),
+);
+const BoxPage = lazyRoute(() =>
+  import('../features/stock/BoxPages').then((m) => ({ default: m.BoxPage })),
+);
 const TransfersPage = lazyRoute(() =>
   import('../features/stock/StockPages').then((m) => ({ default: m.TransfersPage })),
 );
@@ -372,6 +378,8 @@ export function AppRoutes() {
               material has to be able to see what is there. */}
             <Route path="stock" element={<StockPage />} />
             <Route path="stock/serials/:serialNumber" element={<SerialHistoryPage />} />
+            <Route path="stock/boxes" element={<BoxesPage />} />
+            <Route path="stock/boxes/:code" element={<BoxPage />} />
             <Route path="stock/drums" element={<DrumsPage />} />
             <Route path="stock/drums/:drumNumber" element={<DrumHistoryPage />} />
             <Route
