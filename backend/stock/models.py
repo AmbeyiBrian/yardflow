@@ -412,6 +412,15 @@ class SerialUnit(TenantModel, TimeStampedModel):
     status = models.CharField(
         max_length=20, choices=SerialUnitStatus.choices, default=SerialUnitStatus.IN_STOCK
     )
+    # §4.16.2, Q1: the site this is earmarked for. A projection beside the ledger.
+    earmark_site = models.ForeignKey(
+        "network.Site",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        db_index=True,
+        related_name="earmarked_serial_units",
+    )
 
     # D5: recovered client-owned equipment keeps its origin, so the operator can
     # be shown what came off which site.
@@ -482,6 +491,15 @@ class Reel(TenantModel, TimeStampedModel):
         "network.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="reels"
     )
     status = models.CharField(max_length=20, choices=ReelStatus.choices, default=ReelStatus.OPEN)
+    # §4.16.2: a drum is earmarked whole.
+    earmark_site = models.ForeignKey(
+        "network.Site",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        db_index=True,
+        related_name="earmarked_reels",
+    )
 
     class Meta:
         constraints = [
@@ -824,3 +842,123 @@ class BoxEvent(TenantModel):
 
     def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         raise ValidationError("Box events are append-only and are never deleted (P8, §4.15.2).")
+
+
+class BulkEarmark(TenantModel, TimeStampedModel):
+    """A claim by a site on the bulk lot at a node (§4.16.2, Q1, Q2).
+
+    It does not hold stock: the balance at ``node`` still counts the lot. Free
+    bulk is ``balance - sum(earmarks)``, computed and never stored. The row is
+    deleted when it reaches zero.
+    """
+
+    site = models.ForeignKey("network.Site", on_delete=models.PROTECT, related_name="bulk_earmarks")
+    node = models.ForeignKey(
+        "locations.StockNode", on_delete=models.PROTECT, related_name="bulk_earmarks"
+    )
+    item_type = models.ForeignKey(
+        "catalogue.ItemType", on_delete=models.PROTECT, related_name="bulk_earmarks"
+    )
+    owner_client = models.ForeignKey(
+        "network.Client",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bulk_earmarks",
+    )
+    condition = models.CharField(max_length=20, choices=Condition.choices)
+    quantity = models.DecimalField(
+        max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0.001"))]
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["site", "node", "item_type", "owner_client", "condition"],
+                name="uniq_bulk_earmark_per_site_lot",
+                # As StockBalance: own stock has a NULL owner.
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                condition=Q(quantity__gt=0), name="bulk_earmark_quantity_is_positive"
+            ),
+        ]
+        indexes = [models.Index(fields=["organization", "node", "item_type"])]
+        ordering = ("id",)
+
+    def __str__(self) -> str:
+        return f"{self.quantity} of {self.item_type_id} at {self.node_id} for site {self.site_id}"
+
+
+class EarmarkAction(models.TextChoices):
+    EARMARKED = "EARMARKED", "Earmarked"
+    CHANGED = "CHANGED", "Earmark changed"
+    CLEARED = "CLEARED", "Earmark cleared"
+    DELIVERED = "DELIVERED", "Delivered to its site"
+    DIVERTED = "DIVERTED", "Diverted to another site"
+    MOVED = "MOVED", "Moved inside the yard"
+    REDUCED = "REDUCED", "Reduced by a correction"
+
+
+class EarmarkEvent(TenantModel):
+    """One thing that happened to an earmark (§4.16.2).
+
+    **Append-only**, in Python and by a Postgres trigger, like ``BoxEvent``. The
+    "Material by site" report reads from it.
+    """
+
+    action = models.CharField(max_length=20, choices=EarmarkAction.choices)
+    # ``site`` is null when the stock was free before (a CHANGED from free).
+    site = models.ForeignKey(
+        "network.Site", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    to_site = models.ForeignKey(
+        "network.Site", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+
+    serial_unit = models.ForeignKey(
+        SerialUnit, on_delete=models.PROTECT, null=True, blank=True, related_name="earmark_events"
+    )
+    reel = models.ForeignKey(
+        Reel, on_delete=models.PROTECT, null=True, blank=True, related_name="earmark_events"
+    )
+    node = models.ForeignKey(
+        "locations.StockNode", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    item_type = models.ForeignKey(
+        "catalogue.ItemType", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    owner_client = models.ForeignKey(
+        "network.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    condition = models.CharField(max_length=20, choices=Condition.choices, blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+
+    document_type = models.CharField(max_length=50, blank=True)
+    document_id = models.CharField(max_length=64, blank=True)
+    document_number = models.CharField(max_length=50, blank=True)
+
+    actor = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    occurred_at = models.DateTimeField(default=timezone.now)
+    reason = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["organization", "site", "occurred_at"]),
+            models.Index(fields=["organization", "to_site", "occurred_at"]),
+            models.Index(fields=["organization", "action", "occurred_at"]),
+        ]
+        ordering = ("-occurred_at", "-id")
+
+    def __str__(self) -> str:
+        return f"{self.action} for site {self.site_id}"
+
+    def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if self.pk is not None and not self._state.adding:
+            raise ValidationError("Earmark events are append-only (§4.16.2).")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationError("Earmark events are append-only and are never deleted (§4.16.2).")

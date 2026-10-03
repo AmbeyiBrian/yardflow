@@ -469,6 +469,9 @@ class GateOutLine(TenantModel, TimeStampedModel):
     # free choice, and the gate has nothing to check the load against (G1).
     no_serial_reason = models.CharField(max_length=300, blank=True)
 
+    # §4.16.2, Q3: required when the line uses another site's earmarked stock.
+    divert_reason = models.TextField(blank=True)
+
     # §4.15.7, P6: the box the line was picked from. It groups the request, the
     # approval and the pass; for a bulk line it is the claim `_release_line`
     # draws on. After approval the pass covers units and quantities, not the box.

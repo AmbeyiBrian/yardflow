@@ -88,6 +88,14 @@ class GateIn(TenantModel, TimeStampedModel):
 
     # D5: a recovery records the site it came from, so the operator can be shown
     # what was retrieved from where.
+    # §4.16.2, Q1: who the material is for. Each line inherits it and may override.
+    for_site = models.ForeignKey(
+        "network.Site",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="gate_ins_for",
+    )
     origin_site = models.ForeignKey(
         "network.Site",
         on_delete=models.PROTECT,
@@ -230,6 +238,15 @@ class GateInLine(TenantModel, TimeStampedModel):
     # D3, D11: defaults from the item type, overridable on the line — so a batch
     # of recovered units with unreadable serials can still be received.
     tracking_mode = models.CharField(max_length=20, choices=TrackingMode.choices)
+
+    # §4.16.2, Q1: the line's own site; defaults from the delivery.
+    for_site = models.ForeignKey(
+        "network.Site",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="gate_in_lines_for",
+    )
 
     quantity = models.DecimalField(
         max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0.001"))]
