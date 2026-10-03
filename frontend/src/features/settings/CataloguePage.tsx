@@ -619,7 +619,8 @@ export function ItemTypeSheet({
       const body: Record<string, unknown> = {
         category: Number(values.category),
         name: values.name,
-        code: values.code || undefined,
+        // Editing sends the blank too, so a code can be cleared (C10).
+        code: item ? values.code.trim() : values.code || undefined,
         description: values.description,
         uom: values.uom,
         default_tracking_mode: values.default_tracking_mode,
