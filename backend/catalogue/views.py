@@ -8,6 +8,7 @@ re-implemented — and T1.20's suite discovers each one automatically.
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Case, IntegerField, Value, When
 from django_filters import rest_framework as filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -77,10 +78,11 @@ class ItemTypeFilter(filters.FilterSet):
     include_archived = filters.BooleanFilter(method="filter_include_archived")
     returnable = filters.BooleanFilter(field_name="is_returnable")
     tracking_mode = filters.CharFilter(field_name="default_tracking_mode")
+    is_archived = filters.BooleanFilter(field_name="is_archived")
 
     class Meta:
         model = ItemType
-        fields = ["category", "returnable", "tracking_mode"]
+        fields = ["category", "returnable", "tracking_mode", "is_archived"]
 
     def filter_include_archived(self, queryset, name, value):  # type: ignore[no-untyped-def]
         return queryset if value else queryset.filter(is_archived=False)
@@ -108,8 +110,29 @@ class ItemTypeViewSet(TenantScopedViewSet):
         queryset = super().get_queryset()
         # C3: "the archive is excluded from pickers". Opt in with
         # ?include_archived=true when looking at history.
-        if self.action == "list" and "include_archived" not in self.request.query_params:
+        params = self.request.query_params
+        if (
+            self.action == "list"
+            and "include_archived" not in params
+            and "is_archived" not in params
+        ):
             queryset = queryset.filter(is_archived=False)
+        # C9: a search with no explicit ordering lists the best matches first.
+        text = params.get("search", "").strip()
+        if self.action == "list" and text and not params.get("ordering"):
+            # The list is cursor-paginated, and the cursor takes its order from
+            # the OrderingFilter's default, i.e. ``view.ordering`` - so the
+            # relevance order is declared there as well as applied here.
+            self.ordering = ["search_rank", "name", "id"]
+            queryset = queryset.annotate(
+                search_rank=Case(
+                    When(name__istartswith=text, then=Value(0)),
+                    When(name__icontains=text, then=Value(1)),
+                    When(code__icontains=text, then=Value(2)),
+                    default=Value(3),
+                    output_field=IntegerField(),
+                )
+            )
         return queryset
 
     @action(detail=True, methods=["post"])

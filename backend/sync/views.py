@@ -338,6 +338,8 @@ class OfflineBundleView(APIView):
                 "tracking_mode": item.default_tracking_mode,
                 "category": item.category_id,
                 "is_returnable": item.is_returnable,
+                "description": item.description,
+                "category_name": item.category.name if item.category else "",
             }
             for item in ItemType.objects.filter(is_archived=False).select_related("category")
         ]

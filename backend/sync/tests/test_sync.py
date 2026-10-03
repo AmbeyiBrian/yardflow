@@ -417,6 +417,12 @@ class TestTheApprovalHoleStaysClosed:
         # T8.2: enough reference data to build a line with no signal.
         assert bundle["item_types"]
         assert bundle["locations"]
+        # C9: the offline item search matches on the same fields as the server.
+        for row in bundle["item_types"]:
+            assert "description" in row
+            assert isinstance(row["category_name"], str)
+        clamp = next(row for row in bundle["item_types"] if row["id"] == item.pk)
+        assert clamp["category_name"] == item.category.name
 
 
 class TestConflicts:
