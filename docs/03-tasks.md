@@ -1446,7 +1446,7 @@ gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes t
   `verify_ledger` checks earmarks. Lands alone.
   *Done when:* each rule is tested and the whole backend suite passes unchanged.
 
-- [ ] **T13.3 `[B]` Gate-in earmarks** — Refs: §4.16.4 · Q1
+- [x] **T13.3 `[B]` Gate-in earmarks** — Refs: §4.16.4 · Q1
   *Done when:* a delivery for site X earmarks its units, drums and bulk; a line can override; an
   offline replay earmarks once.
 
