@@ -428,5 +428,14 @@
     ],
     "box_code": null,
     "document_token": null
+  },
+  {
+    "name": "json boolean serial is ignored, falls through to raw",
+    "raw": "{\"sn\": true}",
+    "serials": [
+      "{\"sn\": true}"
+    ],
+    "box_code": null,
+    "document_token": null
   }
 ]

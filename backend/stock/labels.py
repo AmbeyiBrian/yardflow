@@ -93,6 +93,12 @@ def _gate_pass_token(text: str) -> str | None:
     return next((v.strip() for v in values if v.strip()), None)
 
 
+def _scalar(value) -> bool:
+    """A string or a whole number. Not a bool: Python counts ``True`` as an int,
+    and ``{"sn": true}`` must not become the serial "True"."""
+    return isinstance(value, (str, int)) and not isinstance(value, bool)
+
+
 def _from_json(text: str):
     """Rule 2: an object, or an array of strings or objects."""
     if text[0] not in "{[":
@@ -108,13 +114,13 @@ def _from_json(text: str):
         if isinstance(item, dict):
             for key, value in item.items():
                 name = str(key).lower()
-                if name in _SERIAL_KEYS and isinstance(value, (str, int)):
+                if name in _SERIAL_KEYS and _scalar(value):
                     serials.append(str(value))
                 elif name == "serials" and isinstance(value, list):
-                    serials.extend(str(v) for v in value if isinstance(v, (str, int)))
-                elif name in _BOX_KEYS and isinstance(value, (str, int)) and not box_code:
+                    serials.extend(str(v) for v in value if _scalar(v))
+                elif name in _BOX_KEYS and _scalar(value) and not box_code:
                     box_code = str(value).strip() or None
-        elif isinstance(item, (str, int)) and not isinstance(item, bool):
+        elif _scalar(item):
             serials.append(str(item))
     return serials, box_code
 

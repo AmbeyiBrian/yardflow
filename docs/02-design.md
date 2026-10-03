@@ -795,6 +795,12 @@ path, and per box line its box path. So:
 Because it needs no server call, it works the same at a gate with no signal. Every line can still be
 confirmed by hand.
 
+The contract both read sides honour (gate-out detail and the releasable bundle): each line carries
+`box_path: string[]`, the box codes from outermost to the box it was picked from (empty when
+loose); each entry of `line.serials` carries `id`, `serial_unit`, `serial_number`, `asset_tag`,
+`released` and its own `box_path` (where the unit sat when the pass was raised). Codes compare
+case-insensitively, as the database does.
+
 **Releasing what was ticked.** `release_gate_out` gains `released_serials: {line_id: [unit_id, …]}`.
 For a line that has it, exactly those units are issued, ending today's behaviour of issuing the
 first N unreleased units whoever was actually loaded. Whatever is unticked or unconfirmed is short,
