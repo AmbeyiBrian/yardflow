@@ -176,13 +176,24 @@ export function BarcodeScanner({
 
   // Every result, camera or keyboard, is read the same way (P3, §4.15.6): the
   // scanner reports what the label said, then passes on the serial it found.
+  // The camera loop captures `deliver` once, when it starts, and keeps it for
+  // the whole session. Reading the callbacks through refs means it always
+  // reaches the screen's *current* handlers -- a gate-in that switches to a new
+  // box mid-session must not keep filling the old one.
+  const onScanRef = useRef(onScan);
+  const onReadRef = useRef(onRead);
+  useEffect(() => {
+    onScanRef.current = onScan;
+    onReadRef.current = onRead;
+  });
+
   const deliver = useCallback(
     (value: string, continuousNote: boolean) => {
       const reading = readLabel(value);
       const passed = valueToPass(reading);
       const raw = reading.raw.trim();
-      onRead?.(reading);
-      onScan(passed);
+      onReadRef.current?.(reading);
+      onScanRef.current(passed);
       setShowRaw(false);
       if (passed !== raw) {
         setRawShown(raw);
@@ -196,7 +207,7 @@ export function BarcodeScanner({
       }
       scanNoteRef.current = passed !== raw || continuousNote;
     },
-    [onRead, onScan],
+    [],
   );
 
   const handleResult = useCallback(
