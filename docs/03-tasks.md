@@ -1274,7 +1274,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   validation is tested; void leaves every box closed; an offline replay of the same payload through
   `apply_submission` posts once; `api-schema.yml` regenerated.
 
-- [ ] **T11.8 `[B]` Box API**
+- [x] **T11.8 `[B]` Box API**
   Refs: §4.15.9 · P4, P6, P7, P8
   `/boxes` list and detail with tree and counts, `/boxes/{code}/history`, `take-out`, `empty`,
   `move`, and `/stock/boxes/{code}/issuable?from_location=`. Permissions as §4.15.9.
