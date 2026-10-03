@@ -1450,7 +1450,7 @@ gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes t
   *Done when:* a delivery for site X earmarks its units, drums and bulk; a line can override; an
   offline replay earmarks once.
 
-- [ ] **T13.4 `[B]` Gate-out diversions** — Refs: §4.16.5 · Q3
+- [x] **T13.4 `[B]` Gate-out diversions** — Refs: §4.16.5 · Q3
   Destination sites, submit-time diversion detection and reasons, the approval payload, release
   consuming earmarks.
   *Done when:* to site X uses X's earmark with no reason; to site Y is refused without a reason and
