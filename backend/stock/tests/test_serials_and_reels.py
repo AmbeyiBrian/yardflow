@@ -24,8 +24,10 @@ from stock.services import (
     LedgerRuleViolation,
     MovementRequest,
     ReelExhausted,
+    UnitNotAtOrigin,
     balance_at,
     post_movement,
+    reverse_movement,
 )
 
 
@@ -61,6 +63,113 @@ class TestSerializedUnits:
         )
 
         assert balance_at(yard.node, unit.item_type) == Decimal("1")
+
+    def test_a_serialized_movement_must_start_where_the_unit_is(self, tenant, yard, supplier):
+        """§4.15.3: the unit is at the yard, so a movement from the supplier is
+        refused, and the message says where it really is."""
+        unit = SerialUnitFactory(serial_number="RRU-0042", current_node=yard.node)
+        site = node_for_site(SiteFactory())
+        # Stock at the named origin, so only the unit's position can refuse it.
+        other = SerialUnitFactory(item_type=unit.item_type, current_node=supplier)
+        move(
+            item_type=unit.item_type,
+            quantity=Decimal("1"),
+            from_node=supplier,
+            to_node=site,
+            movement_type=MovementType.ISSUE,
+            tracking_mode=TrackingMode.SERIALIZED,
+            serial_unit=other,
+        )
+
+        with pytest.raises(UnitNotAtOrigin) as raised:
+            move(
+                item_type=unit.item_type,
+                quantity=Decimal("1"),
+                from_node=site,
+                to_node=supplier,
+                movement_type=MovementType.TRANSFER,
+                tracking_mode=TrackingMode.SERIALIZED,
+                serial_unit=unit,
+            )
+
+        assert "RRU-0042" in str(raised.value)
+        assert yard.node.label in str(raised.value)
+        unit.refresh_from_db()
+        assert unit.current_node_id == yard.node.pk
+
+    def test_a_movement_from_the_units_node_moves_it(self, tenant, yard, supplier):
+        unit = SerialUnitFactory(current_node=supplier)
+        move(
+            item_type=unit.item_type,
+            quantity=Decimal("1"),
+            from_node=supplier,
+            to_node=yard.node,
+            movement_type=MovementType.RECEIPT,
+            tracking_mode=TrackingMode.SERIALIZED,
+            serial_unit=unit,
+        )
+        site = node_for_site(SiteFactory())
+
+        move(
+            item_type=unit.item_type,
+            quantity=Decimal("1"),
+            from_node=yard.node,
+            to_node=site,
+            movement_type=MovementType.ISSUE,
+            tracking_mode=TrackingMode.SERIALIZED,
+            serial_unit=unit,
+        )
+
+        unit.refresh_from_db()
+        assert unit.current_node_id == site.pk
+
+    def test_a_stale_copy_of_the_unit_is_judged_by_the_locked_row(
+        self, tenant, yard, supplier
+    ):
+        """The position is read after locking, not from the object the caller
+        holds: a caller's copy can be stale by the time it posts."""
+        unit = SerialUnitFactory(current_node=supplier)
+        stale = SerialUnit.objects.get(pk=unit.pk)
+        move(
+            item_type=unit.item_type,
+            quantity=Decimal("1"),
+            from_node=supplier,
+            to_node=yard.node,
+            movement_type=MovementType.RECEIPT,
+            tracking_mode=TrackingMode.SERIALIZED,
+            serial_unit=unit,
+        )
+
+        with pytest.raises(UnitNotAtOrigin):
+            move(
+                item_type=unit.item_type,
+                quantity=Decimal("1"),
+                from_node=supplier,
+                to_node=yard.node,
+                movement_type=MovementType.RECEIPT,
+                tracking_mode=TrackingMode.SERIALIZED,
+                serial_unit=stale,
+            )
+
+    def test_a_reversal_of_a_serialized_movement_still_posts(self, tenant, yard, supplier):
+        """A reversal swaps the nodes, so it starts where the original ended,
+        which is where the unit is."""
+        unit = SerialUnitFactory(current_node=supplier)
+        original = move(
+            item_type=unit.item_type,
+            quantity=Decimal("1"),
+            from_node=supplier,
+            to_node=yard.node,
+            movement_type=MovementType.RECEIPT,
+            tracking_mode=TrackingMode.SERIALIZED,
+            serial_unit=unit,
+        )
+
+        with transaction.atomic():
+            reverse_movement(original)
+
+        unit.refresh_from_db()
+        assert unit.current_node_id == supplier.pk
 
     def test_a_serialized_movement_of_more_than_one_is_refused(self, tenant, yard, supplier):
         """Two units are two movements. Allowing quantity 2 with one serial would

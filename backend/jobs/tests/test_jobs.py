@@ -321,7 +321,9 @@ class TestCloseoutPosting:
         unit = SerialUnitFactory(
             item_type=item,
             serial_number="RRU-INSTALL-1",
-            current_node=node_for_user(technician),
+            # Where a unit about to be received starts (§4.15.3): the receipt
+            # below moves it to the technician.
+            current_node=external_node(tenant.pk),
         )
         stock_in_tracked(
             tenant, node_for_user(technician), item, 1, serial_unit=unit

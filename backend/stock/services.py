@@ -75,6 +75,19 @@ class DuplicateSerial(DomainError):
     default_message = "That serial number is already recorded."
 
 
+class UnitNotAtOrigin(DomainError):
+    """§4.15.3: a serialized movement was asked to start somewhere the unit is not.
+
+    A unit is in exactly one place (§3.5). A movement saying it leaves node X
+    when the unit is at Y would debit X's balance for stock that was never
+    there and leave the unit's own position unchanged in meaning.
+    """
+
+    code = "UNIT_NOT_AT_ORIGIN"
+    status_code = 409
+    default_message = "That unit is not where the movement says it is."
+
+
 class LedgerRuleViolation(DomainError):
     """A caller asked for something the ledger's shape forbids."""
 
@@ -237,7 +250,19 @@ def post_movement(request: MovementRequest) -> StockMovement:
             },
         )
 
-    # 2c. Value it, once, now (O11, D27).
+    # 2c. A serialized movement must start where the unit is (§4.15.3). Read
+    #     under lock, after the balances
+    #     and after the stock check (a unit already issued on still reads as
+    #     "not enough stock" at the node it left, which is what callers and
+    #     §13's double-issue guard expect): the unit's position is what a
+    #     concurrent movement of the same unit would change, so a second one
+    #     waits here and then sees the new position and is refused. Lock order
+    #     is always balances then unit; no other code path locks a SerialUnit
+    #     row before calling this, so the order cannot invert and deadlock.
+    if request.serial_unit is not None:
+        _assert_unit_at_origin(request.serial_unit, request.from_node)
+
+    # 2d. Value it, once, now (O11, D27).
     unit_cost, unit_cost_source = _resolve_valuation(request, item_type)
 
     # 3. Write the movement.
@@ -342,6 +367,21 @@ def _lock_balances(
         )
 
     return tuple(locked[(node.pk, condition)] for node, condition in sides)  # type: ignore[return-value]
+
+
+def _assert_unit_at_origin(unit: SerialUnit, from_node: StockNode) -> None:
+    """Lock the unit and refuse a movement that does not start at its node (§4.15.3)."""
+    locked = SerialUnit.objects.select_for_update().select_related("current_node").get(pk=unit.pk)
+    if locked.current_node_id != from_node.pk:
+        raise UnitNotAtOrigin(
+            f"Serial {locked.serial_number} is at {locked.current_node.label}, "
+            f"not at {from_node.label}.",
+            details={
+                "serial_number": locked.serial_number,
+                "current_node": locked.current_node.label,
+                "from_node": from_node.label,
+            },
+        )
 
 
 def _move_serial_unit(unit: SerialUnit, to_node: StockNode, condition: str, owner_client) -> None:

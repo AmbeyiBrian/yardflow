@@ -74,7 +74,8 @@ def a_serialized_radio(signed_in):
             organization=organization,
             item_type=item,
             serial_number="RRU-IDENTITY-1",
-            current_node=yard.node,
+            # Starts where the receipt below says it comes from (§4.15.3).
+            current_node=external_node(organization.pk),
         )
         with transaction.atomic():
             post_movement(

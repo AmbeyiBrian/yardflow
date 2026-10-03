@@ -338,7 +338,7 @@ def post_gate_in(gate_in: GateIn, *, posted_by=None, request=None) -> GateIn:
                 unit = _existing_unit_for_return(gate_in, serial_entry)
                 if unit is None:
                     unit = _create_serial_unit(
-                        gate_in, line, serial_entry, destination, settings=settings
+                        gate_in, line, serial_entry, source, settings=settings
                     )
                     unit_source = source
                 else:
@@ -486,7 +486,7 @@ def _existing_unit_for_return(gate_in, entry: GateInSerial) -> SerialUnit | None
     return SerialUnit.objects.filter(serial_number=entry.serial_number).first()
 
 
-def _create_serial_unit(gate_in, line, entry: GateInSerial, destination, *, settings) -> SerialUnit:
+def _create_serial_unit(gate_in, line, entry: GateInSerial, source, *, settings) -> SerialUnit:
     """Create the tracked unit a serialized line refers to (D3)."""
     if SerialUnit.objects.filter(serial_number=entry.serial_number).exists():
         raise DuplicateSerial(
@@ -504,7 +504,11 @@ def _create_serial_unit(gate_in, line, entry: GateInSerial, destination, *, sett
         serial_number=entry.serial_number,
         asset_tag=asset_tag or "",
         source=entry.source,
-        current_node=destination,
+        # Starts at the source and is moved by the receipt movement itself, as
+        # a drum is: the ledger requires a serialized movement to start where
+        # the unit is (§4.15.3), and the unit's position then has a movement
+        # behind it.
+        current_node=source,
         condition=line.condition,
         owner_type=line.owner_type,
         owner_client=line.owner_client,
