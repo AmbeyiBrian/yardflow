@@ -361,7 +361,8 @@ export function withoutBox(boxes: DraftBox[], key: string): DraftBox[] {
  */
 export function linesForPayload(lines: GateInLineInput[]): GateInLineInput[] {
   return lines.map((line) => {
-    const { box_key: boxKey, ...rest } = line;
+    const { box_key: boxKey, reel_item: _reelItem, ...rest } = line;
+    void _reelItem;
     const out: GateInLineInput = { ...rest };
     if (line.tracking_mode === 'BULK' && boxKey) out.box_key = boxKey;
     if (line.serials) {

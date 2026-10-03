@@ -151,6 +151,38 @@ test.describe('Receiving a delivery', () => {
     await expect(page.getByText('250', { exact: false }).first()).toBeVisible();
   });
 
+  test('cable that is not on a drum is received as a plain length', async ({ page }) => {
+    /** D10: a coil or a cut length has no drum number, and nobody is asked for one. */
+    await open(page, '/gate-in/new');
+    await page.getByLabel('Source').selectOption('PURCHASE');
+    await page.getByLabel('Received into').selectOption({ index: 1 });
+
+    await page.getByRole('button', { name: 'Add a line' }).click();
+    const sheet = page.getByRole('dialog');
+
+    const found = await chooseAReelItem(sheet);
+    test.skip(!found, 'no reel item in the seeded catalogue');
+
+    await sheet.getByRole('radio', { name: 'Not on a drum' }).click();
+    await expect(sheet.getByLabel('Drum number')).toBeHidden();
+    await sheet.getByLabel(/^Length/).fill('240');
+    await sheet.getByRole('button', { name: 'Add line' }).click();
+
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText(/240 m .*not on a drum/).first()).toBeVisible();
+
+    // Change reopens it as it was keyed.
+    await page.getByRole('button', { name: /^Change the .* line$/ }).click();
+    await expect(sheet.getByRole('radio', { name: 'Not on a drum' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await sheet.getByRole('button', { name: 'Cancel' }).click();
+
+    await page.getByRole('button', { name: /receive it|save on this device/i }).click();
+    await expect(page.getByText(/GRN-\d+/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
+  });
+
   test('half a drum is refused by saying which half is missing', async ({ page }) => {
     /** A number with no length is genuinely incomplete — so the complaint names
      * the drum and asks for the one thing it needs. */

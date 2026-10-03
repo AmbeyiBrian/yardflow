@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  drumNote,
   lineToSheet,
   moveSerial,
   replaceLineAt,
@@ -29,6 +30,7 @@ function result(state: ReturnType<typeof lineToSheet>, mode: SheetResult['mode']
     notes: state.notes,
     serials: state.serials,
     drums: state.drums,
+    notOnDrum: state.notOnDrum,
     activeKey: state.intoKey,
   };
 }
@@ -106,6 +108,40 @@ describe('gate-in line and sheet', () => {
     const state = lineToSheet(line);
     expect(state.drums).toEqual(line.reels);
     expect(sheetToLine(result(state, 'REEL'), line)).toEqual(line);
+  });
+
+  it('receives cable not on a drum as a bulk line and reopens it so', () => {
+    const state = lineToSheet({
+      ...base,
+      item_type: 6,
+      item_name: 'Power cable',
+      tracking_mode: 'REEL',
+      uom: 'm',
+      quantity: '0',
+      reels: [],
+    });
+    const line = sheetToLine({ ...result(state, 'REEL'), quantity: '240', notOnDrum: true });
+    expect(line.tracking_mode).toBe('BULK');
+    expect(line.quantity).toBe('240');
+    expect(line.reels).toEqual([]);
+    expect(line.no_serial_reason).toBe('');
+    expect(line.box_key).toBe('');
+    expect(drumNote(line)).toBe(' · not on a drum');
+
+    const reopened = lineToSheet(line);
+    expect(reopened.notOnDrum).toBe(true);
+    expect(reopened.item.default_tracking_mode).toBe('REEL');
+    expect(reopened.quantity).toBe('240');
+    expect(sheetToLine(result(reopened, 'REEL'), line)).toEqual(line);
+  });
+
+  it('does not mistake a plain bulk line for cable, and counts drums', () => {
+    const bulk: GateInLineInput = { ...base, item_type: 4, tracking_mode: 'BULK', quantity: '3' };
+    expect(lineToSheet(bulk).notOnDrum).toBe(false);
+    expect(drumNote(bulk)).toBe('');
+    expect(drumNote({ ...bulk, tracking_mode: 'REEL', reels: [{ drum_number: 'D', length: '1' }] })).toBe(
+      ' · 1 drums',
+    );
   });
 
   it('keeps a no-serial line changeable as a serialized item', () => {

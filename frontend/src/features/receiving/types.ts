@@ -64,6 +64,11 @@ export interface GateInLineInput {
   box_key?: string;
   serials?: GateInSerialInput[];
   reels?: GateInReelInput[];
+  /**
+   * Kept on this device only (never sent): the item is tracked by drum, and this
+   * BULK line is cable received not on a drum (D10).
+   */
+  reel_item?: boolean;
 }
 
 export interface GateIn {
@@ -105,6 +110,9 @@ export interface StockBalance {
   condition: string;
   quantity: string;
   uom: string;
+  /** Reel items only (D10): metres on open drums, and metres not on one. */
+  on_drums?: string | null;
+  loose?: string | null;
 }
 
 export interface Movement {

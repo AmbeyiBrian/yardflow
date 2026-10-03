@@ -36,6 +36,7 @@ import {
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
 import type { Client, Location } from '../settings/types';
+import { cableSplitText } from './cableSplit';
 import type { Movement, Reel, SerialUnit, StockBalance, StockCount } from '../receiving/types';
 
 /* -------------------------------------------------------------------------- */
@@ -173,7 +174,20 @@ export default function StockPage() {
           }
           columns={[
             { header: 'Item', cell: (row) => row.item_name },
-            { header: 'Quantity', cell: (row) => `${row.quantity} ${row.uom}` },
+            {
+              header: 'Quantity',
+              cell: (row) => {
+                const split = cableSplitText(row);
+                return split ? (
+                  <>
+                    {row.quantity} {row.uom}
+                    <span className="block text-xs text-slate-600">{split}</span>
+                  </>
+                ) : (
+                  `${row.quantity} ${row.uom}`
+                );
+              },
+            },
             { header: 'Where', cell: (row) => row.node_label },
             {
               header: 'Owner',

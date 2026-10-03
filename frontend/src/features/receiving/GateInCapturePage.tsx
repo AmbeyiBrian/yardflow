@@ -65,6 +65,8 @@ import {
   type DraftBox,
 } from './gateInBoxes';
 import {
+  drumNote,
+  DRUM_CHOICES,
   lineToSheet,
   moveSerial,
   replaceLineAt,
@@ -682,7 +684,7 @@ export default function GateInCapturePage() {
                         {line.owner_client ? ` · ${clientName(line.owner_client)} owns this` : ''}
                         {line.serials?.length ? ` · ${line.serials.length} serials` : ''}
                         {looseUnits !== null ? ` (${looseUnits} loose)` : ''}
-                        {line.reels?.length ? ` · ${line.reels.length} drums` : ''}
+                        {drumNote(line)}
                       </p>
                       {quarantines ? (
                         // J1: said here, at entry, because this is the decision
@@ -810,6 +812,8 @@ function LineSheet({
   const [startError, setStartError] = useState<string | null>(null);
   const [drums, setDrums] = useState<{ drum_number: string; length: string }[]>([]);
   const [noSerialReason, setNoSerialReason] = useState('');
+  /** Cable that is not on a drum: a plain length (D10). */
+  const [notOnDrum, setNotOnDrum] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   /**
@@ -827,6 +831,7 @@ function LineSheet({
   const [pendingLength, setPendingLength] = useState('');
 
   const mode = item?.default_tracking_mode ?? 'BULK';
+  const looseCable = mode === 'REEL' && notOnDrum;
   /** Units are identified one by one, so they are what a box holds. */
   const serialised = mode === 'SERIALIZED' && !noSerialReason;
   /** Everything but drums can go in a box (4.15.5). */
@@ -951,6 +956,7 @@ function LineSheet({
     setSerials(state.serials);
     setDrums(state.drums);
     setNoSerialReason(state.noSerialReason);
+    setNotOnDrum(state.notOnDrum);
     setNotes(state.notes);
     intoRef.current = state.intoKey;
     setIntoKey(state.intoKey);
@@ -970,6 +976,7 @@ function LineSheet({
     setPendingDrum('');
     setPendingLength('');
     setNoSerialReason('');
+    setNotOnDrum(false);
     setNotes('');
     setError(null);
   }
@@ -981,7 +988,8 @@ function LineSheet({
       return;
     }
 
-    const trackingMode = mode === 'SERIALIZED' && noSerialReason ? 'BULK' : mode;
+    const trackingMode =
+      looseCable || (mode === 'SERIALIZED' && noSerialReason) ? 'BULK' : mode;
 
     // Anything typed and not yet added still counts: pressing this button is
     // as clear a statement of intent as pressing the one beside the field.
@@ -1048,6 +1056,7 @@ function LineSheet({
           notes,
           serials: allSerials,
           drums: allDrums,
+          notOnDrum: looseCable,
           activeKey,
         },
         initial,
@@ -1209,6 +1218,26 @@ function LineSheet({
         ) : null}
 
         {mode === 'REEL' ? (
+          <div role="radiogroup" aria-label="How the cable is held" className="flex gap-2">
+            {DRUM_CHOICES.map((choice) => {
+              const selected = (choice.value === 'loose') === notOnDrum;
+              return (
+                <Button
+                  key={choice.value}
+                  variant={selected ? 'primary' : 'secondary'}
+                  block
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setNotOnDrum(choice.value === 'loose')}
+                >
+                  {choice.label}
+                </Button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {mode === 'REEL' && !notOnDrum ? (
           <DrumEntry
             drums={drums}
             onChange={setDrums}
@@ -1220,8 +1249,11 @@ function LineSheet({
           />
         ) : null}
 
-        {mode === 'BULK' || noSerialReason ? (
-          <Field label={`Quantity${item ? ` (${item.uom})` : ''}`} htmlFor="line-quantity">
+        {mode === 'BULK' || noSerialReason || looseCable ? (
+          <Field
+            label={`${looseCable ? 'Length' : 'Quantity'}${item ? ` (${item.uom})` : ''}`}
+            htmlFor="line-quantity"
+          >
             <Input
               id="line-quantity"
               inputMode="decimal"

@@ -27,6 +27,8 @@ export interface SheetState {
   /** Each unit with its own box; '' is loose. */
   serials: GateInSerialInput[];
   drums: GateInReelInput[];
+  /** A cable line received as a plain length, not on a drum (D10). */
+  notOnDrum: boolean;
   /** The "Into a box" selector: the line's box when bulk, otherwise loose. */
   intoKey: string;
 }
@@ -41,7 +43,11 @@ export interface SheetState {
  * available" reason could never be cleared.
  */
 export function itemOfLine(line: GateInLineInput): PickedItem {
-  const mode = line.no_serial_reason ? 'SERIALIZED' : line.tracking_mode;
+  const mode = line.no_serial_reason
+    ? 'SERIALIZED'
+    : line.reel_item
+      ? 'REEL'
+      : line.tracking_mode;
   return {
     id: line.item_type,
     name: line.item_name ?? '',
@@ -69,6 +75,7 @@ export function lineToSheet(line: GateInLineInput): SheetState {
       box_key: serial.box_key ?? '',
     })),
     drums: (line.reels ?? []).map((drum) => ({ ...drum })),
+    notOnDrum: Boolean(line.reel_item) && line.tracking_mode === 'BULK',
     intoKey: line.tracking_mode === 'BULK' ? (line.box_key ?? '') : '',
   };
 }
@@ -86,6 +93,8 @@ export interface SheetResult {
   notes: string;
   serials: GateInSerialInput[];
   drums: GateInReelInput[];
+  /** Cable received as a plain length: the line is BULK and has no drums (D10). */
+  notOnDrum?: boolean;
   /** The selected box, already checked against the delivery's boxes. */
   activeKey: string;
 }
@@ -98,7 +107,9 @@ export interface SheetResult {
  * Its server ids are dropped — the line is saved as a whole.
  */
 export function sheetToLine(state: SheetResult, base?: GateInLineInput): GateInLineInput {
-  const trackingMode = state.mode === 'SERIALIZED' && state.noSerialReason ? 'BULK' : state.mode;
+  const looseCable = state.mode === 'REEL' && Boolean(state.notOnDrum);
+  const trackingMode =
+    looseCable || (state.mode === 'SERIALIZED' && state.noSerialReason) ? 'BULK' : state.mode;
   const total =
     trackingMode === 'SERIALIZED'
       ? String(state.serials.length)
@@ -123,11 +134,14 @@ export function sheetToLine(state: SheetResult, base?: GateInLineInput): GateInL
     no_serial_reason: state.noSerialReason,
     notes: state.notes,
     serials,
-    reels: state.drums,
+    reels: looseCable ? [] : state.drums,
     // Bulk only: the whole quantity is in that box. Serialized units carry
-    // their own box_key, and drums take none (4.15.5).
-    box_key: trackingMode === 'BULK' ? state.activeKey : '',
+    // their own box_key, and drums take none (4.15.5). Cable is never boxed.
+    box_key: trackingMode === 'BULK' && !looseCable ? state.activeKey : '',
   };
+  // Not sent: remembers that the item is tracked by drum, so Change can reopen
+  // the line as "Not on a drum".
+  if (looseCable) line.reel_item = true;
   if (base?.custom_field_values && base.item_type === state.item.id) {
     line.custom_field_values = base.custom_field_values;
   }
@@ -153,4 +167,16 @@ export function moveSerial(
   return serials.map((unit) =>
     unit.serial_number === serialNumber ? { ...unit, box_key: boxKey } : unit,
   );
+}
+
+/** The choice at the top of a cable line's drum section (D10). */
+export const DRUM_CHOICES = [
+  { value: 'drums', label: 'On drums' },
+  { value: 'loose', label: 'Not on a drum' },
+] as const;
+
+/** The lines card's tail for a cable line: how many drums, or that it is not on one. */
+export function drumNote(line: GateInLineInput): string {
+  if (line.tracking_mode === 'BULK' && line.reel_item) return ' · not on a drum';
+  return line.reels?.length ? ` · ${line.reels.length} drums` : '';
 }

@@ -19,6 +19,7 @@
  * against the pass (G1). Scanning is the fast path; searching is always there.
  */
 
+import { drumOrLooseMessage, LOOSE_LENGTH_LABEL, lengthLabel, lineTrackingMode } from './looseLength';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -804,6 +805,8 @@ function LineSheet({
   // refuses the line without it, so the reason is asked for here rather than
   // left as a 400 nobody can act on.
   const [noSerialReason, setNoSerialReason] = useState('');
+  /** Cable taken as loose length rather than from a named drum (D10). */
+  const [looseLength, setLooseLength] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   void fromLocation;
@@ -854,6 +857,7 @@ function LineSheet({
     setScanned(null);
     setProposal(null);
     setNoSerialReason('');
+    setLooseLength(false);
     setHoldingKey('');
     setError(null);
   }
@@ -946,17 +950,22 @@ function LineSheet({
       return;
     }
 
+    // D10: cable is either a named drum or loose length, never neither.
+    if (!scanned && item.default_tracking_mode === 'REEL' && !looseLength) {
+      setError(drumOrLooseMessage(item.name));
+      return;
+    }
+
     const line: GateOutLine = {
       item_type: item.id,
       item_name: item.name,
-      tracking_mode: scanned?.unit
-        ? 'SERIALIZED'
-        : scanned?.reel
-          ? 'REEL'
-          : serializedWithoutAScan
-            // Untagged units are a quantity, with the reason recorded (D3).
-            ? 'BULK'
-            : item.default_tracking_mode,
+      tracking_mode: lineTrackingMode({
+        itemMode: item.default_tracking_mode,
+        scanned: scanned?.unit ? 'unit' : scanned?.reel ? 'reel' : null,
+        looseLength,
+        // Untagged units are a quantity, with the reason recorded (D3).
+        untagged: serializedWithoutAScan,
+      }),
       no_serial_reason: serializedWithoutAScan ? noSerialReason.trim() : '',
       requested_qty: quantity,
       uom: item.uom,
@@ -1165,11 +1174,29 @@ function LineSheet({
           </Field>
         ) : null}
 
+        {!scanned && item?.default_tracking_mode === 'REEL' ? (
+          <Button
+            variant={looseLength ? 'primary' : 'secondary'}
+            block
+            role="switch"
+            aria-checked={looseLength}
+            onClick={() => setLooseLength((current) => !current)}
+          >
+            {LOOSE_LENGTH_LABEL}
+          </Button>
+        ) : null}
+
         <Field
-          label={`How much${item ? ` (${item.uom})` : ''}`}
+          label={
+            looseLength && !scanned && item?.default_tracking_mode === 'REEL'
+              ? lengthLabel(item.uom)
+              : `How much${item ? ` (${item.uom})` : ''}`
+          }
           htmlFor="gol-quantity"
           hint={
-            scanned?.reel
+            looseLength && !scanned
+              ? 'Only what is not on a drum. Metres on a drum go out by scanning the drum.'
+              : scanned?.reel
               ? 'Less than the drum holds is a cut; all of it means the drum goes with them.'
               : undefined
           }
