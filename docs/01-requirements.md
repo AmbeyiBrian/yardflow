@@ -346,6 +346,8 @@ and keying it again. *(Approved 2026-10-03.)*
   serial with the box it is in, and drums. Saving replaces the line in place; Cancel leaves it as
   it was.
 - Units can be added or removed and moved between boxes while changing a line.
+- Removing a line or a box takes two taps: the first asks ("Remove this line?"), the second
+  removes, and "Keep" cancels. One tap is too easy to make by accident while scrolling.
 - The same applies to a saved draft opened for correction (D8).
 - A delivery that has been received is not editable: it has moved stock, and it is corrected by
   voiding it (M4, M6).

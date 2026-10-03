@@ -699,13 +699,12 @@ export default function GateInCapturePage() {
                       >
                         Change
                       </Button>
-                      <Button
-                        variant="ghost"
-                        className="min-h-0 px-2 py-1 text-sm text-red-700"
-                        onClick={() => removeLine(index)}
-                      >
-                        Remove
-                      </Button>
+                      <RemoveWithConfirm
+                        label="Remove"
+                        ariaLabel={`Remove the ${line.item_name ?? 'item'} line`}
+                        prompt="Remove this line?"
+                        onConfirm={() => removeLine(index)}
+                      />
                     </div>
                   </li>
                 );
@@ -1607,14 +1606,12 @@ function BoxBranch({
             </span>
           )}
         </p>
-        <Button
-          variant="ghost"
-          className="px-2 text-sm text-red-700"
-          aria-label={`Remove box ${node.label}`}
-          onClick={() => onRemoveBox(node.box.key)}
-        >
-          Remove box
-        </Button>
+        <RemoveWithConfirm
+          label="Remove box"
+          ariaLabel={`Remove box ${node.label}`}
+          prompt="Remove this box?"
+          onConfirm={() => onRemoveBox(node.box.key)}
+        />
       </div>
 
       {node.entries.length > 0 || node.children.length > 0 ? (
@@ -1676,15 +1673,65 @@ function BoxContents({
         >
           Change
         </Button>
-        <Button
-          variant="ghost"
-          className="px-2 text-sm text-red-700"
-          aria-label={`Remove the ${entry.line.item_name ?? 'item'} line`}
-          onClick={() => onRemoveLine(entry.lineIndex)}
-        >
-          Remove line
-        </Button>
+        <RemoveWithConfirm
+          label="Remove line"
+          ariaLabel={`Remove the ${entry.line.item_name ?? 'item'} line`}
+          prompt="Remove this line?"
+          onConfirm={() => onRemoveLine(entry.lineIndex)}
+        />
       </div>
     </li>
+  );
+}
+
+/**
+ * Remove in two taps (D9). One tap on a phone is too easy to make by accident
+ * while scrolling a long delivery, and a removed line takes its scanned units
+ * with it. The first tap asks; only "Remove" on the second removes; "Keep"
+ * puts the button back.
+ */
+function RemoveWithConfirm({
+  label,
+  ariaLabel,
+  prompt,
+  onConfirm,
+}: {
+  label: string;
+  ariaLabel: string;
+  prompt: string;
+  onConfirm: () => void;
+}) {
+  const [asking, setAsking] = useState(false);
+
+  if (!asking) {
+    return (
+      <Button
+        variant="ghost"
+        className="px-2 text-sm text-red-700"
+        aria-label={ariaLabel}
+        onClick={() => setAsking(true)}
+      >
+        {label}
+      </Button>
+    );
+  }
+
+  return (
+    <span role="group" aria-label={prompt} className="flex flex-wrap items-center justify-end gap-1">
+      <span className="text-sm text-slate-700">{prompt}</span>
+      <Button
+        variant="ghost"
+        className="px-2 text-sm font-semibold text-red-700"
+        onClick={() => {
+          setAsking(false);
+          onConfirm();
+        }}
+      >
+        Yes, remove
+      </Button>
+      <Button variant="ghost" className="px-2 text-sm" onClick={() => setAsking(false)}>
+        Keep
+      </Button>
+    </span>
   );
 }

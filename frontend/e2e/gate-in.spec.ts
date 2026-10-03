@@ -322,7 +322,9 @@ test.describe('Correcting a draft', () => {
     await expect(page.getByRole('heading', { name: 'Correct this delivery' })).toBeVisible();
     await expect(page.getByLabel('Supplier')).toHaveValue(supplier);
 
-    await page.getByRole('button', { name: 'Remove' }).first().click();
+    // Removing takes two taps (D9): the first asks, the second removes.
+    await page.getByRole('button', { name: /^Remove the .* line$/ }).first().click();
+    await page.getByRole('button', { name: 'Yes, remove' }).click();
     await page.getByRole('button', { name: 'Add a line' }).click();
     const again = page.getByRole('dialog');
     await pickItem(again, 'Item', 'Cable clamp');
