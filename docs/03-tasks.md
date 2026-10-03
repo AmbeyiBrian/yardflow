@@ -1463,7 +1463,7 @@ gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes t
 - [ ] **T13.6 `[B]` "Material by site" report** — Refs: §4.16.8 · Q5
   *Done when:* on a scenario the four columns are right per site and item, and it exports.
 
-- [ ] **T13.7 `[F]` "For site" at gate-in** — Refs: Q1
+- [x] **T13.7 `[F]` "For site" at gate-in** — Refs: Q1
 - [x] **T13.5a `[B]` What is waiting for a site** — Refs: §4.16.8a · Q6
   *Done when:* the endpoint lists a site's earmarked units, drums and bulk at a location, and its
   open jobs by project.
