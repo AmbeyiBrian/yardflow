@@ -67,6 +67,7 @@ import {
 import {
   drumNote,
   DRUM_CHOICES,
+  effectiveSite,
   lineToSheet,
   moveSerial,
   replaceLineAt,
@@ -117,6 +118,8 @@ interface DraftHeader {
   client: string;
   returned_by: string;
   origin_site: string;
+  /** Earmark the delivery for this site; '' is spares (Q1). Absent in older drafts. */
+  for_site?: string;
   to_location: string;
   client_delivery_note_ref: string;
   notes: string;
@@ -163,6 +166,7 @@ function emptyDraft(): Draft {
       client: '',
       returned_by: '',
       origin_site: '',
+      for_site: '',
       to_location: '',
       client_delivery_note_ref: '',
       notes: '',
@@ -239,6 +243,7 @@ export default function GateInCapturePage() {
         client: document.client ? String(document.client) : '',
         returned_by: document.returned_by ? String(document.returned_by) : '',
         origin_site: document.origin_site ? String(document.origin_site) : '',
+        for_site: document.for_site ? String(document.for_site) : '',
         to_location: document.to_location ? String(document.to_location) : '',
         client_delivery_note_ref: document.client_delivery_note_ref ?? '',
         notes: document.notes ?? '',
@@ -285,6 +290,12 @@ export default function GateInCapturePage() {
     return (
       (clients.data?.results ?? []).find((row) => row.id === id)?.name ?? 'A client'
     );
+  }
+
+  /** " · for Site X" on a line, from its own site or the delivery's (Q1). */
+  function siteNote(line: GateInLineInput): string {
+    const id = effectiveSite(line, draft.header.for_site ?? '');
+    return id ? ` · for ${siteLabel(sites.data?.results ?? [], String(id))}` : '';
   }
 
   const source = SOURCES.find((entry) => entry.value === draft.header.source_type);
@@ -360,6 +371,7 @@ export default function GateInCapturePage() {
       client: header.client ? Number(header.client) : null,
       returned_by: header.returned_by ? Number(header.returned_by) : null,
       origin_site: header.origin_site ? Number(header.origin_site) : null,
+      for_site: header.for_site ? Number(header.for_site) : null,
       to_location: Number(header.to_location),
       received_at: draft.received_at ?? new Date().toISOString(),
       client_delivery_note_ref: header.client_delivery_note_ref,
@@ -605,6 +617,25 @@ export default function GateInCapturePage() {
           </ControlledReferenceSelect>
         </Field>
 
+        <Field
+          label="For site"
+          htmlFor="gi-for-site"
+          hint="Material for a particular site is earmarked for it. Leave blank for spares."
+        >
+          <ControlledReferenceSelect resource="sites"
+            id="gi-for-site"
+            value={draft.header.for_site ?? ''}
+            onChange={(event) => setHeader({ for_site: event.target.value })}
+          >
+            <option value="">Not for a particular site</option>
+            {(sites.data?.results ?? []).map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.internal_ref} · {site.name}
+              </option>
+            ))}
+          </ControlledReferenceSelect>
+        </Field>
+
         <Field label="Their delivery note" htmlFor="gi-note-ref" hint="Keeps the paper trail.">
           <Input
             id="gi-note-ref"
@@ -685,6 +716,7 @@ export default function GateInCapturePage() {
                         {line.serials?.length ? ` · ${line.serials.length} serials` : ''}
                         {looseUnits !== null ? ` (${looseUnits} loose)` : ''}
                         {drumNote(line)}
+                        {siteNote(line)}
                       </p>
                       {quarantines ? (
                         // J1: said here, at entry, because this is the decision
@@ -759,6 +791,8 @@ export default function GateInCapturePage() {
         onStartBox={addBox}
         clients={clients.data?.results ?? []}
         defaultClient={needsClient ? draft.header.client : ''}
+        sites={sites.data?.results ?? []}
+        headerSite={draft.header.for_site ?? ''}
       />
     </div>
   );
@@ -777,6 +811,8 @@ function LineSheet({
   onStartBox,
   clients,
   defaultClient,
+  sites,
+  headerSite,
 }: {
   open: boolean;
   onClose: () => void;
@@ -788,11 +824,16 @@ function LineSheet({
   onStartBox: (box: DraftBox) => void;
   clients: Client[];
   defaultClient: string;
+  sites: Site[];
+  /** The delivery's "For site"; a line left blank takes it (Q1). */
+  headerSite: string;
 }) {
   const [item, setItem] = useState<PickedItem | null>(null);
   const [quantity, setQuantity] = useState('');
   const [condition, setCondition] = useState<Condition>('NEW');
   const [ownerClient, setOwnerClient] = useState(defaultClient);
+  /** '' inherits the delivery's site. */
+  const [forSite, setForSite] = useState('');
   /** Each unit with the box that was open when it was scanned (P10). */
   const [serials, setSerials] = useState<GateInSerialInput[]>([]);
   /**
@@ -946,6 +987,7 @@ function LineSheet({
     if (!open) return;
     if (!initial) {
       setOwnerClient(defaultClient);
+      setForSite('');
       return;
     }
     const state = lineToSheet(initial);
@@ -953,6 +995,7 @@ function LineSheet({
     setQuantity(state.quantity);
     setCondition(state.condition);
     setOwnerClient(state.ownerClient);
+    setForSite(state.forSite);
     setSerials(state.serials);
     setDrums(state.drums);
     setNoSerialReason(state.noSerialReason);
@@ -967,6 +1010,7 @@ function LineSheet({
     setItem(null);
     setQuantity('');
     setCondition('NEW');
+    setForSite('');
     setSerials([]);
     setStarting(null);
     setStartError(null);
@@ -1058,6 +1102,7 @@ function LineSheet({
           drums: allDrums,
           notOnDrum: looseCable,
           activeKey,
+          forSite,
         },
         initial,
       ),
@@ -1299,6 +1344,29 @@ function LineSheet({
             {clients.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
+              </option>
+            ))}
+          </ControlledReferenceSelect>
+        </Field>
+
+        <Field
+          label="For site"
+          htmlFor="line-for-site"
+          hint="Earmarks this line for a site, overriding the delivery's."
+        >
+          <ControlledReferenceSelect resource="sites"
+            id="line-for-site"
+            value={forSite}
+            onChange={(event) => setForSite(event.target.value)}
+          >
+            <option value="">
+              {headerSite
+                ? `Same as the delivery (${siteLabel(sites, headerSite)})`
+                : 'Same as the delivery (no site)'}
+            </option>
+            {sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.internal_ref} · {site.name}
               </option>
             ))}
           </ControlledReferenceSelect>
@@ -1766,4 +1834,9 @@ function RemoveWithConfirm({
       </Button>
     </span>
   );
+}
+
+function siteLabel(sites: Site[], id: string): string {
+  const site = sites.find((entry) => String(entry.id) === id);
+  return site ? site.name : 'chosen site';
 }

@@ -177,6 +177,7 @@ export function GateInDetailPage() {
 
       <Card className="grid gap-3 sm:grid-cols-2">
         <Detail label="Received into" value={document.to_location_name} />
+        <Detail label="For site" value={document.for_site_name || 'Not for a particular site'} />
         <Detail label="Received at" value={document.received_at?.slice(0, 16).replace('T', ' ')} />
         <Detail
           label="From"
@@ -223,6 +224,10 @@ export function GateInDetailPage() {
                   {row.is_unserviceable ? ' · quarantined' : ''}
                 </span>
               ),
+            },
+            {
+              header: 'For site',
+              cell: (row) => row.for_site_name || document.for_site_name || '—',
             },
             {
               header: 'Box',

@@ -10,9 +10,32 @@
  * Run on a phone viewport, because that is where it happens.
  */
 
-import { type Locator, expect, test } from '@playwright/test';
+import { type APIRequestContext, type Locator, expect, test } from '@playwright/test';
 
-import { chooseFirst, itemOptions, open, PEOPLE, pickItem, signIn, unique } from './fixtures';
+import {
+  chooseFirst,
+  itemOptions,
+  open,
+  PASSWORD,
+  PEOPLE,
+  pickItem,
+  signIn,
+  unique,
+} from './fixtures';
+
+const api = process.env.E2E_API_URL ?? 'http://127.0.0.1:8000';
+const host = new URL(process.env.E2E_BASE_URL ?? 'http://demo.localhost:5173').hostname;
+
+async function apiGet(request: APIRequestContext, who: string, path: string) {
+  const login = await request.post(`${api}/api/v1/auth/login`, {
+    headers: { Host: host },
+    data: { identifier: who, password: PASSWORD },
+  });
+  const { access } = (await login.json()) as { access: string };
+  return request.get(`${api}/api/v1${path}`, {
+    headers: { Host: host, Authorization: `Bearer ${access}` },
+  });
+}
 
 /**
  * Pick an item the sheet treats as a reel.
@@ -76,6 +99,41 @@ test.describe('Receiving a delivery', () => {
     // write on the supplier's paperwork.
     await page.getByRole('button', { name: /receive it|save on this device/i }).click();
     await expect(page.getByText(/GRN-\d+/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
+  });
+
+  test('a delivery received for a site is earmarked for it', async ({ page, request }) => {
+    const supplier = unique('Earmark Supplies');
+    await open(page, '/gate-in/new');
+    await page.getByLabel('Source').selectOption('PURCHASE');
+    await page.getByLabel('Supplier').fill(supplier);
+    await chooseFirst(page.getByLabel('Received into'));
+    const siteId = await chooseFirst(page.getByLabel('For site'));
+
+    await page.getByRole('button', { name: 'Add a line' }).click();
+    const sheet = page.getByRole('dialog');
+    await expect(sheet).toBeVisible();
+    const bulk = await pickItem(sheet, 'Item', 'Cable clamp');
+    test.skip(!bulk, 'no bulk item in the seeded catalogue');
+    await sheet.getByLabel(/^Quantity/).fill('5');
+    await sheet.getByRole('button', { name: 'Add line' }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText(/· for /).first()).toBeVisible();
+
+    await page.getByRole('button', { name: /receive it|save on this device/i }).click();
+    await expect(page.getByText(/GRN-\d+/).filter({ visible: true }).first()).toBeVisible({
+      timeout: 30_000,
+    });
+
+    const list = await apiGet(request, PEOPLE.storekeeper, '/gate-ins?page_size=50&ordering=-id');
+    const rows = ((await list.json()) as { results: { id: number; supplier_name: string }[] }).results;
+    const mine = rows.find((row) => row.supplier_name === supplier);
+    expect(mine).toBeTruthy();
+    const detail = await apiGet(request, PEOPLE.storekeeper, `/gate-ins/${mine!.id}`);
+    const doc = (await detail.json()) as {
+      for_site: number | null;
+      lines: { for_site: number | null }[];
+    };
+    expect(String(doc.for_site ?? doc.lines[0]?.for_site)).toBe(siteId);
   });
 
   test('a delivery with no destination cannot be received', async ({ page }) => {

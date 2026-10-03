@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   drumNote,
+  effectiveSite,
   lineToSheet,
   moveSerial,
   replaceLineAt,
@@ -32,6 +33,7 @@ function result(state: ReturnType<typeof lineToSheet>, mode: SheetResult['mode']
     drums: state.drums,
     notOnDrum: state.notOnDrum,
     activeKey: state.intoKey,
+    forSite: state.forSite,
   };
 }
 
@@ -171,5 +173,35 @@ describe('gate-in line and sheet', () => {
     const next = replaceLineAt([mk(1), mk(2), mk(3)], 1, mk(9));
     expect(next.map((l) => l.item_type)).toEqual([1, 9, 3]);
     expect(replaceLineAt([mk(1)], 5, mk(9)).map((l) => l.item_type)).toEqual([1]);
+  });
+});
+
+describe('for site (Q1)', () => {
+  const line: GateInLineInput = {
+    ...base,
+    item_type: 4,
+    item_name: 'Cable clamp',
+    tracking_mode: 'BULK',
+    quantity: '10',
+    for_site: 9,
+  };
+
+  it("keeps a line's own site through Change", () => {
+    const state = lineToSheet(line);
+    expect(state.forSite).toBe('9');
+    expect(sheetToLine(result(state, 'BULK'), line).for_site).toBe(9);
+  });
+
+  it('a line with no site inherits (left out), and reopens blank', () => {
+    const plain = { ...line, for_site: undefined };
+    const state = lineToSheet(plain);
+    expect(state.forSite).toBe('');
+    expect(sheetToLine(result(state, 'BULK'), plain).for_site).toBeUndefined();
+  });
+
+  it('works out the effective site', () => {
+    expect(effectiveSite(line, '3')).toBe(9);
+    expect(effectiveSite({ ...line, for_site: null }, '3')).toBe(3);
+    expect(effectiveSite({ ...line, for_site: null }, '')).toBeNull();
   });
 });

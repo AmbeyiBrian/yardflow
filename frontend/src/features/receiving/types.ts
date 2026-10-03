@@ -69,6 +69,9 @@ export interface GateInLineInput {
    * BULK line is cable received not on a drum (D10).
    */
   reel_item?: boolean;
+  /** Earmark this line for a site; null or absent inherits the delivery's (Q1). */
+  for_site?: number | null;
+  for_site_name?: string;
 }
 
 export interface GateIn {
@@ -83,6 +86,9 @@ export interface GateIn {
   returned_by_name?: string;
   origin_site: number | null;
   origin_site_ref?: string;
+  /** Material is earmarked for this site at posting (Q1). */
+  for_site?: number | null;
+  for_site_name?: string;
   to_location: number;
   to_location_name?: string;
   received_at: string;

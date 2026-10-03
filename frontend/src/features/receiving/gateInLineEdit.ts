@@ -31,6 +31,8 @@ export interface SheetState {
   notOnDrum: boolean;
   /** The "Into a box" selector: the line's box when bulk, otherwise loose. */
   intoKey: string;
+  /** '' inherits the delivery's site (Q1). */
+  forSite: string;
 }
 
 /**
@@ -77,6 +79,7 @@ export function lineToSheet(line: GateInLineInput): SheetState {
     drums: (line.reels ?? []).map((drum) => ({ ...drum })),
     notOnDrum: Boolean(line.reel_item) && line.tracking_mode === 'BULK',
     intoKey: line.tracking_mode === 'BULK' ? (line.box_key ?? '') : '',
+    forSite: line.for_site ? String(line.for_site) : '',
   };
 }
 
@@ -97,6 +100,8 @@ export interface SheetResult {
   notOnDrum?: boolean;
   /** The selected box, already checked against the delivery's boxes. */
   activeKey: string;
+  /** '' inherits the delivery's site; absent is the same (older callers). */
+  forSite?: string;
 }
 
 /**
@@ -139,6 +144,8 @@ export function sheetToLine(state: SheetResult, base?: GateInLineInput): GateInL
     // their own box_key, and drums take none (4.15.5). Cable is never boxed.
     box_key: trackingMode === 'BULK' && !looseCable ? state.activeKey : '',
   };
+  // Left out, the line inherits the delivery's site at posting.
+  if (state.forSite) line.for_site = Number(state.forSite);
   // Not sent: remembers that the item is tracked by drum, so Change can reopen
   // the line as "Not on a drum".
   if (looseCable) line.reel_item = true;
@@ -179,4 +186,10 @@ export const DRUM_CHOICES = [
 export function drumNote(line: GateInLineInput): string {
   if (line.tracking_mode === 'BULK' && line.reel_item) return ' · not on a drum';
   return line.reels?.length ? ` · ${line.reels.length} drums` : '';
+}
+
+/** The site a line is earmarked for: its own, else the delivery's, else none (Q1). */
+export function effectiveSite(line: GateInLineInput, headerSite: string): number | null {
+  if (line.for_site) return line.for_site;
+  return headerSite ? Number(headerSite) : null;
 }
