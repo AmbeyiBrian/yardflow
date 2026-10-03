@@ -1460,7 +1460,7 @@ gate-out tasks land alone, as T11.3 and T11.4 did, because every movement goes t
   *Done when:* the change endpoint moves and clears earmarks with a reason; stock rows carry the
   split; units and drums carry their site.
 
-- [ ] **T13.6 `[B]` "Material by site" report** — Refs: §4.16.8 · Q5
+- [x] **T13.6 `[B]` "Material by site" report** — Refs: §4.16.8 · Q5
   *Done when:* on a scenario the four columns are right per site and item, and it exports.
 
 - [x] **T13.7 `[F]` "For site" at gate-in** — Refs: Q1
