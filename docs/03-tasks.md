@@ -1410,7 +1410,7 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
   names it (`ITEM_TRACKING_LOCKED`, naming the field); the item payload says whether it is locked.
   *Done when:* API tests cover the refusal, the unlocked case, and every other field still editable.
 
-- [ ] **T12.6 `[F]` Edit and archive an item from the catalogue**
+- [x] **T12.6 `[F]` Edit and archive an item from the catalogue**
   Refs: C10
   Rows open the item sheet filled in; Save patches; archive and restore; locked fields shown fixed
   with the reason; read-only for those without `catalogue.manage`.
