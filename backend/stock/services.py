@@ -126,6 +126,17 @@ class BoxClaimShort(DomainError):
     default_message = "That box does not hold enough of the item."
 
 
+class EarmarkDiversionNeedsReason(DomainError):
+    """§4.16.3, Q3: stock earmarked for another site is leaving without a reason.
+
+    Nothing is blocked beyond the reason: give one, or take free stock.
+    """
+
+    code = "EARMARK_DIVERSION_NEEDS_REASON"
+    status_code = 409
+    default_message = "That stock is earmarked for another site; give a reason to divert it."
+
+
 class LedgerRuleViolation(DomainError):
     """A caller asked for something the ledger's shape forbids."""
 
@@ -175,6 +186,11 @@ class MovementRequest:
     #: §4.15.3: set only by ``move_box``, meaning "this movement carries the box
     #: intact", so units and claims inside it stay put.
     moving_box: Box | None = None
+    #: §4.16.3: the sites this movement delivers to. ``None`` or empty means none,
+    #: so earmarked stock leaving the perimeter is a diversion.
+    for_sites: frozenset | None = None
+    #: §4.16.3: why earmarked stock is leaving for somewhere else; required then.
+    divert_reason: str = ""
 
 
 def _resolve_valuation(
@@ -330,6 +346,32 @@ def post_movement(request: MovementRequest) -> StockMovement:
                 document_id=str(request.document_id or ""),
                 document_number=request.document_number,
             ),
+        )
+
+    # 2c'''. Earmark rules (§4.16.3), after the box rule and before anything is
+    #        written, so a diversion without a reason leaves nothing behind.
+    #        Lock order, in full: balances, the unit or drum, boxes (claims
+    #        after their box), then earmark claims; see stock/earmark_hooks.py.
+    from stock import earmark_hooks
+
+    earmark_ctx = box_hooks.EventContext(
+        actor=request.posted_by,
+        occurred_at=request.occurred_at,
+        document_type=request.document_type,
+        document_id=str(request.document_id or ""),
+        document_number=request.document_number,
+    )
+    if locked_unit is not None:
+        earmark_hooks.apply_unit_rule(request, locked_unit, earmark_ctx)
+    elif request.reel is not None:
+        earmark_hooks.apply_reel_rule(request, quantity, earmark_ctx)
+    elif tracking_mode == TrackingMode.BULK and request.from_node.type != NodeType.EXTERNAL:
+        earmark_hooks.apply_bulk_rule(
+            request,
+            quantity=quantity,
+            held_condition=held_condition,
+            balance_before=outbound.quantity,
+            ctx=earmark_ctx,
         )
 
     # 2c''. D10 (§7.3c): loose cable length out of a node can never draw on

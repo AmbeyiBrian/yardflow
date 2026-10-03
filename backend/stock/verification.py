@@ -15,12 +15,13 @@ import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from django.db.models import F, Sum
+from django.db.models import F, Q, Sum
 
 from stock.models import (
     Box,
     BoxBulkContent,
     BoxStatus,
+    BulkEarmark,
     Reel,
     ReelStatus,
     SerialUnit,
@@ -292,6 +293,75 @@ def _verify_loose_length(organization_id, result: VerificationResult) -> None:
             )
 
 
+def _verify_earmarks(organization_id, result: VerificationResult) -> None:
+    """Check the earmark projection against the ledger (§4.16.1, §4.16.3).
+
+    As for boxes, the ledger wins and a disagreement is reported, never
+    repaired. Two aggregate queries and two set queries, none per row.
+    """
+    from stock.counting import INSIDE_PERIMETER
+
+    balances = {
+        (row["node_id"], row["item_type_id"], row["owner_client_id"], row["condition"]): row[
+            "quantity"
+        ]
+        for row in StockBalance.objects.filter(organization_id=organization_id).values(
+            "node_id", "item_type_id", "owner_client_id", "condition", "quantity"
+        )
+    }
+    claims = (
+        BulkEarmark.objects.filter(organization_id=organization_id)
+        .order_by()
+        .values("node_id", "item_type_id", "owner_client_id", "condition")
+        .annotate(total=Sum("quantity"))
+    )
+    for row in claims:
+        key = (row["node_id"], row["item_type_id"], row["owner_client_id"], row["condition"])
+        held = balances.get(key, Decimal("0"))
+        if row["total"] > held:
+            result.drifts.append(
+                Drift(
+                    kind="earmarks exceed balance",
+                    description=(
+                        f"node {key[0]}, item {key[1]}, condition {key[3]}"
+                    ),
+                    cached=f"earmarked {row['total']}",
+                    ledger=f"balance {held}",
+                )
+            )
+
+    # An earmark is used up when stock leaves the perimeter, so an earmarked unit
+    # or open drum anywhere else has kept one it should have lost.
+    outside = ~Q(current_node__type="LOCATION") | ~Q(
+        current_node__location__type__in=INSIDE_PERIMETER
+    )
+    for unit in SerialUnit.objects.filter(
+        outside, organization_id=organization_id, earmark_site__isnull=False
+    ).select_related("current_node"):
+        result.drifts.append(
+            Drift(
+                kind="earmarked unit outside the yard",
+                description=f"unit {unit.serial_number}",
+                cached=f"earmarked, at {unit.current_node.label}",
+                ledger="an earmark ends when stock leaves the yard",
+            )
+        )
+    for reel in Reel.objects.filter(
+        outside,
+        organization_id=organization_id,
+        earmark_site__isnull=False,
+        status=ReelStatus.OPEN,
+    ).select_related("current_node"):
+        result.drifts.append(
+            Drift(
+                kind="earmarked drum outside the yard",
+                description=f"drum {reel.drum_number}",
+                cached=f"earmarked, at {reel.current_node.label}",
+                ledger="an earmark ends when stock leaves the yard",
+            )
+        )
+
+
 def verify_ledger(organization_id) -> VerificationResult:
     """Recompute balances from the ledger and report any drift (§3.3)."""
     result = VerificationResult()
@@ -376,6 +446,9 @@ def verify_ledger(organization_id) -> VerificationResult:
 
     # 4. §4.15 (P8): the box projection against the ledger.
     _verify_boxes(organization_id, result)
+
+    # 5. §4.16: the earmark projection against the ledger.
+    _verify_earmarks(organization_id, result)
 
     if result.drifts:
         # Loud, and never corrected here: drift means something wrote a balance
