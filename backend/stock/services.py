@@ -26,6 +26,7 @@ from core.exceptions import DomainError
 from locations.models import NodeType, StockNode
 from network.models import Client
 from stock.models import (
+    Box,
     Condition,
     MovementType,
     OwnerType,
@@ -88,6 +89,28 @@ class UnitNotAtOrigin(DomainError):
     default_message = "That unit is not where the movement says it is."
 
 
+class BoxedStockOnly(DomainError):
+    """§4.15.3, P9: bulk drawn without naming a box, loose stock short.
+
+    The rest of the quantity is claimed by boxes. Taking it from one of them
+    silently would empty a carton nobody opened, so the caller is told which
+    boxes hold it and asked to name one.
+    """
+
+    code = "BOXED_STOCK_ONLY"
+    status_code = 409
+    default_message = "The rest of that stock is in boxes."
+
+
+class BoxClaimShort(DomainError):
+    """§4.15.3, P9: a named box does not hold what was asked of it (or is closed
+    or at another node)."""
+
+    code = "BOX_CLAIM_SHORT"
+    status_code = 409
+    default_message = "That box does not hold enough of the item."
+
+
 class LedgerRuleViolation(DomainError):
     """A caller asked for something the ledger's shape forbids."""
 
@@ -132,6 +155,11 @@ class MovementRequest:
     #: (T10.7). Left unset, ``post_movement`` resolves it.
     unit_cost: Decimal | None = None
     unit_cost_source: str | None = None
+    #: §4.15.3: the box a bulk quantity is drawn from (P9).
+    from_box: Box | None = None
+    #: §4.15.3: set only by ``move_box``, meaning "this movement carries the box
+    #: intact", so units and claims inside it stay put.
+    moving_box: Box | None = None
 
 
 def _resolve_valuation(
@@ -259,8 +287,35 @@ def post_movement(request: MovementRequest) -> StockMovement:
     #     waits here and then sees the new position and is refused. Lock order
     #     is always balances then unit; no other code path locks a SerialUnit
     #     row before calling this, so the order cannot invert and deadlock.
+    locked_unit: SerialUnit | None = None
     if request.serial_unit is not None:
-        _assert_unit_at_origin(request.serial_unit, request.from_node)
+        locked_unit = _assert_unit_at_origin(request.serial_unit, request.from_node)
+
+    # 2c'. Box rule 2 (§4.15.3): bulk out of a node draws on a box's claim or on
+    #      loose stock. After the stock check, so an over-issue is still "not
+    #      enough stock" and not "boxed stock". Lock order, in full: balances,
+    #      then the unit, then boxes (parent before child, claims after their
+    #      box); see stock/box_hooks.py. Imported here because box_hooks
+    #      raises errors defined in this module.
+    from stock import box_hooks
+
+    if (
+        tracking_mode == TrackingMode.BULK
+        and request.from_node.type != NodeType.EXTERNAL
+    ):
+        box_hooks.apply_bulk_rule(
+            request,
+            quantity=quantity,
+            held_condition=held_condition,
+            balance_before=outbound.quantity,
+            ctx=box_hooks.EventContext(
+                actor=request.posted_by,
+                occurred_at=request.occurred_at,
+                document_type=request.document_type,
+                document_id=str(request.document_id or ""),
+                document_number=request.document_number,
+            ),
+        )
 
     # 2d. Value it, once, now (O11, D27).
     unit_cost, unit_cost_source = _resolve_valuation(request, item_type)
@@ -304,6 +359,14 @@ def post_movement(request: MovementRequest) -> StockMovement:
 
     if request.serial_unit is not None:
         _move_serial_unit(request.serial_unit, request.to_node, request.condition, owner_client)
+        # Box rule 1 (§4.15.3), on the locked row read before the move.
+        assert locked_unit is not None
+        left_box = box_hooks.apply_unit_rule(
+            locked_unit, request.moving_box, box_hooks.EventContext.for_movement(movement)
+        )
+        # The caller's instance must not keep claiming a box the unit left.
+        if left_box:
+            request.serial_unit.box = None
 
     if request.reel is not None:
         _move_or_consume_reel(request.reel, quantity, request.to_node, request.condition)
@@ -369,8 +432,11 @@ def _lock_balances(
     return tuple(locked[(node.pk, condition)] for node, condition in sides)  # type: ignore[return-value]
 
 
-def _assert_unit_at_origin(unit: SerialUnit, from_node: StockNode) -> None:
-    """Lock the unit and refuse a movement that does not start at its node (§4.15.3)."""
+def _assert_unit_at_origin(unit: SerialUnit, from_node: StockNode) -> SerialUnit:
+    """Lock the unit and refuse a movement that does not start at its node (§4.15.3).
+
+    Returns the locked row, which box rule 1 reads the unit's box from.
+    """
     locked = SerialUnit.objects.select_for_update().select_related("current_node").get(pk=unit.pk)
     if locked.current_node_id != from_node.pk:
         raise UnitNotAtOrigin(
@@ -382,6 +448,7 @@ def _assert_unit_at_origin(unit: SerialUnit, from_node: StockNode) -> None:
                 "from_node": from_node.label,
             },
         )
+    return locked
 
 
 def _move_serial_unit(unit: SerialUnit, to_node: StockNode, condition: str, owner_client) -> None:
