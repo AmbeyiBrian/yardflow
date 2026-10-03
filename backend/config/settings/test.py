@@ -35,3 +35,9 @@ SMS_BACKEND = "notifications.channels.logging_sms.LoggingSmsBackend"
 
 # A concrete TenantModel to test the tenancy layers against (§2.1, §2.3).
 INSTALLED_APPS = [*INSTALLED_APPS, "core.tests.tenancy_app"]
+
+# Several test runs may share one Postgres at once (parallel worktrees). Each
+# sets TEST_DATABASE_NAME so its test database never collides with another's;
+# unset, Django's default ``test_<name>`` is used as before.
+if _test_db := env("TEST_DATABASE_NAME", default=""):
+    DATABASES["default"]["TEST"] = {"NAME": _test_db}

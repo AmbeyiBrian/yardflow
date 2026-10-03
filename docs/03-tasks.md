@@ -1205,6 +1205,174 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
 
 ---
 
+## Phase 11 — Boxes
+
+Epic P (approved 2026-10-03), design §4.15. A box groups units and bulk quantities under one code,
+nests up to three deep, and is received, looked up, sent out and checked at the gate by scan.
+
+**This phase touches `post_movement`, which every stock path in the system goes through.** T11.3
+and T11.4 are the risky ones: each lands alone, with the full backend suite green, before anything
+builds on it. Everything else is additive — new tables, new optional fields, new screens.
+
+### Backend
+
+- [ ] **T11.1 `[B]` Box models**
+  Refs: §4.15.2 · P1, P8, P10
+  `Box`, `BoxBulkContent`, `BoxEvent` (append-only) and `SerialUnit.box`, with their constraints:
+  code unique per org case-insensitively including closed boxes, depth 1–3, claim quantity > 0.
+  RLS migration, isolation fixtures, `DocumentType.BOX` with prefix `BX`.
+  *Done when:* migrations apply; `core.E001`, the RLS test and the isolation suite pass with the new
+  tables; a `BoxEvent` cannot be updated or deleted (test).
+
+- [ ] **T11.2 `[B]` Label reader and box lookup**
+  Refs: §4.15.6 · P2, P3, P4
+  `stock/labels.py:read_label` and the shared vectors file
+  `backend/stock/tests/data/label_vectors.json`, covering every rule in §4.15.6. `find_by_identifier`
+  tries the raw value, then each candidate. Box codes are resolved in T11.8, once the box exists to
+  look up; this task runs alongside T11.1.
+  *Done when:* every vector passes; a GS1 code, a URL and an `SN:` label each find the unit their
+  serial names; an unreadable label is still looked up whole (tests).
+
+- [ ] **T11.3 `[B]` A serialized movement starts where the unit is**
+  Refs: §4.15.3
+  `post_movement` refuses a serialized movement whose `from_node` is not the unit's `current_node`.
+  Lands alone: it is a new rule on the path every movement takes.
+  *Done when:* the refusal is tested, and the **whole** backend suite passes unchanged, proving no
+  existing caller relied on the gap.
+
+- [ ] **T11.4 `[B]` Ledger hooks for boxes**
+  Refs: §4.15.3 · P5, P7, P9, P10
+  `MovementRequest.from_box` and `moving_box`. A moving unit leaves its box; bulk draws on a named
+  box's claim or on loose stock; `BoxedStockOnly` for issue-like movements when loose is short;
+  ADJUST and REVERSAL reduce claims in code order; empty boxes close up the tree. Every change
+  writes its `BoxEvent` with the movement's document refs.
+  *Done when:* each rule has a test, including a pallet emptied by one release closing at every
+  level, and the whole backend suite passes.
+
+- [ ] **T11.5 `[B]` Box services**
+  Refs: §4.15.4 · P1, P7, P9, P10, E4
+  `stock/boxes.py`: `create_box` (with generated codes), `put_units`, `put_bulk`, `put_box`,
+  `take_out`, `empty_box`, `move_box`, `box_tree`, `issuable_contents`. Locks parent before child;
+  refuses cycles, depth over three, contents at another node, claims beyond loose stock.
+  *Done when:* each function and each refusal is tested; `move_box` carries a nested box with units
+  and bulk to another store without anything leaving its box; `issuable_contents` names every
+  exclusion reason.
+
+- [ ] **T11.6 `[B]` `verify_ledger` checks boxes**
+  Refs: §4.15.12 · P8
+  Units in a box sit at its node and the box is open; claims never exceed the balance; trees are
+  acyclic, at most three deep, children with their parents. Reports, never corrects.
+  *Done when:* each kind of drift, injected directly into the tables, is reported; a clean ledger
+  with boxes reports nothing.
+
+- [ ] **T11.7 `[B]` Gate-in receives boxes**
+  Refs: §4.15.5 · P1, P2, P9, P10
+  `GateInBox`, `GateInSerial.box_key`, `GateInLine.box_key`; serializer read and write; validation
+  (`box_code_in_use`, `box_too_deep`, `box_cycle`, `box_empty`, `box_mixed_destinations`); posting
+  creates the boxes top-down and fills them; void empties and closes them first.
+  *Done when:* a pallet of two cartons, one mixed and one of bulk, posts and is found by lookup; each
+  validation is tested; void leaves every box closed; an offline replay of the same payload through
+  `apply_submission` posts once; `api-schema.yml` regenerated.
+
+- [ ] **T11.8 `[B]` Box API**
+  Refs: §4.15.9 · P4, P6, P7, P8
+  `/boxes` list and detail with tree and counts, `/boxes/{code}/history`, `take-out`, `empty`,
+  `move`, and `/stock/boxes/{code}/issuable?from_location=`. Permissions as §4.15.9.
+  `find_by_identifier` resolves box codes and `/stock/lookup` returns `kind: "box"`.
+  *Done when:* API tests cover each endpoint and its permission; another tenant's box is a 404;
+  scanning a box code on the lookup returns the box; schema regenerated.
+
+- [ ] **T11.9 `[B]` Gate-out by box**
+  Refs: §4.15.7 · P5, P6, P9, P10
+  `GateOutLine.box`; submit refuses a unit that is elsewhere or on another open pass
+  (`unit_not_available`) and a box line beyond its claim; `_release_line` draws bulk with
+  `from_box`; the detail serializer and the releasable bundle carry each unit's serial, asset tag
+  and box path, and each line's box path; the gate-pass PDF groups lines under box codes.
+  *Done when:* a whole box requested, approved and released leaves the box closed; one unit
+  released from a box leaves the rest in it; the new submit refusals are tested; schema regenerated.
+
+- [ ] **T11.10 `[B]` Release by named serials**
+  Refs: §4.15.8 · P11, G1
+  `release_gate_out(released_serials=…)` issues exactly the named units; anything unnamed is short
+  with a variance. `OrganizationSettings.release_scan_required` (default off) and
+  `scan_required_for_release`. The offline replay passes `released_serials` through.
+  *Done when:* releasing two named units of three issues those two and raises a variance for the
+  third; the setting refuses an unscanned release; a queued release with named serials replays
+  correctly; schema regenerated.
+
+### Frontend
+
+- [ ] **T11.11 `[F]` Label reader, scan matcher and a unit test runner**
+  Refs: §4.15.6, §4.15.8 · P2, P3, P11
+  Add Vitest. `src/features/boxes/readLabel.ts` against the shared vectors file;
+  `matchScan.ts` against fixture passes (a unit, a box, a pallet, a stranger, a repeat).
+  *Done when:* `npm test` runs both suites green and CI runs them in the frontend job; the lockfile
+  carries no platform-specific packages.
+
+- [ ] **T11.12 `[F]` The scanner says what it read**
+  Refs: §4.15.10 · P3
+  `BarcodeScanner` passes the read result, shows "Scanned X from the label" with the raw text on a
+  tap, and stops hard-coding its manual input's `id`.
+  *Done when:* a GS1 or URL label shows the serial it found; two scanners on one screen have
+  distinct ids; existing gate-in and gate-out scanning still works.
+
+- [ ] **T11.13 `[F]` Gate-in boxes**
+  Refs: §4.15.10 · P1, P2, P9, P10
+  `Draft.boxes`; "Into a box" on the line sheet; start a box by scanning its code, or leave it blank
+  for a generated one; a label listing serials offers them for confirmation; bulk lines into a box;
+  a box inside a pallet; the lines card shows the tree with counts. A half-built box survives a
+  reload.
+  *Done when:* receiving a pallet with a carton of three units and a carton of bulk posts, and a
+  reload mid-way loses nothing (E2E in T11.18).
+
+- [ ] **T11.14 `[F]` Box screens**
+  Refs: §4.15.10 · P4, P7, P8
+  `/stock/boxes` and `/stock/boxes/:code`: tree, counts received versus now, units, bulk, history,
+  and take out, empty and move. Stock lookup opens a scanned box; serial history shows the unit's
+  box and its box events.
+  *Done when:* scanning a box on the stock screen opens it; taking a unit out shows in both the box's
+  history and the unit's.
+
+- [ ] **T11.15 `[F]` Gate-out by box**
+  Refs: §4.15.10 · P5, P6, P9, P10
+  The line sheet's lookup handles a box: the proposal, the exclusions with reasons, and "Add all";
+  a scanned unit shows which box it is in; the request and detail group lines under their box.
+  *Done when:* scanning a box adds one line per item and lot with every unit named, and the excluded
+  units are listed with why.
+
+- [ ] **T11.16 `[F]` Scan the load at release**
+  Refs: §4.15.8, §4.15.10 · P11, G1
+  A shared `useLoadScan(pass)` over `matchScan`; "Scan the load" in the online and offline release
+  sheets; ticks per unit and line, refusals listed, short lines from what is unticked, hand
+  confirmation still possible; the payload sends `released_serials`. The require-scan setting in
+  Settings.
+  *Done when:* scanning two of three units and a stranger refuses the stranger and releases short
+  by one, online and from the offline release page.
+
+- [ ] **T11.17 `[F]` Scan a pass to open it**
+  Refs: §4.15.8 · P11, G5
+  `/gate-out/scan`, with entries on the gate-out list and the offline release page. Online it
+  resolves through `/qr/scan` and opens `/gate-out/{id}?release=1`; offline it matches the cached
+  releasable passes. A pass that cannot be released says why.
+  *Done when:* scanning a printed pass opens its release sheet online and offline; an expired pass
+  says it is expired.
+
+### Verification
+
+- [ ] **T11.18 `[T]` Boxes end to end**
+  Refs: §4.15.12
+  `e2e/boxes.spec.ts` on the phone project: receive a box of three by manual entry; scan it at
+  gate-out and see one line with three serials; release by scanning two units and a stranger.
+  *Done when:* the spec passes against a seeded tenant.
+
+- [ ] **T11.19 `[I]` Ship and check on production**
+  Refs: §12.2
+  Push, watch CI deploy, and confirm on Silvertech that a box can be received, looked up and sent
+  out. The migrations are additive, so a rollback is the previous image.
+  *Done when:* CI is green, the deploy is healthy, and the production check passes.
+
+---
+
 ## Milestones
 
 | Milestone | Completes | Meaning |
@@ -1218,6 +1386,7 @@ Phase 9 remains the AWS move (§12.1). Neither phase blocks the other.
 | **M7 — Audit-ready** | Phase 7 | Every report an operator or ISO auditor asks for, exportable. |
 | **M8 — Field-hardened** | Phase 8 | Works with poor connectivity, non-repudiable approvals. |
 | **M9 — Commercially accountable** | Phase 10 | A PO has a manager, a budget and a margin. Answers *did this job make money*, not just *where is the material*. |
+| **M11 — Boxed** | Phase 11 | Cartons and pallets are received, found, sent out and checked at the gate by scan, and every unit in them stays traceable on its own. |
 
 **M4 is the point of no return in value terms.** If the schedule compresses, trade scope from
 phases 5–8, never from 1–4.

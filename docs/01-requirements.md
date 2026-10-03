@@ -52,6 +52,7 @@ industry with minimal effort.
 | **Day rate** | A costing rate for a person's time, held per user and falling back to their role. Not pay. |
 | **Item type** | A catalogue entry (e.g. "RRU 2x40W", "LDF4 feeder cable"). |
 | **Tracking mode** | How a given item type is counted: serialized, bulk, or reel. |
+| **Box** | A labelled carton, handled as one until opened. It holds serialized units, a quantity of a bulk item, or other boxes; it groups stock and is not stock itself. A **pallet** is a box of boxes. |
 | **Stock lot** | A quantity of an item type at a location, with a known owner. |
 | **Custody** | Material currently held by a person rather than a location. |
 | **Recovery** | Equipment retrieved from a decommissioned or demolished site. |
@@ -874,6 +875,153 @@ the project's margin includes the costs that do not pass through the yard.
   corrected by a reversing entry, not by editing the original.
 - Expenses are **not** captured offline. D17 limits offline work to gate-in and gate-out, and
   nothing in this epic widens it.
+
+---
+
+### Epic P — Boxes
+
+> **Status: approved 2026-10-03. P1–P8 approved first; P9–P11 were added the same day from the
+> scope decisions below and approved with the design (§4.15).**
+
+Material rarely arrives one unit at a time. A supplier ships ten RRUs in a carton with one label on
+the outside, and a yard handles that carton as one thing until somebody opens it. Until now the
+system knew only loose units: scanning a carton's label at gate-in recorded the label as a single
+serial, the ten real units were never captured, and none of them could later be found or sent out
+on their own. This epic makes the box a thing the system knows, without making it a second kind of
+stock. The units stay the stock. The box is how they are grouped, found and moved together.
+
+A box may hold serialized units, a quantity of a bulk item, other boxes, or a mix of these, and may
+hold more than one item type. A pallet is a box that holds boxes.
+
+**P1.** As a storekeeper, I want to receive a box at gate-in and record the units inside it, so
+that the box and each unit in it are both known from the moment they arrive.
+- On a serialized line, the storekeeper can start a box: scan or type the box's code, then scan the
+  units into it. The count on the viewfinder climbs per unit, as D7 already does.
+- One gate-in may receive several boxes and loose units side by side.
+- A box may hold units of more than one item type, such as a kit. Each unit is received on the line
+  for its own item type and placed in the box.
+- A box's units take their owner, condition and location from the gate-in line they are received
+  on, exactly as loose units do.
+- Posting the gate-in creates the box and its units together. A draft creates nothing (D8).
+- **Edge case:** a box code already in use in the tenant is refused, naming where that box sits,
+  as D3 does for a duplicate serial.
+- **Edge case:** a box with no readable code. The system generates an internal box code, as D3
+  does for an asset tag, so the box can still be labelled and scanned later.
+- **Edge case:** a box received with zero units is refused. An empty box is not stock.
+
+**P2.** As a storekeeper, I want a box label that lists its serials to fill in the units for me,
+so that receiving a full box is one scan, not eleven.
+- When a scanned code carries several serials, gate-in creates the box and offers every serial in
+  it as a unit, for the storekeeper to confirm before adding.
+- When a scanned code carries only the box's own code, gate-in creates the box and asks for the
+  units to be scanned in (P1).
+- Either way the storekeeper sees the count and can remove a unit that is not physically there
+  before posting. A label is a claim; the box on the floor is the fact.
+- *Depends on open question 1.*
+
+**P3.** As a storekeeper, I want a scanned label to be read for the serial it carries rather than
+taken whole, so that a supplier's richer QR code still finds or records the right unit.
+- A plain value is used as it is, which is how every scan works today.
+- A structured value is read for its serial: a GS1 code's serial field, a web address's serial
+  parameter or final path part, a labelled `SN:` or `Serial:` value, or a `serial` field in JSON.
+- What was taken from the label is shown with the scan ("Scanned ABC123 from the label"), and the
+  full raw text is available on a tap, so a wrong pick is visible and can be corrected by typing.
+- The same reading is applied by the server when it looks an identifier up, so a value that
+  reaches it unread still resolves.
+- **Edge case:** a label the reader cannot interpret is used whole, as today, never discarded.
+
+**P4.** As any authorised user, I want to see a box and what is in it, so that I can answer
+"what is in that carton?" without opening it.
+- Scanning or searching a box code shows the box: its code, location, owner, how many units it
+  held when received and how many it holds now, and the units themselves.
+- A unit's own page and history (E2) show the box it came in and when it left it.
+- Stock on hand (E1) is unchanged in what it counts. The units are the stock; a box adds no
+  quantity. Where a screen lists units, it can group them by box.
+
+**P5.** As a storekeeper, I want to send out one unit from a box, so that a job needing one RRU
+does not take the carton.
+- Scanning the unit's serial at gate-out (F1) adds that unit, exactly as for a loose unit.
+- When the release posts (G1), the unit leaves the box. The box remains with what is left in it,
+  and its count falls.
+- **Edge case:** the last unit leaving empties the box, and an empty box closes automatically, as
+  an empty drum does (E3). A closed box keeps its history and cannot be reused.
+
+**P6.** As a storekeeper, I want to send out a whole box by scanning its code, so that a carton
+going to site is one scan, not ten.
+- Scanning a box code at gate-out adds every unit **still in the box and free to issue**, one line
+  per unit, grouped under the box on the request, the approval and the gate pass.
+- Units in the box that cannot go are named with the reason and left out: already on another open
+  request, quarantined, or held by a person.
+- After approval, the pass lists the units, not the box. The box is how they were picked, not what
+  was approved, so a later change to the box cannot change what the pass covers.
+- **Edge case:** a unit from the box is missing at release. It is recorded as a short line and a
+  release variance (G1), exactly as for a loose unit, and stays in the box.
+- **Edge case:** the box's units span more than one owner or condition. Each unit carries its own
+  lot as E1 requires, and the request says so rather than treating the box as one lot.
+
+**P7.** As a storekeeper, I want to take units out of a box without them leaving the yard, so that
+an opened carton on a shelf is still described truthfully.
+- A unit can be taken out of its box, or a whole box emptied, as a recorded action with who and
+  when. The units stay where they are, in stock, now loose.
+- This is not a movement: nothing changes location, owner or condition, and stock on hand does not
+  change.
+- **Edge case:** a transfer (E4) moves a box with all its units. Moving some units of a box takes
+  them out of it.
+
+**P8.** As an auditor, I want every change to a box recorded, so that "where did the tenth unit go?"
+has an answer.
+- Box created (with the gate-in), unit taken out, unit sent out, box moved, box closed: each is
+  recorded with who and when and is visible on the box (M-series audit rules apply).
+- Corrections reverse, never edit (M4). A voided gate-in removes the box with its units.
+
+**P9.** As a storekeeper, I want to receive and send out a box of a bulk item, so that a carton of
+a hundred connectors moves as one scan.
+- A bulk line can be received into a box with a quantity: the box holds that quantity of that item.
+- Scanning the box at gate-out adds a line for what the box still holds. The quantity can be lowered
+  to take part of it, and the box keeps the rest.
+- The bulk balance (E1) is unchanged in meaning: it counts everything at the location, boxed or not.
+  What is not in any box is **loose**.
+- Taking bulk out without naming a box draws on loose stock. If loose stock is short, the line is
+  refused and names the boxes holding the rest, so the storekeeper can scan one.
+- **Edge case:** a box can never claim more of an item than the location holds. A count or
+  adjustment that lowers the balance below what boxes claim reduces the boxes too, and names them.
+- Cable on drums is not boxed. A drum is already its own container (D4).
+
+**P10.** As a storekeeper, I want to receive a pallet of boxes and send out a whole pallet, a box
+from it, or a unit from a box on it, so that the system follows the load however it is broken down.
+- A box may hold other boxes, up to three levels deep (pallet, carton, inner pack).
+- At gate-in, scanning a pallet's code starts it; boxes are then received into it as in P1 and P9.
+- Scanning a pallet at gate-out adds everything inside it at every level, by the rules of P6 and P9.
+- Taking a box off a pallet, or a unit out of a box on a pallet, works as P5 and P7 describe.
+- **Edge case:** a box can never end up inside itself, directly or through another box.
+
+**P11.** As the storekeeper at the gate, I want to scan the gate pass and then each unit or box as it
+is loaded, so that the load is checked against the pass by the scanner rather than by eye (G1, G5).
+- Scanning a gate pass QR opens that pass's release screen. A pass that cannot be released (not
+  approved, expired, already released) says why instead of opening.
+- With the release open, each scan ticks off what it names: a unit ticks its line, a box ticks every
+  unit and bulk quantity inside it that is on the pass.
+- A scanned unit or box that is not on the pass is refused aloud on screen and not counted, naming
+  what was scanned and that the pass does not cover it.
+- Scanning is the fast path, not the only one. Every line can still be confirmed by hand, so a
+  denied camera or a torn label never stops a release.
+- Whatever is not ticked or confirmed when the release posts is a short line and a release
+  variance, exactly as G1 already requires.
+- An admin may require every serialized unit to be scanned before release. Off by default.
+
+**Not in this epic.**
+- **Counting by box** in a stock count (E5). A count still counts units and bulk quantities; boxes
+  are adjusted to match (P9).
+- **Printing box and pallet labels.** A generated box code (P1) can be written on the carton or
+  printed from the existing label tools; a dedicated label layout is later work.
+
+**Scope decisions, 2026-10-03.**
+1. Supplier box labels carry either a list of the serials inside or only a carton code, depending
+   on the supplier. Both paths in P2 are built with equal weight.
+2. Boxes of bulk items are in scope: P9.
+3. Pallets of boxes are in scope: P10.
+4. Scan-to-release at the gate is in scope: P11.
+5. Mixed boxes, holding more than one item type, are allowed: P1.
 
 ---
 

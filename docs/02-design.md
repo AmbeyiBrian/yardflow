@@ -636,6 +636,234 @@ the project as partly unvalued instead of stating a confident understatement.
 Client-owned material therefore carries a valuation on every movement but contributes **nothing** to
 cost while it behaves. It reaches the P&L only through the material-loss query above.
 
+### 4.15 Boxes (Epic P)
+
+> **Status: approved 2026-10-03**, together with stories P9–P11.
+
+#### 4.15.1 The decision: a box groups stock, it is not stock
+
+The ledger (§3) stays exactly as it is. A box adds no quantity, no balance key and no movement
+type. `StockBalance` still counts a lot at a node; `SerialUnit` still knows where it is. A box is a
+**projection** kept beside the ledger: which units, and which slice of a bulk lot, are currently
+grouped under one code. It is written in the same transaction as the movements that change it, and
+`verify_ledger` checks it against them, so if they ever disagree the ledger wins and the drift is
+reported — the same contract the denormalised `SerialUnit.current_node` already has.
+
+The alternative, a box dimension on the ledger, was rejected. It would touch every balance query,
+every report and valuation, and turn "take a unit out of a carton on the shelf" into a stock
+movement with nothing physically moving (P7 says it is not one).
+
+**Boxes live inside the perimeter** (`YARD`, `STORE`, `QUARANTINE`). What goes out the gate goes as
+units and quantities, never as a box. A unit leaving the box's node leaves the box; a box left with
+nothing in it closes (P5). This is how P5 and P6 both hold without a box ever sitting at a site.
+
+#### 4.15.2 Data model (`stock` app)
+
+| Model | Fields | Notes |
+|---|---|---|
+| **`Box`** | `code`, `source` (LABEL / INTERNAL), `parent` → Box (null), `depth` (1–3), `current_node` → StockNode, `status` (OPEN / CLOSED), `gate_in` → GateIn (null), `label_text` (raw scan, for audit), `closed_at` | `TenantModel` + `TimeStampedModel`. `code` unique per org, case-insensitive, **including closed boxes** (P5: a closed box cannot be reused). `depth` = parent's + 1, check `1 ≤ depth ≤ 3` (P10). |
+| **`SerialUnit.box`** | → Box (null, `PROTECT`) | The box the unit is in **now**. Indexed. |
+| **`BoxBulkContent`** | `box`, `item_type`, `owner_client` (null), `condition`, `quantity` (> 0) | A claim on the lot at `box.current_node` (P9). Unique per (box, item, owner, condition). Deleted when it reaches zero. |
+| **`BoxEvent`** | `box`, `action`, `serial_unit` (null), `child_box` (null), `item_type` / `owner_client` / `condition` / `quantity` (null), `document_type` / `document_id` / `document_number` (blank), `actor`, `occurred_at`, `note` | Append-only (`make_append_only`). Actions: CREATED, UNIT_IN, UNIT_OUT, BULK_IN, BULK_OUT, BOX_IN, BOX_OUT, MOVED, CLOSED. This is P8's trail and the source of a unit's box history (P4). |
+
+Every new table gets `enable_rls(...)` in its own migration and an isolation fixture in
+`stock/isolation.py` (§2; `core.E001` and the A3 suite fail otherwise). Box codes generated for
+unlabelled boxes (P1) use `allocate_number(DocumentType.BOX)` with prefix `BX`, so they appear in the
+number-series admin like every other series.
+
+**Loose bulk** at a node, for a lot, is `balance − Σ claims of open boxes at that node for that lot`.
+It is computed, never stored.
+
+#### 4.15.3 Ledger hooks — one place, every path (P5, P7, P9)
+
+`post_movement` (§3) gains two optional fields on `MovementRequest`, and three rules run inside its
+existing transaction after the balances are locked. Putting them here, not in each caller, is what
+makes custody, closeouts, disposition, counts and gate-out all obey the box rules without each of
+them knowing boxes exist.
+
+- `from_box: Box | None` — the box a bulk quantity is drawn from.
+- `moving_box: Box | None` — set only by `move_box`, meaning "this movement carries the box intact".
+
+1. **A unit that moves leaves its box**, unless `moving_box` is its box or an ancestor of it. The
+   unit's `box` is cleared and a UNIT_OUT event is written with the movement's document refs.
+2. **Bulk out of a node:** with `from_box`, the box's claim must cover the quantity and is reduced
+   (BULK_OUT). Without it, the movement draws on loose stock. If loose stock is short:
+   - for ISSUE, TRANSFER, INSTALL, CONSUME, RETURN, QUARANTINE, DISPOSE it is refused with
+     `BoxedStockOnly`, naming the boxes that hold the rest (P9);
+   - for ADJUST and REVERSAL, which are corrections, the shortfall is taken from the boxes at that
+     node in code order, each reduction written as a BULK_OUT event (P9 edge case).
+3. **Empty boxes close.** After any change, a box with no units, no claims and no open child boxes
+   is closed (CLOSED event), and the check climbs to its parent (P5, P10).
+
+`move_box(box, to_location, *, actor, request)` (P7 edge case, E4) locks the box subtree, posts one
+TRANSFER per unit and per claim with `moving_box` set, then updates `current_node` across the
+subtree and writes MOVED. Both ends must be inside the perimeter, as `transfer_stock` requires.
+
+`post_movement` also gains the check it lacks today: a serialized movement's `from_node` must be the
+unit's `current_node`. Box rule 1 depends on that being true.
+
+#### 4.15.4 Box services (`stock/boxes.py`)
+
+| Function | Does | Story |
+|---|---|---|
+| `create_box(code, *, node, parent, gate_in, label_text, actor)` | Validates code (in use, including closed → `BoxCodeInUse` naming where it sits), depth, parent at the same node; generates a code when blank | P1, P10 |
+| `put_units / put_bulk / put_box` | Adds contents; units and child boxes must be at the box's node; bulk claim must fit loose stock | P1, P9, P10 |
+| `take_out(box, *, units, bulk, boxes, actor)` | Removes contents without moving them; writes events and an audit record | P7 |
+| `empty_box(box, *, actor)` | Takes everything out, closes | P7 |
+| `move_box(...)` | §4.15.3 | P7, E4 |
+| `issuable_contents(box, *, from_node)` | Expands the subtree into proposed gate-out lines, plus exclusions with reasons: already on an open pass, quarantined, held by a person, not at this location | P6, P9, P10 |
+| `box_tree(box)` | Contents at every level with counts received vs now | P4 |
+
+Every function locks the box rows it touches (`select_for_update`, parent before child) and refuses
+a cycle (`BoxCycle`). They are the only writers of `Box`, `BoxBulkContent` and `SerialUnit.box`.
+
+#### 4.15.5 Gate-in (P1, P2, P9, P10)
+
+The draft gains boxes, so a half-received pallet survives a reload and an offline queue (§8):
+
+- `GateInBox`: `gate_in`, `key` (client-made, stable across edits), `code`, `parent_key`, `source`,
+  `label_text`.
+- `GateInSerial.box_key` and `GateInLine.box_key` (bulk lines: the whole line's quantity is in that
+  box; two boxes of the same item are two lines). Keys, not FKs, because `GateInSerializer.update`
+  rewrites lines wholesale today and a key survives that unchanged.
+
+`validate_for_posting` adds: codes unique within the document and the tenant; parents resolve and
+form a tree no deeper than three; every box holds something, directly or below (`BoxEmpty`); and
+everything in one box lands on **one node** — a box mixing a serviceable and a quarantined line is
+refused (`BoxMixedDestinations`), because a box's contents always sit where the box does.
+
+`post_gate_in` creates the units and drums as today, then creates the boxes top-down at the
+destination node and puts the contents in, all in its transaction. `void_gate_in` empties and closes
+its boxes before posting the reversals.
+
+The offline replay (`sync._apply_gate_in`) needs no change: it already runs the same serializer, and
+the queue stores the payload verbatim (§8).
+
+#### 4.15.6 Reading a label (P2, P3)
+
+One reader, written twice with **shared test vectors** (`backend/stock/tests/data/label_vectors.json`,
+used by pytest and by the frontend unit tests), so the phone and the server never disagree about
+what a label says.
+
+`read_label(raw) → { serials: string[], box_code?: string, document_token?: string, raw }`, tried in
+order:
+
+1. A gate-pass address (`…/qr/scan?token=…`) → `document_token`.
+2. JSON → `serial` / `serialNumber` / `sn`; a `serials` array; `box` / `carton` / `pallet` code.
+3. GS1 → AI 21 (serial), AI 00 (SSCC, used as the box code), split on the group separator.
+4. A web address → `serial` / `sn` / `s` parameter, else the last path segment.
+5. Labelled text → `SN:` / `S/N` / `Serial:` values, one or many.
+6. A list → two or more tokens on separate lines, or separated by commas or semicolons.
+7. Otherwise → the raw value, trimmed, as one serial. **A label is never discarded** (P3).
+
+`find_by_identifier` tries the raw value first, then each candidate, and gains `kind: "box"`, so the
+stock lookup, gate-out and release all resolve boxes through the one endpoint.
+
+#### 4.15.7 Gate-out (P5, P6, P9, P10)
+
+- `GateOutLine.box` → Box (null): the box the line was picked from. Grouping on the request, the
+  approval and the gate pass; for a bulk line, the claim `_release_line` draws on (`from_box`).
+- Scanning a box calls `GET /stock/boxes/{code}/issuable?from_location=…`, and the screen adds the
+  proposal: **one line per item and lot within each box, each unit named**, with the exclusions
+  shown and their reasons. This is how loose multi-unit lines already work, and keeps a carton of
+  ten RRUs to one line that lists ten serials, rather than ten lines. *This refines P6's "one line
+  per unit"; each unit is still named and released individually.*
+- `submit_gate_out` gains the checks it lacks today: each named unit is at the from-location,
+  IN_STOCK and not on another open pass (`UnitNotAvailable`, naming the pass that holds it); a box
+  line's claim covers its quantity.
+- After approval the pass covers units and quantities, not the box (P6). The gate-pass PDF groups
+  lines under their box code.
+
+#### 4.15.8 Scan-to-release (P11, G1, G5)
+
+**Opening a pass by scan.** A "Scan a pass" action on the gate-out list and the offline release
+page opens `/gate-out/scan`. Online, the token goes to `GET /qr/scan` and the screen opens
+`/gate-out/{id}?release=1`, which opens the release sheet. A pass that cannot be released says why
+(not approved, expired, released) instead. Offline, the token's payload is read without verifying
+the signature and matched against the cached releasable passes; the release is still validated by
+the server when it syncs.
+
+**Ticking the load.** Matching runs **on the device** in one pure function,
+`matchScan(pass, scannedText) → { ticks, refused }`, using the pass's own data. The gate-out detail
+and the offline releasable bundle both carry, per named unit, its serial number, asset tag and box
+path, and per box line its box path. So:
+
+- a unit's serial or asset tag ticks that unit;
+- a box or pallet code ticks every unit and bulk line on the pass whose box path contains it;
+- anything else is refused on screen, naming what was scanned and that the pass does not cover it.
+
+Because it needs no server call, it works the same at a gate with no signal. Every line can still be
+confirmed by hand.
+
+**Releasing what was ticked.** `release_gate_out` gains `released_serials: {line_id: [unit_id, …]}`.
+For a line that has it, exactly those units are issued, ending today's behaviour of issuing the
+first N unreleased units whoever was actually loaded. Whatever is unticked or unconfirmed is short,
+and a release variance, as G1 already requires. `OrganizationSettings.release_scan_required`
+(default off) makes `released_serials` mandatory for serialized lines (`ScanRequiredForRelease`).
+The offline release payload carries the same field and `_apply_gate_out_release` passes it on.
+
+#### 4.15.9 API
+
+| Endpoint | Purpose | Permission |
+|---|---|---|
+| `GET /boxes`, `GET /boxes/{code}` | List and detail with tree, counts, units, bulk | as `/stock` |
+| `GET /boxes/{code}/history` | BoxEvents | as `/stock` |
+| `GET /stock/boxes/{code}/issuable?from_location=` | Gate-out proposal and exclusions | `gate_out.request` |
+| `POST /boxes/{code}/take-out`, `/empty`, `/move` | P7, E4 | `stock.adjust` or `gate_in.post`, as transfers |
+| `GET /stock/lookup` | adds `kind: "box"` | unchanged |
+| `POST /gate-outs/{id}/release` | adds `released_serials` | unchanged |
+| `GateIn` and `GateOut` serializers | add `boxes` / `box_key` / `box`, and per-serial box paths on read | unchanged |
+
+`api-schema.yml` is regenerated with the change; CI's drift test enforces it.
+
+#### 4.15.10 Frontend
+
+| Piece | Where | Story |
+|---|---|---|
+| `readLabel`, `matchScan` (pure) | `src/features/boxes/` | P2, P3, P11 |
+| Gate-in: "Into a box" on the line sheet — choose an open box from the draft or start one by scanning its code; a label listing serials offers them for confirmation; the lines card shows the box tree with counts | `GateInCapturePage` | P1, P2, P9, P10 |
+| Gate-out: lookup handles `kind: "box"`, shows the proposal and exclusions, "Add all"; a single unit shows which box it is in | `GateOutRequestPage` | P5, P6, P9, P10 |
+| Release: "Scan the load", a continuous scanner ticking lines and units, refusals listed, short lines derived from what is unticked; shared by the online and offline release sheets | `GateOutPages`, `OfflineReleasePage` | P11 |
+| `/gate-out/scan` | new route | P11, G5 |
+| `/stock/boxes`, `/stock/boxes/:code` — tree, history, take out, empty, move | `StockPages` | P4, P7, P8 |
+| Serial history shows the unit's box and its box events | `SerialHistoryPage` | P4 |
+| `BarcodeScanner` shows "Scanned X from the label" with the raw text on a tap; its manual input stops hard-coding `id`, since release and gate-in can now mount two scanners | `BarcodeScanner` | P3 |
+| Settings: "Require every unit to be scanned at release" | Settings | P11 |
+
+Draft state for boxes lives in `Draft` (localStorage), not in the line sheet, so a half-built box
+survives a reload. The IndexedDB schema does not change: queued payloads are stored verbatim.
+
+#### 4.15.11 Errors
+
+All through the existing `{error: {code, message, field_errors, details}}` envelope (§13), each
+message naming the thing involved.
+
+| Code | When |
+|---|---|
+| `box_code_in_use` | A code already used in the tenant, open or closed; names where it sits |
+| `box_too_deep`, `box_cycle` | Nesting beyond three, or a box inside itself |
+| `box_empty`, `box_mixed_destinations` | Gate-in validation |
+| `boxed_stock_only` | Bulk drawn without naming a box, loose stock short; names the boxes |
+| `unit_not_available` | Submit: a named unit is elsewhere or on another open pass; names it |
+| `scan_required_for_release` | Release without scans when the setting is on |
+
+#### 4.15.12 Testing
+
+- **Backend (pytest):** the three ledger hooks, including a unit issued from a box, a pallet emptied
+  by one release closing up its tree, ADJUST reducing claims and ISSUE refused; `move_box`; gate-in
+  with nested, mixed and generated-code boxes and every validation; void; `issuable_contents`
+  exclusions; submit's new checks; release by named serials and the require-scan setting; the label
+  vectors through `find_by_identifier`; `verify_ledger`'s new checks; sync replay of a gate-in with
+  boxes and a release with `released_serials`; RLS and the isolation suite for the new tables.
+- **`verify_ledger` gains:** units in a box sit at the box's node and the box is open; claims never
+  exceed the balance; trees are acyclic, at most three deep, and children sit with their parents.
+- **Frontend unit tests:** `readLabel` against the shared vectors and `matchScan` against fixture
+  passes. This adds Vitest as a dev dependency; the project has no unit runner today.
+- **E2E (Playwright, phone):** receive a box of three units by manual entry; scan the box at
+  gate-out and see one line with three serials; release by scanning two units and one stranger, see
+  the stranger refused and the third unit short. As with every E2E here, CI does not run these; they
+  run against a seeded tenant.
+
 ---
 
 ## 5. Approval engine
@@ -1381,6 +1609,7 @@ Each phase ends with something demonstrable.
 | **8. Offline & biometrics** | Service worker, Dexie queue, sync idempotency, exception queue, WebAuthn enrolment and approval step-up, SMS channel | N, B5, F4 |
 | **9. Production deployment** | The AWS move (§12.1), deferred until the customer is ready | Non-functional |
 | **10. Projects & commercials** | WorkOrder→Project migration, PO fields and variations, subcontractor register, job delivery mode, PM routing, movement valuation, labour, expenses, project performance reporting, financial permissions | O |
+| **11. Boxes** | Box model and ledger hooks, label reader, gate-in boxes and pallets, gate-out by box, scan-to-release and pass scanning, box screens, release by named serials | P, G1, G5 |
 
 Phases 1–4 deliver the system's core value: controlled, approved, auditable gate movements. If the
 schedule compresses, phases 5–8 are where scope can be traded, not earlier.
@@ -1415,6 +1644,7 @@ projects that include them as partly unvalued, rather than quietly understating 
 | M — Reporting & audit | 3.2, 4.2, 4.13, 10 |
 | N — Offline | 8 |
 | O — Projects & PO performance | 3.2, 4.4, 4.9, 4.14, 5.4, 6, 10 |
+| P — Boxes | 3, 4.15, 8 |
 | Non-functional | 1.1, 12, 13, 14 |
 
 ---
