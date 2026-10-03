@@ -17,7 +17,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { openDocument } from '../../api/client';
@@ -57,9 +57,17 @@ export default function GateOutListPage() {
         title="Gate-out"
         subtitle="Requests, approvals waiting, and passes ready to release."
         actions={
-          hasAny(PERM.GATE_OUT_REQUEST) ? (
-            <Button onClick={() => navigate('/gate-out/new')}>Request material</Button>
-          ) : undefined
+          <>
+            {/* P11, G5: the printed pass's own QR opens it, instead of a search. */}
+            {hasAny(PERM.GATE_OUT_RELEASE) ? (
+              <Button variant="secondary" onClick={() => navigate('/gate-out/scan')}>
+                Scan a pass
+              </Button>
+            ) : null}
+            {hasAny(PERM.GATE_OUT_REQUEST) ? (
+              <Button onClick={() => navigate('/gate-out/new')}>Request material</Button>
+            ) : null}
+          </>
         }
       />
 
@@ -150,6 +158,24 @@ export function GateOutDetailPage() {
   const [reasonSheet, setReasonSheet] = useState<'reject' | 'cancel' | 'close' | null>(null);
   const [reason, setReason] = useState('');
   const [releasing, setReleasing] = useState(false);
+
+  // T11.17 (P11, §4.15.8): arriving from a scan asks for the release sheet. It
+  // is derived from the URL once the pass has loaded, and the param is dropped
+  // on close so a refresh or a Back does not reopen it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantsRelease = searchParams.get('release') === '1';
+  const mayRelease = hasAny(PERM.GATE_OUT_RELEASE);
+  const sheetOpen =
+    releasing || (wantsRelease && mayRelease && pass.data?.is_releasable === true);
+
+  function closeRelease() {
+    setReleasing(false);
+    if (searchParams.has('release')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('release');
+      setSearchParams(next, { replace: true });
+    }
+  }
 
   // Spelled out rather than built in a loop: these are hooks, and hooks have to
   // be called unconditionally and in a fixed order.
@@ -263,6 +289,10 @@ export function GateOutDetailPage() {
           This pass has expired, so it can no longer be released. An approval
           given three weeks ago is not permission to walk material out today.
         </Banner>
+      ) : null}
+
+      {wantsRelease && mayRelease && !document.is_releasable ? (
+        <Banner tone="warning">{whyNotReleasable(document)}</Banner>
       ) : null}
 
       {document.status === 'REJECTED' ? (
@@ -451,12 +481,12 @@ export function GateOutDetailPage() {
         </div>
       </Sheet>
 
-      {releasing ? (
+      {sheetOpen ? (
         <ReleaseSheet
           gateOut={document}
-          onClose={() => setReleasing(false)}
+          onClose={closeRelease}
           onDone={() => {
-            setReleasing(false);
+            closeRelease();
             void pass.refetch();
           }}
         />
@@ -468,6 +498,29 @@ export function GateOutDetailPage() {
 /* -------------------------------------------------------------------------- */
 /* T4.23 — the gate                                                           */
 /* -------------------------------------------------------------------------- */
+
+/** Why a scanned pass cannot be released, from the pass's own fields (G5, P11). */
+function whyNotReleasable(pass: GateOut): string {
+  if (pass.is_expired || pass.status === 'EXPIRED') {
+    return 'This pass has expired, so it cannot be released. It has to be approved again.';
+  }
+  switch (pass.status) {
+    case 'DRAFT':
+      return 'This pass is still a draft. It has not been sent for approval, so nothing can be released.';
+    case 'PENDING_APPROVAL':
+      return 'This pass is not approved yet. It is waiting for approval, so nothing can be released.';
+    case 'REJECTED':
+      return 'This pass was rejected, so nothing can be released.';
+    case 'CANCELLED':
+      return 'This pass was cancelled, so nothing can be released.';
+    case 'RELEASED':
+      return 'This pass has already been released.';
+    case 'CLOSED':
+      return 'This pass is closed. Nothing more can be released on it.';
+    default:
+      return 'This pass cannot be released right now.';
+  }
+}
 
 function ReleaseSheet({
   gateOut,

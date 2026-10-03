@@ -84,6 +84,7 @@ const RecordExpensePage = lazyRoute(() => import('../features/projects/RecordExp
 
 const GateOutRequestPage = lazyRoute(() => import('../features/dispatch/GateOutRequestPage'));
 const GateOutListPage = lazyRoute(() => import('../features/dispatch/GateOutPages'));
+const GateOutScanPage = lazyRoute(() => import('../features/dispatch/GateOutScanPage'));
 const GateOutDetailPage = lazyRoute(() =>
   import('../features/dispatch/GateOutPages').then((m) => ({ default: m.GateOutDetailPage })),
 );
@@ -318,6 +319,15 @@ export function AppRoutes() {
               element={
                 <RequirePermission anyOf={[PERM.GATE_OUT_RELEASE]}>
                   <OfflineReleasePage />
+                </RequirePermission>
+              }
+            />
+            {/* T11.17: before `gate-out/:id`, so "scan" is never read as an id. */}
+            <Route
+              path="gate-out/scan"
+              element={
+                <RequirePermission anyOf={[PERM.GATE_OUT_RELEASE]}>
+                  <GateOutScanPage />
                 </RequirePermission>
               }
             />

@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { errorMessage } from '../api/hooks';
 import { Banner, Button, Card, Field, Input, Spinner } from '../components/ui';
@@ -46,6 +46,11 @@ export default function OfflineReleasePage() {
   const [loading, setLoading] = useState(true);
   const [releasing, setReleasing] = useState<ReleasablePass | null>(null);
 
+  // T11.17 (P11, §4.15.8): `?pass=<id>` comes from scanning a pass and opens its
+  // sheet. Read once, then dropped, so a refresh does not reopen it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantedPass = searchParams.get('pass');
+
   useEffect(() => {
     void readReleasable().then((rows) => {
       setPasses(rows);
@@ -53,15 +58,37 @@ export default function OfflineReleasePage() {
     });
   }, [syncing]);
 
+  // Derived rather than copied into state; an expired pass is not opened.
+  const scanned = wantedPass
+    ? passes.find(
+        (row) =>
+          String(row.id) === wantedPass &&
+          !(row.expires_at && new Date(row.expires_at) < new Date()),
+      )
+    : undefined;
+
+  function closeSheet() {
+    setReleasing(null);
+    if (wantedPass) setSearchParams({}, { replace: true });
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Release at the gate"
         subtitle="Approved passes downloaded to this device. Nothing else can be released here."
         actions={
-          <Button variant="secondary" loading={syncing} onClick={() => void syncNow()}>
-            {online ? 'Refresh the list' : 'Try to refresh'}
-          </Button>
+          <>
+            <Link
+              to="/gate-out/scan"
+              className="flex min-h-[44px] items-center px-2 text-sm text-slate-700"
+            >
+              Scan a pass
+            </Link>
+            <Button variant="secondary" loading={syncing} onClick={() => void syncNow()}>
+              {online ? 'Refresh the list' : 'Try to refresh'}
+            </Button>
+          </>
         }
       />
 
@@ -162,8 +189,8 @@ export default function OfflineReleasePage() {
       </p>
 
       <ReleaseSheet
-        pass={releasing}
-        onClose={() => setReleasing(null)}
+        pass={releasing ?? scanned ?? null}
+        onClose={closeSheet}
         onDone={async () => {
           await refresh();
           setPasses(await readReleasable());
