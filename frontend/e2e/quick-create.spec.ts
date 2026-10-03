@@ -96,7 +96,7 @@ test.describe('Add new … from inside a form', () => {
     await page.getByRole('button', { name: /add a job/i }).click();
 
     const jobSheet = page.getByRole('dialog').first();
-    const site = jobSheet.getByLabel('Site');
+    const site = jobSheet.getByLabel('Site', { exact: true });
     // Last, so it reads as an escape hatch rather than a real site.
     await expect(site.locator('option').last()).toHaveText(/add new site/i);
 
@@ -110,6 +110,8 @@ test.describe('Add new … from inside a form', () => {
     await expect(siteSheet).toContainText(/site/i);
     const name = `E2E Quick Site ${Date.now().toString().slice(-6)}`;
     await siteSheet.getByLabel(/^name$/i).fill(name);
+    // The site's own reference is required.
+    await siteSheet.getByLabel(/our reference/i).fill(`E2E-${Date.now().toString().slice(-6)}`);
     await siteSheet.getByLabel(/client/i).selectOption({ index: 1 });
     await siteSheet.getByRole('button', { name: /create|save|add/i }).first().click();
 
@@ -122,17 +124,15 @@ test.describe('Add new … from inside a form', () => {
     await expect(site).not.toHaveValue('__add_new__');
   });
 
-  test('somebody who may not create one does not see the option', async ({ page, request }) => {
-    const projectId = await firstProjectId(request);
-    test.skip(!projectId, 'no project seeded — run the project spec first');
-
-    // A storekeeper can raise a job but has no catalogue.manage.
+  test('somebody who may not create one does not see the option', async ({ page }) => {
+    // A storekeeper cannot see projects at all (no project.view_cost), so use
+    // a screen they do reach: the gate-out pass. They have no catalogue.manage.
     await signIn(page, PEOPLE.storekeeper);
-    await open(page, `/projects/${projectId}`);
-    await page.getByRole('button', { name: /add a job/i }).click();
+    await open(page, '/gate-out/new');
 
-    const site = page.getByRole('dialog').first().getByLabel('Site');
-    await expect(site.locator('option', { hasText: /add new/i })).toHaveCount(0);
+    const from = page.getByLabel('Out of');
+    await expect(from.locator('option').nth(1)).toBeAttached(); // real options exist
+    await expect(from.locator('option', { hasText: /add new/i })).toHaveCount(0);
   });
 });
 
