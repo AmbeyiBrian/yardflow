@@ -1317,11 +1317,40 @@ class TestLooseCableLine:
 
         cable = self._cable(tenant, yard)
         gate_out = make_gate_out(tenant, yard, storekeeper, technician)
-        add_line(gate_out, cable, 150)
+        # Enough loose cable when it is sent for approval...
+        add_line(gate_out, cable, 90)
         submit_gate_out(gate_out, submitted_by=storekeeper)
         gate_out.refresh_from_db()
+        # ...but 60 m of the loose length goes elsewhere before the truck comes.
+        with transaction.atomic():
+            post_movement(
+                MovementRequest(
+                    item_type=cable,
+                    quantity=Decimal("60"),
+                    from_node=yard.node,
+                    to_node=external_node(tenant.pk),
+                    movement_type=MovementType.ISSUE,
+                    tracking_mode=TrackingMode.BULK,
+                )
+            )
 
         with pytest.raises(OnDrumsOnly, match="D-0007"):
             release_gate_out(gate_out, released_by=storekeeper)
 
-        assert balance_at(yard.node, cable) == Decimal("600")
+        assert balance_at(yard.node, cable) == Decimal("540")
+
+    def test_a_loose_line_beyond_loose_length_is_refused_at_submit(
+        self, tenant, yard, storekeeper, technician
+    ):
+        # D10: refused before an approver signs, naming the drum to scan instead.
+        from dispatch.services import GateOutNotReady
+
+        cable = self._cable(tenant, yard)
+        gate_out = make_gate_out(tenant, yard, storekeeper, technician)
+        add_line(gate_out, cable, 150)
+
+        with pytest.raises(GateOutNotReady) as refused:
+            submit_gate_out(gate_out, submitted_by=storekeeper)
+
+        assert "only 100 m is loose" in str(refused.value.field_errors)
+        assert "D-0007" in str(refused.value.field_errors)

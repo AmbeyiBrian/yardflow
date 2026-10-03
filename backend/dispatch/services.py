@@ -218,9 +218,53 @@ def _validate_stock_is_available(gate_out: GateOut) -> None:
                 message = f"{message} {nearby}"
             field_errors[f"lines.{index}.requested_qty"] = [message]
             messages.append(message)
+            continue
+
+        # D10: loose cable may not draw on metres that are on a drum. Refused
+        # here, before an approver signs for a release that would fail.
+        if (
+            line.tracking_mode == TrackingMode.BULK
+            and line.item_type.default_tracking_mode == TrackingMode.REEL
+        ):
+            problem = _loose_length_problem(source, line, available)
+            if problem:
+                field_errors[f"lines.{index}.requested_qty"] = [problem]
+                messages.append(problem)
 
     if field_errors:
         raise GateOutNotReady(_summary(messages), field_errors=field_errors)
+
+
+def _loose_length_problem(source, line, available: Decimal) -> str | None:
+    """Why a loose-length line asks for more than is off the drums, or None (D10)."""
+    from django.db.models import Sum
+    from django.db.models.functions import Lower
+
+    from stock.models import Reel, ReelStatus
+
+    drums = Reel.objects.filter(
+        current_node=source,
+        item_type=line.item_type,
+        owner_client=line.owner_client,
+        condition=line.condition,
+        status=ReelStatus.OPEN,
+    )
+    on_drums = drums.aggregate(total=Sum("remaining_length"))["total"] or Decimal("0")
+    loose = max(available - on_drums, Decimal("0"))
+    if line.requested_qty <= loose:
+        return None
+    held = [
+        f"{number} ({_amount(length)} {line.uom})"
+        for number, length in drums.filter(remaining_length__gt=0)
+        .order_by(Lower("drum_number"))
+        .values_list("drum_number", "remaining_length")
+    ]
+    listed = held[0] if len(held) == 1 else ", ".join(held[:-1]) + " and " + held[-1]
+    return (
+        f"{line.item_type}: only {_amount(loose)} {line.uom} is loose, and this line asks "
+        f"for {_amount(line.requested_qty)} {line.uom}. The rest is on "
+        f"{'drum' if len(held) == 1 else 'drums'} {listed}; scan the drum instead."
+    )
 
 
 def line_box_problem(
