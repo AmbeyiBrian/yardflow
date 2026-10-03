@@ -39,6 +39,7 @@ from core.audit import record
 from core.exceptions import DomainError
 from core.models import AuditAction, AuthMethod
 from core.numbering import DocumentType, allocate_number
+from dispatch.diversions import destination_sites
 from dispatch.models import (
     GateOut,
     GateOutStatus,
@@ -132,6 +133,7 @@ def submit_gate_out(gate_out: GateOut, *, submitted_by=None, request=None) -> Ga
     _validate_stock_is_available(gate_out)
     _validate_units_are_available(gate_out)
     _validate_box_claims(gate_out)
+    _validate_diversions_have_reasons(gate_out)
 
     if not gate_out.number:
         gate_out.number = allocate_number(
@@ -365,6 +367,32 @@ def _validate_units_are_available(gate_out: GateOut) -> None:
             else f"{len(messages)} units are not available. {messages[0]}"
         )
         raise UnitNotAvailable(summary, details={"problems": messages})
+
+
+def _validate_diversions_have_reasons(gate_out: GateOut) -> None:
+    """Q3, §4.16.5: using another site's earmarked stock needs a reason.
+
+    Uses the same computation as the read side and the approval payload, so what
+    the approver is shown is what was checked here. Nothing else is blocked.
+    """
+    from dispatch.diversions import diversion_message, pass_diversions
+
+    lines = list(
+        gate_out.lines.select_related("item_type", "owner_client")
+        .prefetch_related("serials__serial_unit", "reels__reel")
+        .order_by("line_number", "id")
+    )
+    found = pass_diversions(gate_out, lines)
+    field_errors: dict[str, list[str]] = {}
+    messages: list[str] = []
+    for index, line in enumerate(lines):
+        entries = found.get(line.pk)
+        if entries and not line.divert_reason.strip():
+            message = diversion_message(gate_out, line, entries)
+            field_errors[f"lines.{index}.divert_reason"] = [message]
+            messages.append(message)
+    if field_errors:
+        raise GateOutNotReady(_summary(messages), field_errors=field_errors)
 
 
 def _validate_box_claims(gate_out: GateOut) -> None:
@@ -1137,6 +1165,10 @@ def _release_line(
         "movement_type": MovementType.ISSUE,
         "from_node": source,
         "to_node": destination,
+        # §4.16.5: earmarks are used up as delivered where the pass goes to the
+        # site they were kept for, and as diverted, with the reason, otherwise.
+        "for_sites": destination_sites(gate_out),
+        "divert_reason": line.divert_reason,
     }
 
     if line.tracking_mode == TrackingMode.SERIALIZED:

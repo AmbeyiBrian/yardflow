@@ -128,12 +128,24 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
 
         gate_out = (
             GateOut.objects.filter(pk=approval_request.document_id)
-            .select_related("custody_holder", "site", "client", "from_location")
-            .prefetch_related("lines", "lines__item_type", "lines__owner_client")
+            .select_related("custody_holder", "site", "client", "from_location", "job__site")
+            .prefetch_related(
+                "lines",
+                "lines__item_type",
+                "lines__owner_client",
+                "lines__serials__serial_unit",
+                "lines__reels__reel",
+            )
             .first()
         )
         if gate_out is None:
             return {"label": approval_request.document_number}
+
+        # Q3: the approver sees what is being taken from another site's earmark,
+        # and why, from the same computation submit used.
+        from dispatch.diversions import pass_diversions
+
+        diversions = pass_diversions(gate_out)
 
         return {
             "id": gate_out.pk,
@@ -156,6 +168,8 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
                     "owner": str(line.owner_client) if line.owner_client_id else "Own stock",
                     "is_client_owned": bool(line.owner_client_id),
                     "criticality": line.item_type.criticality,
+                    "divert_reason": line.divert_reason,
+                    "diversions": diversions.get(line.pk, []),
                 }
                 for line in gate_out.lines.all()
             ],

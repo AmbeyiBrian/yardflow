@@ -90,9 +90,22 @@ class GateOutLineSerializer(serializers.ModelSerializer):
     outstanding_qty = serializers.DecimalField(max_digits=14, decimal_places=3, read_only=True)
     box_code = serializers.CharField(source="box.code", read_only=True, default=None)
     box_path = serializers.SerializerMethodField()
+    # §4.16.5: what releasing this line would divert from another site's earmark.
+    # Worked out once per pass (see `GateOutSerializer.to_representation`).
+    diversions = serializers.SerializerMethodField()
 
     def get_box_path(self, line) -> list[str]:  # type: ignore[no-untyped-def]
         return box_path(line.box)
+
+    def get_diversions(self, line) -> list[dict]:  # type: ignore[no-untyped-def]
+        gate_out = line.gate_out
+        cache = getattr(gate_out, "_diversions_by_line", None)
+        if cache is None:
+            from dispatch.diversions import pass_diversions
+
+            cache = pass_diversions(gate_out)
+            gate_out._diversions_by_line = cache
+        return cache.get(line.pk, [])
 
     class Meta:
         model = GateOutLine
@@ -114,6 +127,8 @@ class GateOutLineSerializer(serializers.ModelSerializer):
             "expected_return_date",
             "notes",
             "no_serial_reason",
+            "divert_reason",
+            "diversions",
             "box",
             "box_code",
             "box_path",
@@ -384,6 +399,7 @@ class GateOutViewSet(TenantScopedViewSet):
         "to_location",
         "from_location",
         "custody_holder",
+        "job__site",
     )
     prefetch_related = (
         "lines",
@@ -391,6 +407,7 @@ class GateOutViewSet(TenantScopedViewSet):
         "lines__serials",
         "lines__serials__serial_unit",
         "lines__reels",
+        "lines__reels__reel",
         *BOX_PREFETCH,
     )
     filterset_fields = [

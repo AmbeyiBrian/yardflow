@@ -398,6 +398,8 @@ class OfflineBundleView(APIView):
                             "released_qty": str(line.released_qty),
                             "uom": line.uom,
                             "tracking_mode": line.tracking_mode,
+                            # §4.16.5: what was approved; the offline release follows it.
+                            "divert_reason": line.divert_reason,
                             # §4.15.8: the contract the gate-out detail honours too.
                             "box": line.box_id,
                             "box_code": line.box.code if line.box_id else None,

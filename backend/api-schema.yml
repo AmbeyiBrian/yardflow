@@ -11790,6 +11790,14 @@ components:
         no_serial_reason:
           type: string
           maxLength: 300
+        divert_reason:
+          type: string
+        diversions:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
         box:
           type: integer
           nullable: true
@@ -11813,6 +11821,7 @@ components:
       - box_code
       - box_path
       - criticality
+      - diversions
       - id
       - item_name
       - item_type
@@ -11897,6 +11906,8 @@ components:
         no_serial_reason:
           type: string
           maxLength: 300
+        divert_reason:
+          type: string
         box:
           type: integer
           nullable: true
