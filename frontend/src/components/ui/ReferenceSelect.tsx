@@ -32,6 +32,8 @@
 
 import {
   Suspense,
+  useEffect,
+  useRef,
   useState,
   type ChangeEvent,
   type ReactNode,
@@ -110,12 +112,30 @@ export function ReferenceSelect<TForm extends FieldValues>({
   ...rest
 }: FormProps<TForm>) {
   const registration = form.register(name, rules);
+  const selectRef = useRef<HTMLSelectElement | null>(null);
+  // The new record's id, held until its <option> has rendered. Setting an
+  // uncontrolled select to a value it has no option for falls back to the
+  // first option, which is how "Add new site" used to leave the job form on
+  // "Choose…" although the site had been created.
+  const pendingRef = useRef<string | null>(null);
   const quick = useQuickCreate(resource, (id) => {
-    form.setValue(name, String(id) as TForm[Path<TForm>], {
+    pendingRef.current = String(id);
+  });
+
+  // After every render: once the refetched list has drawn the new option,
+  // select it in the DOM and in the form, exactly once.
+  useEffect(() => {
+    const pending = pendingRef.current;
+    const element = selectRef.current;
+    if (pending === null || !element) return;
+    if (!Array.from(element.options).some((option) => option.value === pending)) return;
+    pendingRef.current = null;
+    element.value = pending;
+    form.setValue(name, pending as TForm[Path<TForm>], {
       shouldDirty: true,
       shouldValidate: true,
     });
-    onCreated?.(id);
+    onCreated?.(Number(pending));
   });
 
   return (
@@ -123,6 +143,10 @@ export function ReferenceSelect<TForm extends FieldValues>({
       <Select
         {...rest}
         {...registration}
+        ref={(element) => {
+          registration.ref(element);
+          selectRef.current = element;
+        }}
         onChange={(event) => {
           if (event.target.value === ADD_NEW) {
             // Put the control back before anything reads it, then open the
