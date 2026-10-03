@@ -15503,7 +15503,19 @@ components:
           type: string
           readOnly: true
           default: ''
+        box_code:
+          type: string
+          readOnly: true
+        box_path:
+          type: array
+          items:
+            type: string
+          description: Codes outermost to the unit's own box; empty when loose (P4,
+            P5).
+          readOnly: true
       required:
+      - box_code
+      - box_path
       - condition
       - current_node
       - id

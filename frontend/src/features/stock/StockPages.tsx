@@ -41,6 +41,19 @@ import type { Movement, Reel, SerialUnit, StockBalance, StockCount } from '../re
 /* Stock on hand                                                              */
 /* -------------------------------------------------------------------------- */
 
+/** A unit's box event, as the serial history returns it (P4). */
+interface UnitBoxEvent {
+  occurred_at: string;
+  action: string;
+  action_label: string;
+  box_code: string;
+  actor: string;
+  document_type: string;
+  document_id: string;
+  document_number: string;
+  note: string;
+}
+
 export default function StockPage() {
   const navigate = useNavigate();
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -220,7 +233,11 @@ export function SerialHistoryPage() {
   const { serialNumber } = useParams();
   // A serial is its own name, so there is nothing to wait for.
   useCrumb(serialNumber);
-  const history = useResource<{ unit: SerialUnit & { box_code?: string | null }; movements: Movement[] }>(
+  const history = useResource<{
+    unit: SerialUnit & { box_code?: string | null };
+    movements: Movement[];
+    box_events?: UnitBoxEvent[];
+  }>(
     `stock/serials/${encodeURIComponent(serialNumber ?? '')}/history`,
   );
 
@@ -287,6 +304,32 @@ export function SerialHistoryPage() {
         <h2 className="text-sm font-semibold text-slate-900">Everywhere it has been</h2>
         <MovementList movements={movements} />
       </Card>
+
+      {/* P4: the boxes it came in and when it left them. Kept apart from the
+          movements because putting a unit in or out of a box moves nothing. */}
+      {(history.data?.box_events ?? []).length > 0 ? (
+        <Card className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">Boxes it has been in</h2>
+          <ul className="flex flex-col gap-2 text-sm">
+            {(history.data?.box_events ?? []).map((event, index) => (
+              <li key={index} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-slate-500">{new Date(event.occurred_at).toLocaleString()}</span>
+                <span className="text-slate-900">{event.action_label}</span>
+                <Link
+                  to={`/stock/boxes/${encodeURIComponent(event.box_code)}`}
+                  className="font-mono underline"
+                >
+                  {event.box_code}
+                </Link>
+                {event.document_number ? (
+                  <span className="text-slate-500">· {event.document_number}</span>
+                ) : null}
+                {event.actor ? <span className="text-slate-500">· {event.actor}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
     </div>
   );
 }

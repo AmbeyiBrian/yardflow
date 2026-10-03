@@ -619,3 +619,30 @@ class TestLookup:
         http, token, _org, _owner = signed_in
         assert self.lookup(http, token, "NO-SUCH").status_code == 404
 
+
+
+class TestSerialHistoryShowsBoxes:
+    """P4: a unit's own page says which box it is in and which it has been in."""
+
+    def test_the_unit_names_its_box_and_its_box_events(self, signed_in, world):
+        http, token, _org, _owner = signed_in
+        unit = world["units"][0]
+        url = reverse("v1:serial-history", args=[unit.serial_number])
+
+        body = http.get(url, **auth(token)).json()
+        assert body["unit"]["box_code"] == "CTN-1"
+        assert body["unit"]["box_path"] == ["PAL-1", "CTN-1"]
+        assert [e["action"] for e in body["box_events"]] == ["UNIT_IN"]
+        assert body["box_events"][0]["box_code"] == "CTN-1"
+
+        http.post(
+            reverse("v1:box-take-out", args=["CTN-1"]),
+            {"units": [unit.pk]},
+            content_type="application/json",
+            **auth(token),
+        )
+
+        body = http.get(url, **auth(token)).json()
+        assert body["unit"]["box_code"] is None
+        assert [e["action"] for e in body["box_events"]] == ["UNIT_IN", "UNIT_OUT"]
+        assert body["box_events"][1]["actor"] == "Olga Owner"

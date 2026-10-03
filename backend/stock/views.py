@@ -169,6 +169,18 @@ class SerialUnitSerializer(serializers.ModelSerializer):
     origin_site_ref = serializers.CharField(
         source="origin_site.internal_ref", read_only=True, default=""
     )
+    # P4: the box the unit is in now, so a scan or a lookup can say "in CTN-1".
+    box_code = serializers.CharField(source="box.code", read_only=True, default=None)
+    box_path = serializers.SerializerMethodField()
+
+    def get_box_path(self, unit) -> list[str]:
+        """Codes outermost to the unit's own box; empty when loose (P4, P5)."""
+        path: list[str] = []
+        box = unit.box
+        while box is not None:
+            path.insert(0, box.code)
+            box = box.parent
+        return path
 
     class Meta:
         model = SerialUnit
@@ -187,6 +199,8 @@ class SerialUnitSerializer(serializers.ModelSerializer):
             "owner_client_name",
             "origin_site",
             "origin_site_ref",
+            "box_code",
+            "box_path",
         )
 
 
@@ -381,10 +395,32 @@ class SerialHistoryView(APIView):
             raise Http404()
 
         movements = serial_history(unit.serial_number)
+        # P4: which boxes the unit came in and when it left them, beside where
+        # it went. Box events are a projection, not movements, so they are
+        # listed apart rather than mixed into the ledger trail.
+        box_events = (
+            BoxEvent.objects.filter(serial_unit=unit)
+            .select_related("box", "actor")
+            .order_by("occurred_at", "id")
+        )
         return Response(
             {
                 "unit": SerialUnitSerializer(unit).data,
                 "movements": MovementSerializer(movements, many=True).data,
+                "box_events": [
+                    {
+                        "occurred_at": event.occurred_at,
+                        "action": event.action,
+                        "action_label": event.get_action_display(),
+                        "box_code": event.box.code,
+                        "actor": event.actor.get_full_name() if event.actor else "",
+                        "document_type": event.document_type,
+                        "document_id": event.document_id,
+                        "document_number": event.document_number,
+                        "note": event.note,
+                    }
+                    for event in box_events
+                ],
             }
         )
 
