@@ -69,6 +69,14 @@ class ReleaseNotPermitted(DomainError):
     default_message = "This gate pass cannot be released."
 
 
+class ScanRequiredForRelease(DomainError):
+    """P11, G1: this organization wants every serialized unit named at the gate."""
+
+    code = "scan_required_for_release"
+    status_code = 409
+    default_message = "Scan the units being loaded before releasing."
+
+
 # --------------------------------------------------------------------------
 # T4.6 — submit for approval
 # --------------------------------------------------------------------------
@@ -646,6 +654,7 @@ def release_gate_out(
     vehicle_reg: str = "",
     driver_name: str = "",
     variance_reasons: dict | None = None,
+    released_serials: dict | None = None,
     request=None,
 ) -> GateOut:
     """Release material at the gate (G1, G2, F7, I2).
@@ -655,6 +664,13 @@ def release_gate_out(
     :class:`~dispatch.models.ReleaseVariance` and **does not block the release**
     (G1's edge case): the driver leaves with what was loaded, and the discrepancy
     stays on the exceptions register until an approver acknowledges it.
+
+    ``released_serials`` maps a SERIALIZED line id to the unit ids physically
+    loaded (P11, §4.15.8). Those exact units are issued, the count is the
+    released quantity, and whatever was not named is short and becomes a
+    variance like any other short release. Lines absent from it release as
+    before. When ``release_scan_required`` is on, every serialized line leaving
+    with a quantity above zero must be named here.
     """
     if not gate_out.is_releasable:
         if gate_out.is_expired:
@@ -681,6 +697,7 @@ def release_gate_out(
 
     released_lines = released_lines or {}
     variance_reasons = variance_reasons or {}
+    released_serials = released_serials or {}
 
     # `from_location` is non-nullable on the model; the local makes that
     # explicit to the type checker.
@@ -696,14 +713,41 @@ def release_gate_out(
         gate_out.lines.select_related("item_type", "owner_client").order_by("line_number", "id")
     )
 
+    named_by_line = _resolve_named_serials(lines, released_serials)
+
     for line in lines:
         outstanding = line.outstanding_qty
         if outstanding <= 0:
             continue
 
-        requested = released_lines.get(line.pk, released_lines.get(str(line.pk), outstanding))
+        named = named_by_line.get(line.pk)
+        requested = released_lines.get(line.pk, released_lines.get(str(line.pk)))
+        if named is not None:
+            # The units ticked are the truth about what was loaded; a quantity
+            # that disagrees means the caller is confused, so refuse (P11).
+            if requested is not None and Decimal(str(requested)) != len(named):
+                raise ReleaseNotPermitted(
+                    f"{line.item_type}: {len(named)} unit(s) were named but the "
+                    f"quantity given is {requested}. They must agree.",
+                    details={"line_id": line.pk},
+                )
+            requested = len(named)
+        elif requested is None:
+            requested = outstanding
         quantity = Decimal(str(requested))
-        if quantity <= 0:
+
+        if (
+            settings.release_scan_required
+            and named is None
+            and line.tracking_mode == TrackingMode.SERIALIZED
+            and quantity > 0
+        ):
+            raise ScanRequiredForRelease(
+                f"This organization requires {line.item_type} units to be scanned "
+                f"before release (P11).",
+                details={"line_id": line.pk},
+            )
+        if quantity <= 0 and named is None:
             continue
         if quantity > outstanding:
             raise ReleaseNotPermitted(
@@ -713,14 +757,18 @@ def release_gate_out(
                 details={"line_id": line.pk, "outstanding": str(outstanding)},
             )
 
-        _release_line(
-            gate_out,
-            line,
-            quantity,
-            source=source,
-            destination=destination,
-            released_by=released_by,
-        )
+        # A line explicitly named with no units was scanned and found empty: it
+        # moves nothing but is still short, so it falls through to the variance.
+        if quantity > 0:
+            _release_line(
+                gate_out,
+                line,
+                quantity,
+                source=source,
+                destination=destination,
+                released_by=released_by,
+                named_entries=named,
+            )
 
         # G1's edge case: a short release is a variance, not a refusal.
         if quantity < outstanding:
@@ -779,8 +827,64 @@ def release_gate_out(
     return gate_out
 
 
-def _release_line(gate_out, line, quantity, *, source, destination, released_by):
-    """Post the movements for one released line, and start any custody clock."""
+def _resolve_named_serials(lines, released_serials: dict) -> dict:
+    """P11, §4.15.8: check the named units; return line id -> GateOutLineSerial rows.
+
+    Every refusal names the serial, so the gate knows which unit to put back.
+    """
+    from stock.models import SerialUnit
+
+    by_id = {line.pk: line for line in lines}
+    resolved: dict = {}
+    for raw_key, raw_ids in released_serials.items():
+        try:
+            line = by_id.get(int(raw_key))
+        except (TypeError, ValueError):
+            line = None
+        if line is None:
+            raise ReleaseNotPermitted(
+                f"Line {raw_key} is not on this gate pass.", details={"line_id": str(raw_key)}
+            )
+        if line.tracking_mode != TrackingMode.SERIALIZED:
+            raise ReleaseNotPermitted(
+                f"{line.item_type} is not serialized, so units cannot be named for it.",
+                details={"line_id": line.pk},
+            )
+        ids = [int(i) for i in raw_ids]
+        duplicates = sorted({i for i in ids if ids.count(i) > 1})
+        if duplicates:
+            raise ReleaseNotPermitted(
+                f"Serial unit(s) {', '.join(map(str, duplicates))} named twice on "
+                f"{line.item_type}.",
+                details={"line_id": line.pk, "serial_units": duplicates},
+            )
+        open_entries = {
+            e.serial_unit_id: e
+            for e in line.serials.filter(released=False).select_related("serial_unit")
+        }
+        unknown = [i for i in ids if i not in open_entries]
+        if unknown:
+            labels = ", ".join(
+                SerialUnit.objects.filter(pk=i).values_list("serial_number", flat=True).first()
+                or str(i)
+                for i in unknown
+            )
+            raise ReleaseNotPermitted(
+                f"Serial {labels} is not an unreleased unit on this line of {line.item_type}.",
+                details={"line_id": line.pk, "serial_units": unknown},
+            )
+        resolved[line.pk] = [open_entries[i] for i in ids]
+    return resolved
+
+
+def _release_line(
+    gate_out, line, quantity, *, source, destination, released_by, named_entries=None
+):
+    """Post the movements for one released line, and start any custody clock.
+
+    ``named_entries`` are the exact GateOutLineSerial rows the gate loaded
+    (P11); without them a serialized line takes the first units by id.
+    """
     common = {
         "item_type": line.item_type,
         "owner_type": line.owner_type,
@@ -798,8 +902,13 @@ def _release_line(gate_out, line, quantity, *, source, destination, released_by)
     }
 
     if line.tracking_mode == TrackingMode.SERIALIZED:
-        remaining = int(quantity)
-        for entry in line.serials.filter(released=False).select_related("serial_unit")[:remaining]:
+        if named_entries is None:
+            named_entries = list(
+                line.serials.filter(released=False)
+                .select_related("serial_unit")
+                .order_by("id")[: int(quantity)]
+            )
+        for entry in named_entries:
             post_movement(
                 MovementRequest(
                     quantity=Decimal("1"),

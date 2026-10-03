@@ -169,6 +169,7 @@ class MeSerializer(serializers.ModelSerializer):
                 "signature_required_on_release": getattr(
                     settings, "signature_required_on_release", False
                 ),
+                "release_scan_required": getattr(settings, "release_scan_required", False),
                 "client_waybill_enabled": getattr(settings, "client_waybill_enabled", False),
                 "timezone": getattr(settings, "timezone", "Africa/Nairobi"),
                 "currency": getattr(settings, "currency", "KES"),

@@ -245,6 +245,7 @@ def _apply_gate_out_release(payload: dict, *, submitted_by=None, request=None):
         vehicle_reg=payload.get("vehicle_reg", ""),
         driver_name=payload.get("driver_name", ""),
         variance_reasons=payload.get("variance_reasons"),
+        released_serials=payload.get("released_serials"),
         request=request,
     )
 

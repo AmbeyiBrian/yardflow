@@ -669,6 +669,7 @@ SETTINGS_FIELDS = (
     "attachments_required_gate_in",
     "attachments_required_gate_out",
     "signature_required_on_release",
+    "release_scan_required",
     "gate_pass_expiry_hours",
     "allow_self_approval",
     "approval_escalation_hours",

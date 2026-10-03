@@ -314,6 +314,10 @@ class ReleaseSerializer(serializers.Serializer):
     released_lines = serializers.DictField(
         child=serializers.DecimalField(max_digits=14, decimal_places=3), required=False
     )
+    #: line id -> the serial unit ids physically loaded (P11, §4.15.8).
+    released_serials = serializers.DictField(
+        child=serializers.ListField(child=serializers.IntegerField()), required=False
+    )
     #: line id -> why it was short. G1's edge case.
     variance_reasons = serializers.DictField(
         child=serializers.CharField(max_length=500), required=False
@@ -446,6 +450,7 @@ class GateOutViewSet(TenantScopedViewSet):
             vehicle_reg=data.get("vehicle_reg", ""),
             driver_name=data.get("driver_name", ""),
             variance_reasons=data.get("variance_reasons"),
+            released_serials=data.get("released_serials"),
             request=request,
         )
         return Response(self.get_serializer(gate_out).data)

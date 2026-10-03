@@ -163,6 +163,8 @@ class OrganizationSettings(models.Model):
     attachments_required_gate_in = models.BooleanField(default=False)
     attachments_required_gate_out = models.BooleanField(default=False)
     signature_required_on_release = models.BooleanField(default=False)
+    # P11: when on, serialized units must be named (scanned) at release.
+    release_scan_required = models.BooleanField(default=False)
 
     # --- Approvals -------------------------------------------------------
     # Q3: an approved gate pass not released within this window expires.

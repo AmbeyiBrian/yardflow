@@ -12259,6 +12259,8 @@ components:
           type: boolean
         signature_required_on_release:
           type: boolean
+        release_scan_required:
+          type: boolean
         gate_pass_expiry_hours:
           type: integer
           maximum: 2147483647
@@ -13565,6 +13567,8 @@ components:
           type: boolean
         signature_required_on_release:
           type: boolean
+        release_scan_required:
+          type: boolean
         gate_pass_expiry_hours:
           type: integer
           maximum: 2147483647
@@ -14478,6 +14482,12 @@ components:
             type: string
             format: decimal
             pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+        released_serials:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: integer
         variance_reasons:
           type: object
           additionalProperties:
