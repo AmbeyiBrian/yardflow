@@ -23,5 +23,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Unit tests import the shared label vectors from ../backend, which the web
+  // image does not contain; Vitest compiles them itself.
+  "exclude": ["src/**/*.test.ts"]
 }
