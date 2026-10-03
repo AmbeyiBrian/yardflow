@@ -267,6 +267,18 @@ description, so that I can pick one item among thousands without scrolling a lis
 - **Why:** the pickers loaded one page of items, and the API caps a page at 200, so on a catalogue
   larger than that some items could not be picked at all.
 
+**C10.** As someone who manages the catalogue, I want to open an existing item and change it, so
+that a misspelt name, a wrong category or a missing code is fixed where it lives.
+*(Approved 2026-10-03.)*
+- Tapping an item in Settings → Catalogue opens it filled in; Save changes it. The same screen
+  archives an item or restores an archived one.
+- Name, code, category, description, criticality, returnable and return days, minimum stock and
+  custom fields can always change.
+- **Tracking mode and unit of measure lock once the item has any stock movement**, because changing
+  them would change what every past movement of it means (ten "ea" silently becoming ten "m"). The
+  screen shows them as fixed and says why; the server refuses the change too.
+- Only people with `catalogue.manage` can edit; others see the item read-only.
+
 ---
 
 ### Epic D — Gate-in (receiving)

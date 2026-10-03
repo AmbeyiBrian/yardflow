@@ -1397,12 +1397,24 @@ C9 (approved 2026-10-03), design §7.3b. Fixes the 200-item cap on every item pi
   *Done when:* the gate-in, gate-out and boxes specs pass on the phone project against the demo
   tenant.
 
-- [ ] **T12.4 `[F]` Change a gate-in line**
+- [x] **T12.4 `[F]` Change a gate-in line**
   Refs: D9, D8, P1
   "Change" on every gate-in line reopens the line sheet filled in, including serials with their
   boxes and drums; Save replaces the line in place. Pure line ↔ sheet mapping unit-tested.
   *Done when:* an E2E changes a line's quantity and moves a unit to another box before receiving,
   and the received delivery shows the change.
+
+- [ ] **T12.5 `[B]` Lock tracking mode and unit once an item has moved**
+  Refs: C10
+  Updating an item refuses a change to `default_tracking_mode` or `uom` when any stock movement
+  names it (`ITEM_TRACKING_LOCKED`, naming the field); the item payload says whether it is locked.
+  *Done when:* API tests cover the refusal, the unlocked case, and every other field still editable.
+
+- [ ] **T12.6 `[F]` Edit and archive an item from the catalogue**
+  Refs: C10
+  Rows open the item sheet filled in; Save patches; archive and restore; locked fields shown fixed
+  with the reason; read-only for those without `catalogue.manage`.
+  *Done when:* an E2E renames an item and finds it by its new name in the gate-in picker.
 
 ---
 
