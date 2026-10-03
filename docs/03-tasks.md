@@ -1216,7 +1216,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
 
 ### Backend
 
-- [ ] **T11.1 `[B]` Box models**
+- [x] **T11.1 `[B]` Box models**
   Refs: §4.15.2 · P1, P8, P10
   `Box`, `BoxBulkContent`, `BoxEvent` (append-only) and `SerialUnit.box`, with their constraints:
   code unique per org case-insensitively including closed boxes, depth 1–3, claim quantity > 0.
@@ -1224,7 +1224,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* migrations apply; `core.E001`, the RLS test and the isolation suite pass with the new
   tables; a `BoxEvent` cannot be updated or deleted (test).
 
-- [ ] **T11.2 `[B]` Label reader and box lookup**
+- [x] **T11.2 `[B]` Label reader and box lookup**
   Refs: §4.15.6 · P2, P3, P4
   `stock/labels.py:read_label` and the shared vectors file
   `backend/stock/tests/data/label_vectors.json`, covering every rule in §4.15.6. `find_by_identifier`
@@ -1233,7 +1233,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* every vector passes; a GS1 code, a URL and an `SN:` label each find the unit their
   serial names; an unreadable label is still looked up whole (tests).
 
-- [ ] **T11.3 `[B]` A serialized movement starts where the unit is**
+- [x] **T11.3 `[B]` A serialized movement starts where the unit is**
   Refs: §4.15.3
   `post_movement` refuses a serialized movement whose `from_node` is not the unit's `current_node`.
   Lands alone: it is a new rule on the path every movement takes.
@@ -1258,7 +1258,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   and bulk to another store without anything leaving its box; `issuable_contents` names every
   exclusion reason.
 
-- [ ] **T11.6 `[B]` `verify_ledger` checks boxes**
+- [x] **T11.6 `[B]` `verify_ledger` checks boxes**
   Refs: §4.15.12 · P8
   Units in a box sit at its node and the box is open; claims never exceed the balance; trees are
   acyclic, at most three deep, children with their parents. Reports, never corrects.
@@ -1291,7 +1291,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* a whole box requested, approved and released leaves the box closed; one unit
   released from a box leaves the rest in it; the new submit refusals are tested; schema regenerated.
 
-- [ ] **T11.10 `[B]` Release by named serials**
+- [x] **T11.10 `[B]` Release by named serials**
   Refs: §4.15.8 · P11, G1
   `release_gate_out(released_serials=…)` issues exactly the named units; anything unnamed is short
   with a variance. `OrganizationSettings.release_scan_required` (default off) and
@@ -1302,7 +1302,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
 
 ### Frontend
 
-- [ ] **T11.11 `[F]` Label reader, scan matcher and a unit test runner**
+- [x] **T11.11 `[F]` Label reader, scan matcher and a unit test runner**
   Refs: §4.15.6, §4.15.8 · P2, P3, P11
   Add Vitest. `src/features/boxes/readLabel.ts` against the shared vectors file;
   `matchScan.ts` against fixture passes (a unit, a box, a pallet, a stranger, a repeat).
