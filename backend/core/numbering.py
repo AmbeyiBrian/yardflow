@@ -44,6 +44,8 @@ class DocumentType(models.TextChoices):
     # to abandon, so numbering them on creation burns nothing.
     PROJECT = "PROJECT", "Project"
     JOB = "JOB", "Job"
+    # Epic P. Only for boxes we label ourselves (P1); a label's own code is kept.
+    BOX = "BOX", "Box"
 
 
 #: The prefix a tenant starts with. **No longer fixed:** a tenant may change it
@@ -65,6 +67,7 @@ DEFAULT_PREFIXES: dict[str, str] = {
     DocumentType.CUSTODY_TRANSFER: "CT",
     DocumentType.PROJECT: "PRJ",
     DocumentType.JOB: "JOB",
+    DocumentType.BOX: "BX",
 }
 
 #: Kept as an alias: the name is used in tests and reads better at call sites

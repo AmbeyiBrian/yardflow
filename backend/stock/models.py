@@ -27,6 +27,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Lower
+from django.utils import timezone
 
 from catalogue.models import TrackingMode
 from core.models import TimeStampedModel
@@ -421,6 +423,18 @@ class SerialUnit(TenantModel, TimeStampedModel):
         related_name="recovered_units",
     )
 
+    # P1: the box this unit is in *now*. A projection kept beside the ledger, not
+    # part of it (§4.15.1): moving a unit in or out of a box is not a stock
+    # movement (P7).
+    box = models.ForeignKey(
+        "stock.Box",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="units",
+        db_index=True,
+    )
+
     class Meta:
         constraints = [
             # D3: "duplicate serial within the tenant must be rejected with a
@@ -625,3 +639,188 @@ class StockCountLine(TenantModel, TimeStampedModel):
     @property
     def has_variance(self) -> bool:
         return self.variance != 0
+
+
+# --------------------------------------------------------------------------
+# Boxes (§4.15, Epic P)
+# --------------------------------------------------------------------------
+
+
+class BoxSource(models.TextChoices):
+    #: The code was read off a printed label (P2).
+    LABEL = "LABEL", "From a label"
+    #: We generated the code for an unlabelled box (P1).
+    INTERNAL = "INTERNAL", "Generated here"
+
+
+class BoxStatus(models.TextChoices):
+    OPEN = "OPEN", "Open"
+    # P5: a box left with nothing in it closes, and its code is never reused.
+    CLOSED = "CLOSED", "Closed"
+
+
+class Box(TenantModel, TimeStampedModel):
+    """A code that groups units and bulk quantities (§4.15.1, P1).
+
+    A box is a projection beside the ledger, not stock: it adds no quantity, no
+    balance key and no movement type. It is written in the same transaction as
+    the movements that change it, and ``verify_ledger`` checks it against them,
+    so if they disagree the ledger wins.
+    """
+
+    code = models.CharField(max_length=100)
+    source = models.CharField(max_length=10, choices=BoxSource.choices)
+    parent = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="children"
+    )
+    # P10: parent's depth + 1. Kept as a column so the limit is a check
+    # constraint rather than a walk up the tree on every insert.
+    depth = models.PositiveSmallIntegerField(default=1)
+    current_node = models.ForeignKey(
+        "locations.StockNode", on_delete=models.PROTECT, related_name="boxes"
+    )
+    status = models.CharField(max_length=10, choices=BoxStatus.choices, default=BoxStatus.OPEN)
+    gate_in = models.ForeignKey(
+        "receiving.GateIn", on_delete=models.PROTECT, null=True, blank=True, related_name="boxes"
+    )
+    # What the scanner actually read, kept for audit even when ``code`` was
+    # parsed out of it (§4.15.6).
+    label_text = models.TextField(blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            # P5: including closed boxes, so a closed box's code cannot come
+            # back as a different box. Case-insensitive because a label read
+            # in a different case is still the same label.
+            models.UniqueConstraint(
+                "organization", Lower("code"), name="uniq_box_code_per_organization"
+            ),
+            # P10
+            models.CheckConstraint(
+                condition=Q(depth__gte=1, depth__lte=3), name="box_depth_is_one_to_three"
+            ),
+            models.CheckConstraint(
+                condition=~Q(status=BoxStatus.CLOSED) | Q(closed_at__isnull=False),
+                name="a_closed_box_says_when",
+            ),
+        ]
+        indexes = [models.Index(fields=["organization", "current_node", "status"])]
+        ordering = ("code",)
+
+    def __str__(self) -> str:
+        return self.code
+
+
+class BoxBulkContent(TenantModel, TimeStampedModel):
+    """A claim on the bulk lot at the box's node (§4.15.2, P9).
+
+    It does not hold stock: the balance at ``box.current_node`` still counts the
+    lot. Loose bulk is ``balance - sum(claims)``, computed and never stored. The
+    row is deleted when it reaches zero.
+    """
+
+    box = models.ForeignKey(Box, on_delete=models.PROTECT, related_name="bulk_contents")
+    item_type = models.ForeignKey(
+        "catalogue.ItemType", on_delete=models.PROTECT, related_name="box_contents"
+    )
+    owner_client = models.ForeignKey(
+        "network.Client",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="box_contents",
+    )
+    condition = models.CharField(max_length=20, choices=Condition.choices)
+    quantity = models.DecimalField(
+        max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0.001"))]
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["box", "item_type", "owner_client", "condition"],
+                name="uniq_box_content_per_item_owner_condition",
+                # As StockBalance: own stock has a NULL owner.
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                condition=Q(quantity__gt=0), name="box_content_quantity_is_positive"
+            ),
+        ]
+        indexes = [models.Index(fields=["organization", "item_type"])]
+        ordering = ("id",)
+
+    def __str__(self) -> str:
+        return f"{self.quantity} of {self.item_type_id} in box {self.box_id}"
+
+
+class BoxAction(models.TextChoices):
+    CREATED = "CREATED", "Box created"
+    UNIT_IN = "UNIT_IN", "Unit put in"
+    UNIT_OUT = "UNIT_OUT", "Unit taken out"
+    BULK_IN = "BULK_IN", "Bulk put in"
+    BULK_OUT = "BULK_OUT", "Bulk taken out"
+    BOX_IN = "BOX_IN", "Box put in"
+    BOX_OUT = "BOX_OUT", "Box taken out"
+    MOVED = "MOVED", "Box moved"
+    CLOSED = "CLOSED", "Box closed"
+
+
+class BoxEvent(TenantModel):
+    """One thing that happened to a box (§4.15.2, P8).
+
+    **Append-only**, in Python and by a Postgres trigger, like the ledger. It is
+    the audit trail for contents and the source of a unit's box history (P4).
+    """
+
+    # Not TimeStampedModel, for the same reason as StockMovement: a row that is
+    # never updated has no use for `updated_at`.
+    box = models.ForeignKey(Box, on_delete=models.PROTECT, related_name="events")
+    action = models.CharField(max_length=20, choices=BoxAction.choices)
+
+    serial_unit = models.ForeignKey(
+        SerialUnit, on_delete=models.PROTECT, null=True, blank=True, related_name="box_events"
+    )
+    child_box = models.ForeignKey(
+        Box, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    item_type = models.ForeignKey(
+        "catalogue.ItemType", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    owner_client = models.ForeignKey(
+        "network.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    condition = models.CharField(max_length=20, choices=Condition.choices, blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+
+    # Generic text, as on StockMovement: the trail must not depend on a
+    # document still existing.
+    document_type = models.CharField(max_length=50, blank=True)
+    document_id = models.CharField(max_length=64, blank=True)
+    document_number = models.CharField(max_length=50, blank=True)
+
+    actor = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    occurred_at = models.DateTimeField(default=timezone.now)
+    note = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["organization", "box", "occurred_at"]),
+            # P4: a unit's box history.
+            models.Index(fields=["organization", "serial_unit", "occurred_at"]),
+        ]
+        ordering = ("-occurred_at", "-id")
+
+    def __str__(self) -> str:
+        return f"{self.action} on box {self.box_id}"
+
+    def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if self.pk is not None and not self._state.adding:
+            raise ValidationError("Box events are append-only (P8, §4.15.2).")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationError("Box events are append-only and are never deleted (P8, §4.15.2).")
