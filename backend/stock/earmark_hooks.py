@@ -56,6 +56,23 @@ if TYPE_CHECKING:
 ZERO = Decimal("0")
 
 
+
+def _reason(request) -> str:  # type: ignore[no-untyped-def]
+    """The diversion reason, given or implied (§4.16.3).
+
+    Scrapping or sending out for repair is decided on its own document
+    (Epic J), which already says why; asking the gate for a second reason would
+    leave an earmarked item impossible to scrap. Such a movement carries its
+    document as the reason. Everything else must say why in words.
+    """
+    given = (request.divert_reason or "").strip()
+    if given:
+        return given
+    if (request.document_type or "").startswith("disposition."):
+        number = request.document_number or request.document_id or ""
+        return f"Decided on {request.document_type.split('.')[-1]} {number}".strip()
+    return ""
+
 def is_inside(node: StockNode) -> bool:
     """Is ``node`` a place inside the yard perimeter (E4)? Reuses the counting
     constant, so a vehicle is outside here as it is there."""
@@ -108,7 +125,7 @@ def _settle(
     if site in for_sites:
         record_event(ctx, organization_id, EarmarkAction.DELIVERED, **common)
         return
-    if not request.divert_reason.strip():
+    if not _reason(request):
         raise EarmarkDiversionNeedsReason(
             f"{description} is earmarked for {site.name}, not for where it is going. "
             f"Give a reason to divert it, or take other stock.",
@@ -118,7 +135,7 @@ def _settle(
         ctx,
         organization_id,
         EarmarkAction.DIVERTED,
-        reason=request.divert_reason.strip(),
+        reason=_reason(request),
         to_site=_diverted_to(for_sites),
         **common,
     )
@@ -304,7 +321,7 @@ def apply_bulk_rule(
 
     # Leaving the perimeter: own-site portions are delivered, others are diverted.
     diverted = [d for d in draws if not d.own]
-    if diverted and not request.divert_reason.strip():
+    if diverted and not _reason(request):
         from stock.services import EarmarkDiversionNeedsReason
 
         listed = ", ".join(f"{d.claim.site.name} ({d.amount.normalize():f})" for d in diverted)
@@ -333,7 +350,7 @@ def apply_bulk_rule(
                 ctx,
                 organization_id,
                 EarmarkAction.DIVERTED,
-                reason=request.divert_reason.strip(),
+                reason=_reason(request),
                 site=draw.claim.site,
                 to_site=_diverted_to(for_sites),
                 node=request.from_node,

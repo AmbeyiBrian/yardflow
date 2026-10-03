@@ -186,6 +186,30 @@ class TestUnits:
         with pytest.raises(EarmarkDiversionNeedsReason):
             move_unit(unit, yard.node, consumed_node(tenant.pk))
 
+    def test_scrapping_an_earmarked_unit_takes_its_document_as_the_reason(
+        self, tenant, yard, alpha
+    ):
+        # Epic J decides a disposal on its own document; the gate must not ask
+        # again, or an earmarked unit could never be scrapped.
+        from locations.nodes import scrap_node
+
+        unit = receive_unit(tenant, yard.node)
+        unit.earmark_site = alpha
+        unit.save()
+        move_unit(
+            unit,
+            yard.node,
+            scrap_node(tenant.pk),
+            MovementType.DISPOSE,
+            document_type="disposition.Disposal",
+            document_number="DSP-000004",
+        )
+        unit.refresh_from_db()
+        assert unit.earmark_site is None
+        (event,) = events(EarmarkAction.DIVERTED)
+        assert event.reason == "Decided on Disposal DSP-000004"
+        clean(tenant)
+
     def test_a_unit_moved_to_another_store_keeps_its_earmark(self, tenant, yard, store, alpha):
         unit = receive_unit(tenant, yard.node)
         unit.earmark_site = alpha
