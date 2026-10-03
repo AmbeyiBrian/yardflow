@@ -11,7 +11,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
-import { PEOPLE, open, signIn } from './fixtures';
+import { chooseFirst, open, PEOPLE, signIn } from './fixtures';
 
 const api = process.env.E2E_API_URL ?? 'http://127.0.0.1:8000';
 const host = new URL(process.env.E2E_BASE_URL ?? 'http://demo.localhost:5173').hostname;
@@ -112,7 +112,7 @@ test.describe('Add new … from inside a form', () => {
     await siteSheet.getByLabel(/^name$/i).fill(name);
     // The site's own reference is required.
     await siteSheet.getByLabel(/our reference/i).fill(`E2E-${Date.now().toString().slice(-6)}`);
-    await siteSheet.getByLabel(/client/i).selectOption({ index: 1 });
+    await chooseFirst(siteSheet.getByLabel(/client/i));
     await siteSheet.getByRole('button', { name: /create|save|add/i }).first().click();
 
     // Back on the job form: the new site is selected, and nothing was lost.

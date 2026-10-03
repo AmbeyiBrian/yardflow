@@ -118,8 +118,12 @@ export function ReferenceSelect<TForm extends FieldValues>({
   // first option, which is how "Add new site" used to leave the job form on
   // "Choose…" although the site had been created.
   const pendingRef = useRef<string | null>(null);
+  // The list may already have refetched by the time the id arrives, leaving no
+  // render to come; one forced render lets the effect below see the option.
+  const [, redraw] = useState(0);
   const quick = useQuickCreate(resource, (id) => {
     pendingRef.current = String(id);
+    redraw((count) => count + 1);
   });
 
   // After every render: once the refetched list has drawn the new option,
