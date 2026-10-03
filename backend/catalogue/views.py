@@ -8,7 +8,7 @@ re-implemented — and T1.20's suite discovers each one automatically.
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Case, IntegerField, Value, When
+from django.db.models import Case, Exists, IntegerField, OuterRef, Value, When
 from django_filters import rest_framework as filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -107,7 +107,14 @@ class ItemTypeViewSet(TenantScopedViewSet):
     }
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
-        queryset = super().get_queryset()
+        from stock.models import StockMovement
+
+        # C10: whether tracking is locked, in the same query as the rows.
+        queryset = (
+            super()
+            .get_queryset()
+            .annotate(has_movements=Exists(StockMovement.objects.filter(item_type=OuterRef("pk"))))
+        )
         # C3: "the archive is excluded from pickers". Opt in with
         # ?include_archived=true when looking at history.
         params = self.request.query_params

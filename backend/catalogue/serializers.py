@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from catalogue.exceptions import ItemTrackingLocked
 from catalogue.models import CategoryCustomField, ItemCategory, ItemType
 
 
@@ -71,6 +72,8 @@ class ItemTypeSerializer(serializers.ModelSerializer):
     # entirely when money tracking is off (D16), and one place deciding that is
     # better than a declared field plus an override that has to remember to.
     unit_cost = serializers.SerializerMethodField()
+    # C10: true once any stock movement names the item.
+    tracking_locked = serializers.SerializerMethodField()
 
     class Meta:
         model = ItemType
@@ -90,10 +93,39 @@ class ItemTypeSerializer(serializers.ModelSerializer):
             "is_archived",
             "criticality",
             "attributes",
+            "tracking_locked",
         )
 
     def get_criticality(self, item: ItemType) -> str:
         return item.criticality
+
+    def get_tracking_locked(self, item: ItemType) -> bool:
+        annotated = getattr(item, "has_movements", None)
+        if annotated is not None:
+            return bool(annotated)
+        from stock.models import StockMovement
+
+        return StockMovement.objects.filter(item_type=item).exists()
+
+    def update(self, instance: ItemType, validated_data: dict) -> ItemType:  # type: ignore[type-arg]
+        """C10: tracking mode and unit cannot change once the item has moved."""
+        locked = None
+        for field, what, past in (
+            ("default_tracking_mode", "tracking mode", "as {old}"),
+            ("uom", "unit of measure", "in {old}"),
+        ):
+            if field in validated_data and validated_data[field] != getattr(instance, field):
+                if locked is None:
+                    locked = self.get_tracking_locked(instance)
+                if locked:
+                    old = getattr(instance, field)
+                    old = old.lower() if field == "default_tracking_mode" else old
+                    raise ItemTrackingLocked(
+                        f"{instance.name} has stock history, so its {what} cannot change: "
+                        f"every past movement was recorded {past.format(old=old)}.",
+                        field_errors={field: [f"Fixed once {instance.name} has stock history."]},
+                    )
+        return super().update(instance, validated_data)
 
     def get_unit_cost(self, item: ItemType) -> str | None:
         """D16: money tracking is off by default.

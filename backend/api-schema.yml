@@ -11825,12 +11825,16 @@ components:
           type: string
           readOnly: true
         attributes: {}
+        tracking_locked:
+          type: boolean
+          readOnly: true
       required:
       - category
       - category_name
       - criticality
       - id
       - name
+      - tracking_locked
       - unit_cost
     ItemTypeRequest:
       type: object
