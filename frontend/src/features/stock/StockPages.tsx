@@ -21,6 +21,7 @@ import { useCrumb } from '../../components/ui/breadcrumbs';
 import { api } from '../../api/client';
 import { errorMessage, useAction, useList, useResource } from '../../api/hooks';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
+import { ItemPicker } from '../../components/ItemPicker.tsx';
 import {
   ActionBar,
   Banner,
@@ -34,7 +35,7 @@ import {
 } from '../../components/ui';
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
-import type { Client, ItemType, Location } from '../settings/types';
+import type { Client, Location } from '../settings/types';
 import type { Movement, Reel, SerialUnit, StockBalance, StockCount } from '../receiving/types';
 
 /* -------------------------------------------------------------------------- */
@@ -61,7 +62,6 @@ export default function StockPage() {
   const [nodeFilter, setNodeFilter] = useState('');
   const [includeUnavailable, setIncludeUnavailable] = useState(false);
 
-  const items = useList<ItemType>('item-types', { page_size: 500 });
   const nodes = useList<{ id: number; label: string; type: string }>('stock-nodes', {
     page_size: 200,
   });
@@ -127,18 +127,7 @@ export default function StockPage() {
 
       <Card className="grid gap-3 sm:grid-cols-3">
         <Field label="Item" htmlFor="stock-item">
-          <ControlledReferenceSelect resource="item-types"
-            id="stock-item"
-            value={itemFilter}
-            onChange={(event) => setItemFilter(event.target.value)}
-          >
-            <option value="">Everything</option>
-            {(items.data?.results ?? []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </ControlledReferenceSelect>
+          <ItemPicker id="stock-item" value={itemFilter} onChange={(next) => setItemFilter(next ? String(next.id) : '')} allowCreate={false} placeholder="Everything" />
         </Field>
 
         <Field label="Where" htmlFor="stock-node">
@@ -478,7 +467,6 @@ export function TransfersPage() {
     note: '',
   });
 
-  const items = useList<ItemType>('item-types', { page_size: 500 });
   const locations = useList<Location>('locations', { page_size: 200 });
   const transfer = useAction<Record<string, unknown>, Movement>({
     resource: 'stock/transfers',
@@ -521,18 +509,7 @@ export function TransfersPage() {
 
       <Card className="flex flex-col gap-3">
         <Field label="Item" htmlFor="tr-item">
-          <ControlledReferenceSelect resource="item-types"
-            id="tr-item"
-            value={form.item_type}
-            onChange={(event) => setForm({ ...form, item_type: event.target.value })}
-          >
-            <option value="">Choose…</option>
-            {(items.data?.results ?? []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </ControlledReferenceSelect>
+          <ItemPicker id="tr-item" value={form.item_type} onChange={(next) => setForm({ ...form, item_type: next ? String(next.id) : '' })} />
         </Field>
 
         <Field label="Quantity" htmlFor="tr-quantity">
@@ -713,7 +690,6 @@ export function CountDetailPage() {
   const [banner, setBanner] = useState<string | null>(null);
   const [line, setLine] = useState({ item_type: '', counted_quantity: '', reason: '' });
 
-  const items = useList<ItemType>('item-types', { page_size: 500 });
   const clients = useList<Client>('clients', { page_size: 200 });
   const addLine = useAction<Record<string, unknown>, StockCount>({
     resource: 'stock-counts',
@@ -766,18 +742,7 @@ export function CountDetailPage() {
           </p>
 
           <Field label="Item" htmlFor="cl-item">
-            <ControlledReferenceSelect resource="item-types"
-              id="cl-item"
-              value={line.item_type}
-              onChange={(event) => setLine({ ...line, item_type: event.target.value })}
-            >
-              <option value="">Choose…</option>
-              {(items.data?.results ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </ControlledReferenceSelect>
+            <ItemPicker id="cl-item" value={line.item_type} onChange={(next) => setLine({ ...line, item_type: next ? String(next.id) : '' })} />
           </Field>
 
           <Field label="Counted" htmlFor="cl-qty">

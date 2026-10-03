@@ -39,6 +39,7 @@ import {
   Textarea,
 } from '../../components/ui';
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
+import { ItemPicker, type PickedItem } from '../../components/ItemPicker.tsx';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Reel, SerialUnit, StockBalance } from '../receiving/types';
 import type { Client, ItemType, Location, Site, Project } from '../settings/types';
@@ -805,10 +806,18 @@ function LineSheet({
   const [noSerialReason, setNoSerialReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const items = useList<ItemType>('item-types', { page_size: 500 });
   void fromLocation;
 
-  const item = (items.data?.results ?? []).find((row) => String(row.id) === itemId);
+  // The item is what the picker handed back; when a scan or an edited line set
+  // the id instead, fetch it (ItemPicker shares the same cached detail).
+  const [picked, setPicked] = useState<PickedItem | null>(null);
+  const itemDetail = useDetail<ItemType>('item-types', itemId || undefined, { retry: false });
+  const item: Pick<ItemType, 'id' | 'name' | 'uom' | 'default_tracking_mode' | 'is_returnable'> | undefined =
+    picked && String(picked.id) === itemId
+      ? picked
+      : itemDetail.data && String(itemDetail.data.id) === itemId
+        ? itemDetail.data
+        : undefined;
 
   /**
    * What this location actually holds of this item, by owner and condition.
@@ -1093,20 +1102,14 @@ function LineSheet({
           <>
         {!scanned ? (
           <Field label="Or choose an item" htmlFor="gol-item">
-            <ControlledReferenceSelect resource="item-types"
+            <ItemPicker
               id="gol-item"
               value={itemId}
-              onChange={(event) => setItemId(event.target.value)}
-            >
-              <option value="">Choose…</option>
-              {(items.data?.results ?? [])
-                .filter((row) => !row.is_archived)
-                .map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name}
-                  </option>
-                ))}
-            </ControlledReferenceSelect>
+              onChange={(next) => {
+                setPicked(next);
+                setItemId(next ? String(next.id) : '');
+              }}
+            />
           </Field>
         ) : null}
 

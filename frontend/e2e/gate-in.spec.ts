@@ -12,7 +12,7 @@
 
 import { type Locator, expect, test } from '@playwright/test';
 
-import { PEOPLE, open, signIn, unique } from './fixtures';
+import { PEOPLE, itemOptions, open, pickItem, signIn, unique } from './fixtures';
 
 /**
  * Pick an item the sheet treats as a reel.
@@ -23,13 +23,20 @@ import { PEOPLE, open, signIn, unique } from './fixtures';
  * for a drum.
  */
 async function chooseAReelItem(sheet: Locator): Promise<boolean> {
-  const item = sheet.getByLabel('Item');
-  const options = await item.locator('option').allTextContents();
+  const options = await itemOptions(sheet, 'Item', 'cable');
+  const feeders = await itemOptions(sheet, 'Item', 'feeder');
 
-  for (const label of options.filter((text) => /cable|feeder/i.test(text))) {
-    await item.selectOption({ label });
-    if (await sheet.getByLabel('Drum number').isVisible().catch(() => false)) {
-      return true;
+  // Each candidate is picked by its position in the list the search shows.
+  for (const [query, count] of [
+    ['cable', options.length],
+    ['feeder', feeders.length],
+  ] as const) {
+    for (let index = 0; index < count; index += 1) {
+      await itemOptions(sheet, 'Item', query);
+      await sheet.getByRole('option').nth(index).click();
+      if (await sheet.getByLabel('Drum number').isVisible().catch(() => false)) {
+        return true;
+      }
     }
   }
   return false;
@@ -55,10 +62,8 @@ test.describe('Receiving a delivery', () => {
     // A bulk item by name. Selecting by index would silently pick whichever
     // item the seed happens to list first — and if that is serialized, the
     // sheet asks for a serial and the failure looks like a broken button.
-    const items = await sheet.getByLabel('Item').locator('option').allTextContents();
-    const bulk = items.find((label) => /clamp|tie|glove|vest/i.test(label));
+    const bulk = await pickItem(sheet, 'Item', 'Cable clamp');
     test.skip(!bulk, 'no bulk item in the seeded catalogue');
-    await sheet.getByLabel('Item').selectOption({ label: bulk! });
     await sheet.getByLabel(/^Quantity/).fill('25');
     await sheet.getByRole('button', { name: 'Add line' }).click();
     await expect(sheet).toBeHidden();
@@ -100,12 +105,8 @@ test.describe('Receiving a delivery', () => {
     const sheet = page.getByRole('dialog');
 
     // The seeded catalogue tracks radios by serial.
-    const item = sheet.getByLabel('Item');
-    const options = await item.locator('option').allTextContents();
-    const serialized = options.find((label) => /rru|antenna/i.test(label));
+    const serialized = await pickItem(sheet, 'Item', 'Baseband board');
     test.skip(!serialized, 'no serialized item in the seeded catalogue');
-
-    await item.selectOption({ label: serialized! });
 
     // Picking a serialized item replaces the quantity box with serial entry —
     // D3 in the interface: the line *is* the list of identities.
@@ -191,10 +192,8 @@ test.describe('Receiving a delivery', () => {
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
-    const items = await sheet.getByLabel('Item').locator('option').allTextContents();
-    const bulk = items.find((label) => /clamp|tie|glove|vest/i.test(label));
+    const bulk = await pickItem(sheet, 'Item', 'Cable clamp');
     test.skip(!bulk, 'no bulk item in the seeded catalogue');
-    await sheet.getByLabel('Item').selectOption({ label: bulk! });
     await sheet.getByLabel(/^Quantity/).fill('3');
     await sheet.getByRole('button', { name: 'Add line' }).click();
     await expect(sheet).toBeHidden();
@@ -236,11 +235,8 @@ test.describe('Receiving a delivery', () => {
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
 
-    const item = sheet.getByLabel('Item');
-    const options = await item.locator('option').allTextContents();
-    const serialized = options.find((label) => /rru|antenna/i.test(label));
+    const serialized = await pickItem(sheet, 'Item', 'Baseband board');
     test.skip(!serialized, 'no serialized item in the seeded catalogue');
-    await item.selectOption({ label: serialized! });
 
     const serials = unique('BOX');
     for (const suffix of ['-1', '-2', '-3']) {
@@ -312,10 +308,8 @@ test.describe('Correcting a draft', () => {
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
-    const items = await sheet.getByLabel('Item').locator('option').allTextContents();
-    const bulk = items.find((label) => /clamp|tie|glove|vest/i.test(label));
+    const bulk = await pickItem(sheet, 'Item', 'Cable clamp');
     test.skip(!bulk, 'no bulk item in the seeded catalogue');
-    await sheet.getByLabel('Item').selectOption({ label: bulk! });
     await sheet.getByLabel(/^Quantity/).fill('7');
     await sheet.getByRole('button', { name: 'Add line' }).click();
     await expect(sheet).toBeHidden();
@@ -331,7 +325,7 @@ test.describe('Correcting a draft', () => {
     await page.getByRole('button', { name: 'Remove' }).first().click();
     await page.getByRole('button', { name: 'Add a line' }).click();
     const again = page.getByRole('dialog');
-    await again.getByLabel('Item').selectOption({ label: bulk! });
+    await pickItem(again, 'Item', 'Cable clamp');
     await again.getByLabel(/^Quantity/).fill('9');
     await again.getByRole('button', { name: 'Add line' }).click();
     await page.getByRole('button', { name: 'Save as draft' }).click();

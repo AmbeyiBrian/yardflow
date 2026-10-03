@@ -14,7 +14,7 @@
  * rather than adding a test id.
  */
 
-import { type APIRequestContext, type Page, expect } from '@playwright/test';
+import { type APIRequestContext, type Locator, type Page, expect } from '@playwright/test';
 
 /** The seeded demo tenant (`manage.py seed_demo`). */
 export const PASSWORD = 'yardflow-demo-password';
@@ -143,4 +143,52 @@ export async function receiveCriticalStock(
     data: {},
   });
   return { itemId: critical.id, itemName: critical.name, locationId: yard.id };
+}
+
+/**
+ * Choose an item in an `ItemPicker` by typing into it (C9).
+ *
+ * The picker is a combobox, not a `<select>`: fill the input, wait for the
+ * matching option, click it. A string `text` is typed and matched literally; a
+ * RegExp is matched as given (and the input is filled with `typed`). Returns
+ * the chosen option's text, or `null` when nothing matched within `timeout` —
+ * so a spec can `test.skip` when the catalogue has no such item, as it did when
+ * it searched `<option>` texts.
+ */
+export async function pickItem(
+  scope: Page | Locator,
+  label: string,
+  text: string | RegExp,
+  typed?: string,
+  timeout = 8_000,
+): Promise<string | null> {
+  const query = typed ?? (typeof text === 'string' ? text : '');
+  await scope.getByRole('combobox', { name: label, exact: true }).fill(query);
+  const matcher =
+    typeof text === 'string' ? new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : text;
+  const option = scope.getByRole('option', { name: matcher }).first();
+  try {
+    await option.waitFor({ state: 'visible', timeout });
+  } catch {
+    return null;
+  }
+  const name = (await option.textContent())?.trim() ?? '';
+  await option.click();
+  return name;
+}
+
+/** The option texts a search offers, for specs that must try several in turn. */
+export async function itemOptions(
+  scope: Page | Locator,
+  label: string,
+  query: string,
+  timeout = 8_000,
+): Promise<string[]> {
+  await scope.getByRole('combobox', { name: label, exact: true }).fill(query);
+  try {
+    await scope.getByRole('option').first().waitFor({ state: 'visible', timeout });
+  } catch {
+    return [];
+  }
+  return (await scope.getByRole('option').allTextContents()).map((t) => t.trim());
 }

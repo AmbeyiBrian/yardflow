@@ -33,6 +33,7 @@ import { useOffline } from '../../offline/OfflineProvider';
 import { newUuid } from '../../offline/db';
 import { submitOrQueue } from '../../offline/sync';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
+import { ItemPicker, type PickedItem } from '../../components/ItemPicker.tsx';
 import type { LabelReading } from '../boxes/readLabel';
 import {
   ActionBar,
@@ -47,7 +48,7 @@ import {
 } from '../../components/ui';
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
-import type { Client, ItemType, Location, Site } from '../settings/types';
+import type { Client, Location, Site } from '../settings/types';
 import {
   boxErrorMessages,
   boxLabel,
@@ -203,7 +204,6 @@ export default function GateInCapturePage() {
   const locations = useList<Location>('locations', { page_size: 200 });
   const clients = useList<Client>('clients', { page_size: 200 });
   const sites = useList<Site>('sites', { page_size: 200 });
-  const items = useList<ItemType>('item-types', { page_size: 500 });
   const people = useList<{ id: number; full_name: string }>('users', { page_size: 200 });
 
   // Every change, not only on submit. See the module comment. Skipped while
@@ -714,7 +714,6 @@ export default function GateInCapturePage() {
         onAdd={addLine}
         boxes={draft.boxes}
         onStartBox={addBox}
-        items={items.data?.results ?? []}
         clients={clients.data?.results ?? []}
         defaultClient={needsClient ? draft.header.client : ''}
       />
@@ -732,7 +731,6 @@ function LineSheet({
   onAdd,
   boxes,
   onStartBox,
-  items,
   clients,
   defaultClient,
 }: {
@@ -742,11 +740,10 @@ function LineSheet({
   /** The delivery's boxes so far, and how to start another (P1, 4.15.5). */
   boxes: DraftBox[];
   onStartBox: (box: DraftBox) => void;
-  items: ItemType[];
   clients: Client[];
   defaultClient: string;
 }) {
-  const [itemId, setItemId] = useState('');
+  const [item, setItem] = useState<PickedItem | null>(null);
   const [quantity, setQuantity] = useState('');
   const [condition, setCondition] = useState<Condition>('NEW');
   const [ownerClient, setOwnerClient] = useState(defaultClient);
@@ -785,7 +782,6 @@ function LineSheet({
   const [pendingDrum, setPendingDrum] = useState('');
   const [pendingLength, setPendingLength] = useState('');
 
-  const item = items.find((row) => String(row.id) === itemId);
   const mode = item?.default_tracking_mode ?? 'BULK';
   /** Units are identified one by one, so they are what a box holds. */
   const serialised = mode === 'SERIALIZED' && !noSerialReason;
@@ -900,7 +896,7 @@ function LineSheet({
   }, [open, defaultClient]);
 
   function reset() {
-    setItemId('');
+    setItem(null);
     setQuantity('');
     setCondition('NEW');
     setSerials([]);
@@ -1028,17 +1024,7 @@ function LineSheet({
         {error ? <Banner tone="error">{error}</Banner> : null}
 
         <Field label="Item" htmlFor="line-item">
-          <ControlledReferenceSelect resource="item-types" id="line-item" value={itemId} onChange={(event) => setItemId(event.target.value)}>
-            <option value="">Choose…</option>
-            {items
-              .filter((row) => !row.is_archived)
-              .map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.name}
-                  {row.code ? ` (${row.code})` : ''}
-                </option>
-              ))}
-          </ControlledReferenceSelect>
+          <ItemPicker id="line-item" value={item?.id ?? ''} onChange={setItem} />
         </Field>
 
         {boxable ? (

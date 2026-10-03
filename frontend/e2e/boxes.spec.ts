@@ -13,7 +13,7 @@
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { PASSWORD, PEOPLE, open, signIn, unique } from './fixtures';
+import { PASSWORD, PEOPLE, open, pickItem, signIn, unique } from './fixtures';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -54,11 +54,8 @@ test.describe('A box from the gate to the truck', () => {
 
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');
-    const item = sheet.getByLabel('Item');
-    const options = await item.locator('option').allTextContents();
-    const serialized = options.find((label) => /baseband|bbu/i.test(label));
+    const serialized = await pickItem(sheet, 'Item', 'Baseband board');
     test.skip(!serialized, 'no serialized item in the seeded catalogue');
-    await item.selectOption({ label: serialized! });
 
     // P1: start the box, then the units go into it as they are scanned.
     await sheet.getByRole('button', { name: 'Start a box' }).click();

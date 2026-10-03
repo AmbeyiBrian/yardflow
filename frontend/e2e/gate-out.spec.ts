@@ -15,7 +15,7 @@
 
 import { expect, test } from '@playwright/test';
 
-import { PEOPLE, open, receiveCriticalStock, signIn } from './fixtures';
+import { PEOPLE, open, pickItem, receiveCriticalStock, signIn } from './fixtures';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -49,8 +49,7 @@ test.describe('The gate-out loop', () => {
     const sheet = page.getByRole('dialog');
     await expect(sheet).toBeVisible();
 
-    const picker = sheet.getByLabel('Or choose an item');
-    await picker.selectOption({ label: criticalItem });
+    await pickItem(sheet, 'Or choose an item', criticalItem);
     // D3's escape hatch, recorded: untagged units go as a quantity.
     await sheet.getByLabel(/no serial available/i).fill('Untagged batch, GRN on file.');
     await sheet.getByLabel(/^How much/).fill('3');
@@ -95,13 +94,11 @@ test.describe('The gate-out loop', () => {
 
     await page.getByRole('button', { name: 'Add' }).click();
     const sheet = page.getByRole('dialog');
-    const picker = sheet.getByLabel('Or choose an item');
-    const items = await picker.locator('option').allTextContents();
 
     // A **high-criticality** item, because that is what routes for approval
     // (§5.1). A clamp auto-approves, and a pass with nothing outstanding has no
     // self-approval to refuse — the test would have passed for the wrong reason.
-    await picker.selectOption({ label: stocked!.itemName });
+    await pickItem(sheet, 'Or choose an item', stocked!.itemName);
 
     // D3's escape hatch: a serialized item can go as a quantity when the yard
     // holds untagged ones, with the reason recorded.
