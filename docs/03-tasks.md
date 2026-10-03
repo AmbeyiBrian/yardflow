@@ -1265,7 +1265,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* each kind of drift, injected directly into the tables, is reported; a clean ledger
   with boxes reports nothing.
 
-- [ ] **T11.7 `[B]` Gate-in receives boxes**
+- [x] **T11.7 `[B]` Gate-in receives boxes**
   Refs: §4.15.5 · P1, P2, P9, P10
   `GateInBox`, `GateInSerial.box_key`, `GateInLine.box_key`; serializer read and write; validation
   (`BOX_CODE_IN_USE`, `BOX_TOO_DEEP`, `BOX_CYCLE`, `BOX_EMPTY`, `BOX_MIXED_DESTINATIONS`); posting
