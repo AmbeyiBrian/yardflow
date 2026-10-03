@@ -22,6 +22,7 @@ from stock.models import (
     BoxBulkContent,
     BoxStatus,
     Reel,
+    ReelStatus,
     SerialUnit,
     StockBalance,
     StockMovement,
@@ -260,6 +261,37 @@ def _verify_boxes(organization_id, result: VerificationResult) -> None:
                 )
 
 
+def _verify_loose_length(organization_id, result: VerificationResult) -> None:
+    """D10: Σ open drum remaining at a node/lot must not exceed the balance."""
+    on_drums = (
+        Reel.objects.filter(organization_id=organization_id, status=ReelStatus.OPEN)
+        .order_by()
+        .values("current_node", "item_type", "owner_client", "condition")
+        .annotate(total=Sum("remaining_length"))
+    )
+    for row in on_drums:
+        balance = StockBalance.objects.filter(
+            organization_id=organization_id,
+            node_id=row["current_node"],
+            item_type_id=row["item_type"],
+            owner_client_id=row["owner_client"],
+            condition=row["condition"],
+        ).first()
+        held = balance.quantity if balance else Decimal("0")
+        if row["total"] > held:
+            result.drifts.append(
+                Drift(
+                    kind="negative loose length",
+                    description=(
+                        f"item {row['item_type']} at node {row['current_node']} "
+                        f"({row['condition']}): open drums hold more than the balance"
+                    ),
+                    cached=str(held),
+                    ledger=f"at least {row['total']} on drums",
+                )
+            )
+
+
 def verify_ledger(organization_id) -> VerificationResult:
     """Recompute balances from the ledger and report any drift (§3.3)."""
     result = VerificationResult()
@@ -337,6 +369,10 @@ def verify_ledger(organization_id) -> VerificationResult:
                     ledger=str(expected_remaining),
                 )
             )
+
+    # 3b. D10: loose length is never negative. Open drums at a node cannot hold
+    #     more metres than the balance there.
+    _verify_loose_length(organization_id, result)
 
     # 4. §4.15 (P8): the box projection against the ledger.
     _verify_boxes(organization_id, result)

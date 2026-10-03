@@ -94,6 +94,15 @@ class StockBalanceSerializer(serializers.ModelSerializer):
         source="owner_client.name", read_only=True, default=""
     )
 
+    # D10 (§7.3c): a reel item's quantity splits into metres on open drums and
+    # loose length. Null for other items, and on lists that do not annotate it.
+    on_drums = serializers.DecimalField(
+        max_digits=14, decimal_places=3, read_only=True, allow_null=True, default=None
+    )
+    loose = serializers.DecimalField(
+        max_digits=14, decimal_places=3, read_only=True, allow_null=True, default=None
+    )
+
     class Meta:
         model = StockBalance
         fields = (
@@ -112,6 +121,8 @@ class StockBalanceSerializer(serializers.ModelSerializer):
             "condition",
             "quantity",
             "uom",
+            "on_drums",
+            "loose",
         )
 
 

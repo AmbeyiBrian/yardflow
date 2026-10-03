@@ -15783,6 +15783,18 @@ components:
         uom:
           type: string
           maxLength: 20
+        on_drums:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+          readOnly: true
+          nullable: true
+        loose:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+          readOnly: true
+          nullable: true
       required:
       - condition
       - holder_id
@@ -15790,9 +15802,11 @@ components:
       - item_code
       - item_name
       - item_type
+      - loose
       - node
       - node_label
       - node_type
+      - on_drums
       - owner_client_name
       - site_id
       - tracking_mode

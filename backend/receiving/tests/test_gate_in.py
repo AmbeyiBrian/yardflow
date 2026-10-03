@@ -765,3 +765,17 @@ class TestAmendmentIsOffByDefault:
         from receiving.services import can_amend
 
         assert can_amend(draft(tenant, yard)) is True
+
+
+class TestLooseCableLine:
+    """D10: a BULK line of a reel-tracked item posts as plain length, no drum."""
+
+    def test_a_bulk_line_of_a_cable_posts_without_a_drum(self, tenant, yard, storekeeper):
+        cable = ItemTypeFactory(default_tracking_mode=TrackingMode.REEL, uom="m")
+        gate_in = draft(tenant, yard)
+        add_bulk_line(gate_in, quantity=240, item=cable)
+
+        post_gate_in(gate_in, posted_by=storekeeper)
+
+        assert balance_at(yard.node, cable) == Decimal("240")
+        assert Reel.objects.count() == 0

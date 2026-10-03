@@ -13,15 +13,30 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from django.db.models import Count, IntegerField, OuterRef, Q, QuerySet, Subquery, Sum
+from django.db.models import (
+    Case,
+    Count,
+    DecimalField,
+    F,
+    IntegerField,
+    OuterRef,
+    Q,
+    QuerySet,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce
 
+from catalogue.models import TrackingMode
 from locations.models import UNAVAILABLE_NODE_TYPES, LocationType, StockNode
 from stock.labels import read_label
 from stock.models import (
     Box,
     BoxBulkContent,
     Reel,
+    ReelStatus,
     SerialUnit,
     StockBalance,
     StockMovement,
@@ -58,7 +73,58 @@ def stock_on_hand(
     if owner_client is not None:
         balances = balances.filter(owner_client=owner_client)
 
-    return balances.select_related("item_type", "node", "owner_client")
+    return with_drum_split(balances.select_related("item_type", "node", "owner_client"))
+
+
+def with_drum_split(balances: QuerySet[StockBalance]) -> QuerySet[StockBalance]:
+    """D10 (§7.3c): annotate ``on_drums`` and ``loose`` for reel items.
+
+    One subquery for the whole list, not one per row. Null for every other
+    item. ``loose`` is quantity less open drums' remaining length, as
+    ``post_movement`` computes it.
+    """
+    dec = DecimalField(max_digits=14, decimal_places=3)
+
+    def drums(owner_filter):  # type: ignore[no-untyped-def]
+        return Subquery(
+            Reel.objects.filter(
+                current_node=OuterRef("node"),
+                item_type=OuterRef("item_type"),
+                condition=OuterRef("condition"),
+                status=ReelStatus.OPEN,
+                **owner_filter,
+            )
+            .order_by()
+            .values("current_node")
+            .annotate(total=Sum("remaining_length"))
+            .values("total"),
+            output_field=dec,
+        )
+
+    is_reel = Q(item_type__default_tracking_mode=TrackingMode.REEL)
+    return balances.annotate(
+        on_drums=Case(
+            When(
+                is_reel,
+                then=Coalesce(
+                    Case(
+                        When(owner_client__isnull=True, then=drums({"owner_client__isnull": True})),
+                        default=drums({"owner_client": OuterRef("owner_client")}),
+                        output_field=dec,
+                    ),
+                    Value(Decimal("0"), output_field=dec),
+                ),
+            ),
+            default=None,
+            output_field=dec,
+        )
+    ).annotate(
+        loose=Case(
+            When(is_reel, then=F("quantity") - F("on_drums")),
+            default=None,
+            output_field=dec,
+        )
+    )
 
 
 def stock_as_at(

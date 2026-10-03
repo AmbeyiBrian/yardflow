@@ -1257,3 +1257,71 @@ class TestExpiryAndEscalation:
         approve_gate_out(gate_out, actor=owner)
 
         assert gate_out.status == GateOutStatus.APPROVED
+
+
+class TestLooseCableLine:
+    """D10: a BULK line of a reel-tracked item releases loose length only."""
+
+    def _cable(self, tenant, yard):
+        from stock.factories import ReelFactory
+
+        cable = ItemTypeFactory(default_tracking_mode=TrackingMode.REEL, uom="m")
+        reel = ReelFactory(
+            item_type=cable,
+            drum_number="D-0007",
+            current_node=external_node(tenant.pk),
+            initial_length=Decimal("500"),
+            remaining_length=Decimal("500"),
+        )
+        with transaction.atomic():
+            post_movement(
+                MovementRequest(
+                    item_type=cable,
+                    quantity=Decimal("500"),
+                    from_node=external_node(tenant.pk),
+                    to_node=yard.node,
+                    movement_type=MovementType.RECEIPT,
+                    tracking_mode=TrackingMode.REEL,
+                    reel=reel,
+                )
+            )
+            post_movement(
+                MovementRequest(
+                    item_type=cable,
+                    quantity=Decimal("100"),
+                    from_node=external_node(tenant.pk),
+                    to_node=yard.node,
+                    movement_type=MovementType.RECEIPT,
+                    tracking_mode=TrackingMode.BULK,
+                )
+            )
+        return cable
+
+    def test_a_loose_line_is_released_from_loose_length(
+        self, tenant, yard, storekeeper, technician
+    ):
+        cable = self._cable(tenant, yard)
+        gate_out = make_gate_out(tenant, yard, storekeeper, technician)
+        add_line(gate_out, cable, 60)
+        submit_gate_out(gate_out, submitted_by=storekeeper)
+        gate_out.refresh_from_db()
+
+        release_gate_out(gate_out, released_by=storekeeper)
+
+        assert balance_at(yard.node, cable) == Decimal("540")
+
+    def test_a_loose_line_beyond_loose_length_is_refused(
+        self, tenant, yard, storekeeper, technician
+    ):
+        from stock.services import OnDrumsOnly
+
+        cable = self._cable(tenant, yard)
+        gate_out = make_gate_out(tenant, yard, storekeeper, technician)
+        add_line(gate_out, cable, 150)
+        submit_gate_out(gate_out, submitted_by=storekeeper)
+        gate_out.refresh_from_db()
+
+        with pytest.raises(OnDrumsOnly, match="D-0007"):
+            release_gate_out(gate_out, released_by=storekeeper)
+
+        assert balance_at(yard.node, cable) == Decimal("600")

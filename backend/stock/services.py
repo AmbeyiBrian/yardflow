@@ -18,6 +18,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Sum
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 from accounts.models import User
@@ -100,6 +102,19 @@ class BoxedStockOnly(DomainError):
     code = "BOXED_STOCK_ONLY"
     status_code = 409
     default_message = "The rest of that stock is in boxes."
+
+
+class OnDrumsOnly(DomainError):
+    """D10, §7.3c: loose cable asked for beyond the loose length.
+
+    The rest of the stock is on drums. Taking it as loose length would empty a
+    drum without anyone naming it, so the drums are named and the caller asks
+    for one of them.
+    """
+
+    code = "ON_DRUMS_ONLY"
+    status_code = 409
+    default_message = "The rest of that cable is on drums."
 
 
 class BoxClaimShort(DomainError):
@@ -317,6 +332,22 @@ def post_movement(request: MovementRequest) -> StockMovement:
             ),
         )
 
+    # 2c''. D10 (§7.3c): loose cable length out of a node can never draw on
+    #       metres that are on a drum. Reel items only; no query for any other.
+    if (
+        tracking_mode == TrackingMode.BULK
+        and item_type.default_tracking_mode == TrackingMode.REEL
+        and request.from_node.type != NodeType.EXTERNAL
+        and request.movement_type not in (MovementType.ADJUST, MovementType.REVERSAL)
+    ):
+        _assert_loose_length(
+            request,
+            quantity=quantity,
+            held_condition=held_condition,
+            balance_before=outbound.quantity,
+            uom=uom,
+        )
+
     # 2d. Value it, once, now (O11, D27).
     unit_cost, unit_cost_source = _resolve_valuation(request, item_type)
 
@@ -372,6 +403,47 @@ def post_movement(request: MovementRequest) -> StockMovement:
         _move_or_consume_reel(request.reel, quantity, request.to_node, request.condition)
 
     return movement
+
+
+def _assert_loose_length(
+    request: MovementRequest,
+    *,
+    quantity: Decimal,
+    held_condition: str,
+    balance_before: Decimal,
+    uom: str,
+) -> None:
+    """D10: a BULK movement of a reel item may take at most the loose length."""
+    drums = Reel.objects.filter(
+        current_node=request.from_node,
+        item_type=request.item_type,
+        owner_client=request.owner_client,
+        condition=held_condition,
+        status=ReelStatus.OPEN,
+    )
+    on_drums = drums.aggregate(total=Sum("remaining_length"))["total"] or Decimal("0")
+    if on_drums == 0:
+        return
+    loose = balance_before - on_drums
+    if quantity <= loose:
+        return
+
+    held = list(
+        drums.filter(remaining_length__gt=0)
+        .order_by(Lower("drum_number"))
+        .values_list("drum_number", "remaining_length")
+    )
+    names = [f"{number} ({length.normalize():f} {uom})" for number, length in held]
+    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    shown = max(loose, Decimal("0"))
+    raise OnDrumsOnly(
+        f"Only {shown.normalize():f} {uom} is loose here; the rest is on "
+        f"{'drum' if len(names) == 1 else 'drums'} {listed}. Take it from a drum.",
+        details={
+            "drums": [number for number, _ in held],
+            "loose": str(shown),
+        },
+    )
 
 
 def _validate_tracking(tracking_mode: str, quantity: Decimal, request: MovementRequest) -> None:
