@@ -19,6 +19,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { api } from '../../api/client';
+import { PERM } from '../../auth/permissions';
+import { useSession } from '../../auth/session';
 import { errorMessage, useAction, useList, useResource } from '../../api/hooks';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { ItemPicker } from '../../components/ItemPicker';
@@ -37,6 +39,8 @@ import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, Stat, StatusBadge } from '../../components/ui/data';
 import type { Client, Location } from '../settings/types';
 import { cableSplitText } from './cableSplit';
+import { BulkEarmarkSheet, EarmarkCard } from './EarmarkSheets';
+import { canChangeBulk, earmarkSplitText, type EarmarkRow } from './earmarkHelpers';
 import type { Movement, Reel, SerialUnit, StockBalance, StockCount } from '../receiving/types';
 
 /* -------------------------------------------------------------------------- */
@@ -56,17 +60,23 @@ interface UnitBoxEvent {
   note: string;
 }
 
+/** A stock row with the earmark split the server now adds (Q2). */
+type StockRow = StockBalance & Pick<EarmarkRow, 'earmarked' | 'free'>;
+
 export default function StockPage() {
   const navigate = useNavigate();
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [itemFilter, setItemFilter] = useState('');
   const [nodeFilter, setNodeFilter] = useState('');
   const [includeUnavailable, setIncludeUnavailable] = useState(false);
+  const { hasAny } = useSession();
+  const canChange = hasAny(PERM.STOCK_ADJUST, PERM.GATE_IN_POST);
+  const [earmarkRow, setEarmarkRow] = useState<StockRow | null>(null);
 
   const nodes = useList<{ id: number; label: string; type: string }>('stock-nodes', {
     page_size: 200,
   });
-  const stock = useResource<{ results: StockBalance[] }>('stock', {
+  const stock = useResource<{ results: StockRow[] }>('stock', {
     item_type: itemFilter || undefined,
     node: nodeFilter || undefined,
     available_only: includeUnavailable ? 'false' : undefined,
@@ -178,13 +188,24 @@ export default function StockPage() {
               header: 'Quantity',
               cell: (row) => {
                 const split = cableSplitText(row);
-                return split ? (
+                const earmarks = earmarkSplitText(row);
+                return (
                   <>
                     {row.quantity} {row.uom}
-                    <span className="block text-xs text-slate-600">{split}</span>
+                    {split ? <span className="block text-xs text-slate-600">{split}</span> : null}
+                    {earmarks ? (
+                      <span className="block text-xs text-slate-600">{earmarks}</span>
+                    ) : null}
+                    {canChange && canChangeBulk(row) ? (
+                      <button
+                        type="button"
+                        className="mt-1 min-h-[44px] text-xs text-slate-700 underline"
+                        onClick={() => setEarmarkRow(row)}
+                      >
+                        Change earmark
+                      </button>
+                    ) : null}
                   </>
-                ) : (
-                  `${row.quantity} ${row.uom}`
                 );
               },
             },
@@ -202,6 +223,10 @@ export default function StockPage() {
           ]}
         />
       </ListState>
+
+      {earmarkRow ? (
+        <BulkEarmarkSheet open row={earmarkRow} onClose={() => setEarmarkRow(null)} />
+      ) : null}
 
       <LowStockCard />
     </div>
@@ -234,10 +259,16 @@ function LowStockCard() {
 
 export function SerialHistoryPage() {
   const { serialNumber } = useParams();
+  const { hasAny } = useSession();
+  const canChange = hasAny(PERM.STOCK_ADJUST, PERM.GATE_IN_POST);
   // A serial is its own name, so there is nothing to wait for.
   useCrumb(serialNumber);
   const history = useResource<{
-    unit: SerialUnit & { box_code?: string | null };
+    unit: SerialUnit & {
+      box_code?: string | null;
+      earmark_site?: number | null;
+      earmark_site_name?: string | null;
+    };
     movements: Movement[];
     box_events?: UnitBoxEvent[];
   }>(
@@ -301,6 +332,13 @@ export function SerialHistoryPage() {
         </Banner>
       ) : null}
 
+      <EarmarkCard
+        subject={{ serial_unit: unit.id }}
+        siteId={unit.earmark_site ?? null}
+        siteName={unit.earmark_site_name ?? null}
+        canChange={canChange}
+      />
+
       <Card className="flex flex-col gap-2">
         {/* E2: "the single most likely question from an operator audit." Oldest
             first, because the story reads forwards. */}
@@ -340,7 +378,12 @@ export function SerialHistoryPage() {
 export function DrumHistoryPage() {
   const { drumNumber } = useParams();
   useCrumb(drumNumber);
-  const history = useResource<{ reel: Reel; movements: Movement[] }>(
+  const { hasAny } = useSession();
+  const canChange = hasAny(PERM.STOCK_ADJUST, PERM.GATE_IN_POST);
+  const history = useResource<{
+    reel: Reel & { earmark_site?: number | null; earmark_site_name?: string | null };
+    movements: Movement[];
+  }>(
     `stock/drums/${encodeURIComponent(drumNumber ?? '')}/history`,
   );
 
@@ -379,6 +422,13 @@ export function DrumHistoryPage() {
         <Stat label="Used so far" value={`${used.toFixed(3)} ${reel.uom}`} />
         <Stat label="Where it is" value={reel.node_label} />
       </div>
+
+      <EarmarkCard
+        subject={{ reel: reel.id }}
+        siteId={reel.earmark_site ?? null}
+        siteName={reel.earmark_site_name ?? null}
+        canChange={canChange}
+      />
 
       <Card className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-slate-900">Every draw off this drum</h2>
