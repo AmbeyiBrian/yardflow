@@ -324,6 +324,7 @@ class OfflineBundleView(APIView):
 
         from accounts.models import User
         from catalogue.models import ItemType
+        from dispatch.box_paths import BOX_PREFETCH, box_path
         from dispatch.models import RELEASABLE_STATUSES, GateOut
         from locations.models import Location
         from network.models import Client, Site
@@ -364,7 +365,15 @@ class OfflineBundleView(APIView):
         for gate_out in (
             GateOut.objects.filter(status__in=RELEASABLE_STATUSES)
             .select_related("site", "client", "to_location", "custody_holder")
-            .prefetch_related("lines", "lines__item_type", "lines__serials", "lines__reels")
+            .prefetch_related(
+                "lines",
+                "lines__item_type",
+                "lines__serials",
+                "lines__serials__serial_unit",
+                "lines__reels",
+                "lines__reels__reel",
+                *BOX_PREFETCH,
+            )
         ):
             if gate_out.is_expired:
                 # Q3: an expired approval is not an approval. Sending it to a
@@ -387,12 +396,20 @@ class OfflineBundleView(APIView):
                             "released_qty": str(line.released_qty),
                             "uom": line.uom,
                             "tracking_mode": line.tracking_mode,
+                            # §4.15.8: the contract the gate-out detail honours too.
+                            "box": line.box_id,
+                            "box_code": line.box.code if line.box_id else None,
+                            "box_path": box_path(line.box),
                             "serials": [
                                 {
+                                    "id": entry.pk,
                                     "serial_unit": entry.serial_unit_id,
                                     "serial_number": entry.serial_unit.serial_number,
+                                    "asset_tag": entry.serial_unit.asset_tag,
+                                    "released": entry.released,
+                                    "box_path": box_path(entry.serial_unit.box),
                                 }
-                                for entry in line.serials.select_related("serial_unit")
+                                for entry in line.serials.all()
                             ],
                             "reels": [
                                 {
@@ -400,7 +417,7 @@ class OfflineBundleView(APIView):
                                     "drum_number": entry.reel.drum_number,
                                     "length_requested": str(entry.length_requested),
                                 }
-                                for entry in line.reels.select_related("reel")
+                                for entry in line.reels.all()
                             ],
                         }
                         for line in gate_out.lines.all()

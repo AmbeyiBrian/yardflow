@@ -10846,6 +10846,17 @@ components:
         no_serial_reason:
           type: string
           maxLength: 300
+        box:
+          type: integer
+          nullable: true
+        box_code:
+          type: string
+          readOnly: true
+        box_path:
+          type: array
+          items:
+            type: string
+          readOnly: true
         serials:
           type: array
           items:
@@ -10855,6 +10866,8 @@ components:
           items:
             $ref: '#/components/schemas/GateOutLineReel'
       required:
+      - box_code
+      - box_path
       - criticality
       - id
       - item_name
@@ -10940,6 +10953,9 @@ components:
         no_serial_reason:
           type: string
           maxLength: 300
+        box:
+          type: integer
+          nullable: true
         serials:
           type: array
           items:
@@ -10964,10 +10980,20 @@ components:
         serial_number:
           type: string
           readOnly: true
+        asset_tag:
+          type: string
+          readOnly: true
         released:
           type: boolean
           readOnly: true
+        box_path:
+          type: array
+          items:
+            type: string
+          readOnly: true
       required:
+      - asset_tag
+      - box_path
       - id
       - released
       - serial_number

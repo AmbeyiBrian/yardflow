@@ -77,6 +77,32 @@ class ScanRequiredForRelease(DomainError):
     default_message = "Scan the units being loaded before releasing."
 
 
+class UnitNotAvailable(DomainError):
+    """§4.15.7: a unit named on a request is elsewhere, not in stock, or already
+    promised to another open pass. The message names the serial and why."""
+
+    code = "UNIT_NOT_AVAILABLE"
+    status_code = 409
+    default_message = "A unit on this request is not available."
+
+
+#: Statuses in which a pass holds the units and box claims it names.
+#:
+#: A DRAFT does not: it is an unsent note, and letting it hold stock would let an
+#: abandoned draft lock units nobody is going to ask for, with no approver or
+#: expiry to ever free them. Submission is where a unit is promised, and it is
+#: checked there. REJECTED and EXPIRED passes are dormant until resubmitted, and
+#: resubmission re-checks, so they do not hold either. Everything live does:
+#: awaiting approval, approved, partially released, and released-but-not-closed
+#: (it may still name units that stayed behind).
+HOLDING_STATUSES = (
+    GateOutStatus.PENDING_APPROVAL,
+    GateOutStatus.APPROVED,
+    GateOutStatus.PARTIALLY_RELEASED,
+    GateOutStatus.RELEASED,
+)
+
+
 # --------------------------------------------------------------------------
 # T4.6 — submit for approval
 # --------------------------------------------------------------------------
@@ -104,6 +130,8 @@ def submit_gate_out(gate_out: GateOut, *, submitted_by=None, request=None) -> Ga
         raise GateOutNotReady("Add at least one line before submitting.")
 
     _validate_stock_is_available(gate_out)
+    _validate_units_are_available(gate_out)
+    _validate_box_claims(gate_out)
 
     if not gate_out.number:
         gate_out.number = allocate_number(
@@ -193,6 +221,172 @@ def _validate_stock_is_available(gate_out: GateOut) -> None:
 
     if field_errors:
         raise GateOutNotReady(_summary(messages), field_errors=field_errors)
+
+
+def line_box_problem(
+    *, box, from_location, tracking_mode, units, item_type, owner_client, condition
+) -> str | None:
+    """Why a line cannot be picked from ``box``, or None (§4.15.7, P6, P9).
+
+    Used when a request is written. It says whether the box is a real, open box
+    at the from-location and whether it holds what the line names; whether there
+    is *enough* of it is a submit-time question, because other passes move.
+    """
+    from stock.models import BoxBulkContent, BoxStatus
+
+    if tracking_mode == TrackingMode.REEL:
+        return "A reel line is taken by drum, so it cannot come from a box."
+    if box.status != BoxStatus.OPEN:
+        return f"Box {box.code} is closed, so nothing can be taken from it."
+    if box.current_node_id != node_for_location(from_location).pk:
+        return f"Box {box.code} is not at {from_location.name}."
+
+    if tracking_mode == TrackingMode.SERIALIZED:
+        stray = []
+        for unit in units:
+            chain = set()
+            holder = unit.box
+            while holder is not None and holder.pk not in chain:
+                chain.add(holder.pk)
+                holder = holder.parent
+            if box.pk not in chain:
+                stray.append(unit.serial_number)
+        if stray:
+            return f"{', '.join(stray)} is not in box {box.code} or a box inside it."
+        return None
+
+    if not BoxBulkContent.objects.filter(
+        box=box, item_type=item_type, owner_client=owner_client, condition=condition
+    ).exists():
+        return f"Box {box.code} holds no {item_type} of that owner and condition."
+    return None
+
+
+def _validate_units_are_available(gate_out: GateOut) -> None:
+    """§4.15.7: every named unit is at the from-location, in stock, and free.
+
+    "Free" means not named on another pass that is still holding it. The
+    message names that pass so the requester knows whom to ask.
+    """
+    from dispatch.models import GateOutLineSerial
+    from stock.models import SerialUnitStatus
+
+    source = node_for_location(gate_out.from_location)
+    entries = list(
+        GateOutLineSerial.objects.filter(line__gate_out=gate_out).select_related(
+            "serial_unit", "serial_unit__current_node"
+        )
+    )
+    if not entries:
+        return
+
+    holders: dict[int, str] = {}
+    others = (
+        GateOutLineSerial.objects.filter(
+            serial_unit_id__in=[e.serial_unit_id for e in entries],
+            released=False,
+            line__gate_out__status__in=HOLDING_STATUSES,
+        )
+        .exclude(line__gate_out=gate_out)
+        .select_related("line__gate_out")
+    )
+    for other in others:
+        holders.setdefault(
+            other.serial_unit_id,
+            other.line.gate_out.number or f"draft {other.line.gate_out_id}",
+        )
+
+    messages: list[str] = []
+    for entry in entries:
+        unit = entry.serial_unit
+        if unit.current_node_id != source.pk:
+            where = unit.current_node.label if unit.current_node_id else "nowhere"
+            messages.append(
+                f"{unit.serial_number} is at {where}, not at {gate_out.from_location.name}."
+            )
+        elif unit.status != SerialUnitStatus.IN_STOCK:
+            messages.append(
+                f"{unit.serial_number} is {unit.get_status_display().lower()}, not in stock."
+            )
+        elif unit.pk in holders:
+            messages.append(
+                f"{unit.serial_number} is already on gate pass {holders[unit.pk]}, "
+                "which is still open."
+            )
+
+    if messages:
+        summary = (
+            " ".join(messages)
+            if len(messages) <= 3
+            else f"{len(messages)} units are not available. {messages[0]}"
+        )
+        raise UnitNotAvailable(summary, details={"problems": messages})
+
+
+def _validate_box_claims(gate_out: GateOut) -> None:
+    """§4.15.7, P9: a box line is from an open box here, and a bulk one fits in
+    that box's claim.
+
+    Other open passes drawing on the same box and lot count against the claim,
+    so two requests cannot both be approved for the one carton of jumpers.
+    """
+    from dispatch.models import GateOutLine
+    from stock.models import BoxBulkContent, BoxStatus
+    from stock.services import BoxClaimShort
+
+    source = node_for_location(gate_out.from_location)
+    wanted: dict[tuple, tuple[Decimal, GateOutLine]] = {}
+    for line in gate_out.lines.select_related("box", "item_type", "owner_client"):
+        box = line.box
+        if box is None:
+            continue
+        if box.status != BoxStatus.OPEN:
+            raise BoxClaimShort(f"Box {box.code} is closed, so nothing can be taken from it.")
+        if box.current_node_id != source.pk:
+            raise BoxClaimShort(f"Box {box.code} is not at {gate_out.from_location.name}.")
+        if line.tracking_mode != TrackingMode.BULK:
+            continue
+        key = (box.pk, line.item_type_id, line.owner_client_id, line.condition)
+        total, _ = wanted.get(key, (Decimal("0"), line))
+        wanted[key] = (total + line.requested_qty, line)
+
+    for (box_id, item_id, owner_id, condition), (quantity, line) in wanted.items():
+        claim = (
+            BoxBulkContent.objects.filter(
+                box_id=box_id, item_type_id=item_id, owner_client_id=owner_id, condition=condition
+            )
+            .values_list("quantity", flat=True)
+            .first()
+            or Decimal("0")
+        )
+        elsewhere = Decimal("0")
+        passes: set[str] = set()
+        for other in (
+            GateOutLine.objects.filter(
+                box_id=box_id,
+                item_type_id=item_id,
+                owner_client_id=owner_id,
+                condition=condition,
+                tracking_mode=TrackingMode.BULK,
+                gate_out__status__in=HOLDING_STATUSES,
+            )
+            .exclude(gate_out=gate_out)
+            .select_related("gate_out")
+        ):
+            elsewhere += other.requested_qty - other.released_qty
+            passes.add(other.gate_out.number)
+        if quantity + elsewhere > claim:
+            code = line.box.code if line.box is not None else ""
+            message = (
+                f"Box {code} holds {_amount(claim)} {line.uom} of "
+                f"{line.item_type}, and this pass asks for {_amount(quantity)}"
+            )
+            if elsewhere:
+                message += (
+                    f" with {_amount(elsewhere)} already requested on "
+                    f"{', '.join(sorted(passes))}"
+                )
+            raise BoxClaimShort(message + ".", details={"box": code})
 
 
 def _amount(quantity) -> str:
@@ -938,7 +1132,13 @@ def _release_line(
             outstanding -= take
 
     else:
-        post_movement(MovementRequest(quantity=quantity, tracking_mode=TrackingMode.BULK, **common))
+        # P9: a line picked from a box draws the box's claim; the ledger hook
+        # reduces it and closes the box if that empties it.
+        post_movement(
+            MovementRequest(
+                quantity=quantity, tracking_mode=TrackingMode.BULK, from_box=line.box, **common
+            )
+        )
 
     line.released_qty += quantity
     line.save(update_fields=["released_qty", "updated_at"])

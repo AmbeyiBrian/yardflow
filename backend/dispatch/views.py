@@ -23,6 +23,7 @@ from core.api import TenantScopedViewSet
 from core.api_permissions import OrganizationIsActive
 from core.idempotency import already_created
 from core.models import AuthMethod
+from dispatch.box_paths import BOX_PREFETCH, box_path
 from dispatch.documents import render_gate_pass, resolve_qr_token
 from dispatch.models import (
     GateOut,
@@ -39,19 +40,29 @@ from dispatch.services import (
     approve_gate_out,
     cancel_gate_out,
     close_gate_out,
+    line_box_problem,
     reject_gate_out,
     release_gate_out,
     submit_gate_out,
 )
+from stock.models import Condition
 
 
 class GateOutLineSerialSerializer(serializers.ModelSerializer):
     serial_number = serializers.CharField(source="serial_unit.serial_number", read_only=True)
 
+    asset_tag = serializers.CharField(source="serial_unit.asset_tag", read_only=True)
+    # §4.15.8: the unit's *current* box chain, outermost first (empty when loose),
+    # because the storekeeper scans the pallet it is on, not where it was raised.
+    box_path = serializers.SerializerMethodField()
+
     class Meta:
         model = GateOutLineSerial
-        fields = ("id", "serial_unit", "serial_number", "released")
+        fields = ("id", "serial_unit", "serial_number", "asset_tag", "released", "box_path")
         read_only_fields = ("released",)
+
+    def get_box_path(self, entry) -> list[str]:  # type: ignore[no-untyped-def]
+        return box_path(entry.serial_unit.box)
 
 
 class GateOutLineReelSerializer(serializers.ModelSerializer):
@@ -77,6 +88,11 @@ class GateOutLineSerializer(serializers.ModelSerializer):
     serials = GateOutLineSerialSerializer(many=True, required=False)
     reels = GateOutLineReelSerializer(many=True, required=False)
     outstanding_qty = serializers.DecimalField(max_digits=14, decimal_places=3, read_only=True)
+    box_code = serializers.CharField(source="box.code", read_only=True, default=None)
+    box_path = serializers.SerializerMethodField()
+
+    def get_box_path(self, line) -> list[str]:  # type: ignore[no-untyped-def]
+        return box_path(line.box)
 
     class Meta:
         model = GateOutLine
@@ -98,6 +114,9 @@ class GateOutLineSerializer(serializers.ModelSerializer):
             "expected_return_date",
             "notes",
             "no_serial_reason",
+            "box",
+            "box_code",
+            "box_path",
             "serials",
             "reels",
         )
@@ -219,6 +238,35 @@ class GateOutSerializer(serializers.ModelSerializer):
             "close_reason",
         )
 
+    def validate(self, attrs):  # type: ignore[no-untyped-def]
+        """§4.15.7: a line picked from a box names a real, open box at the
+        from-location, and holds what the line names. The line serializer cannot
+        see the pass's from-location, so the check lives here."""
+        lines = attrs.get("lines")
+        from_location = attrs.get("from_location") or getattr(self.instance, "from_location", None)
+        if not lines or from_location is None:
+            return attrs
+
+        errors: list[dict] = []
+        for line in lines:
+            box = line.get("box")
+            if box is None:
+                errors.append({})
+                continue
+            problem = line_box_problem(
+                box=box,
+                from_location=from_location,
+                tracking_mode=line.get("tracking_mode", ""),
+                units=[entry["serial_unit"] for entry in line.get("serials") or []],
+                item_type=line.get("item_type"),
+                owner_client=line.get("owner_client"),
+                condition=line.get("condition", Condition.NEW),
+            )
+            errors.append({"box": [problem]} if problem else {})
+        if any(errors):
+            raise serializers.ValidationError({"lines": errors})
+        return attrs
+
     def get_pending_approval(self, gate_out) -> dict | None:
         """What is currently being waited on, so the client can say who to chase."""
         from approvals.engine import next_pending_request
@@ -337,7 +385,14 @@ class GateOutViewSet(TenantScopedViewSet):
         "from_location",
         "custody_holder",
     )
-    prefetch_related = ("lines", "lines__item_type", "lines__serials", "lines__reels")
+    prefetch_related = (
+        "lines",
+        "lines__item_type",
+        "lines__serials",
+        "lines__serials__serial_unit",
+        "lines__reels",
+        *BOX_PREFETCH,
+    )
     filterset_fields = [
         "status",
         "purpose_type",

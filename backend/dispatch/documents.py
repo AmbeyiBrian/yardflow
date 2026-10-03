@@ -21,6 +21,8 @@ from django.core import signing
 from django.template.loader import render_to_string
 from django.urls import reverse
 
+from dispatch.box_paths import box_path
+
 logger = logging.getLogger(__name__)
 
 QR_SALT = "dispatch.document.qr"
@@ -186,7 +188,9 @@ def gate_pass_context(gate_out) -> dict:
     organization = gate_out.organization
 
     lines = []
-    for line in gate_out.lines.select_related("item_type", "owner_client").all():
+    for line in gate_out.lines.select_related(
+        "item_type", "owner_client", "box__parent__parent"
+    ).all():
         serials = [str(entry.serial_unit) for entry in line.serials.select_related("serial_unit")]
         drums = [
             f"{entry.reel.drum_number} ({entry.length_requested} {line.uom})"
@@ -205,11 +209,24 @@ def gate_pass_context(gate_out) -> dict:
                 "owner": str(line.owner_client) if line.owner_client_id else "Own stock",
                 "is_client_owned": bool(line.owner_client_id),
                 "serials": serials,
+                "box": " › ".join(box_path(line.box)),
                 "drums": drums,
                 "returnable": line.is_returnable,
                 "return_by": line.expected_return_date,
             }
         )
+
+    # §4.15.7: lines grouped under their box code. Loose lines come first, then
+    # one group per box in code order; every unit stays listed on its line.
+    groups: list[dict] = []
+    by_box: dict[str, dict] = {}
+    for entry in lines:
+        key = entry["box"]
+        if key not in by_box:
+            by_box[key] = {"box": key, "lines": []}
+            groups.append(by_box[key])
+        by_box[key]["lines"].append(entry)
+    groups.sort(key=lambda g: (g["box"] != "", g["box"].lower()))
 
     approvals = []
     from approvals.models import ApprovalAction
@@ -237,6 +254,7 @@ def gate_pass_context(gate_out) -> dict:
         "logo_url": logo_data_uri(organization),
         "gate_out": gate_out,
         "lines": lines,
+        "line_groups": groups,
         "approvals": approvals,
         "qr": qr_png_data_uri(gate_out),
         "destination": gate_out.destination_label,

@@ -798,7 +798,7 @@ confirmed by hand.
 The contract both read sides honour (gate-out detail and the releasable bundle): each line carries
 `box_path: string[]`, the box codes from outermost to the box it was picked from (empty when
 loose); each entry of `line.serials` carries `id`, `serial_unit`, `serial_number`, `asset_tag`,
-`released` and its own `box_path` (where the unit sat when the pass was raised). Codes compare
+`released` and its own `box_path` (the unit's current box chain, outermost to innermost, empty when loose). Codes compare
 case-insensitively, as the database does.
 
 **Releasing what was ticked.** `release_gate_out` gains `released_serials: {line_id: [unit_id, …]}`.

@@ -469,6 +469,17 @@ class GateOutLine(TenantModel, TimeStampedModel):
     # free choice, and the gate has nothing to check the load against (G1).
     no_serial_reason = models.CharField(max_length=300, blank=True)
 
+    # §4.15.7, P6: the box the line was picked from. It groups the request, the
+    # approval and the pass; for a bulk line it is the claim `_release_line`
+    # draws on. After approval the pass covers units and quantities, not the box.
+    box = models.ForeignKey(
+        "stock.Box",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="gate_out_lines",
+    )
+
     line_number = models.PositiveIntegerField(default=1)
     notes = models.CharField(max_length=500, blank=True)
 
