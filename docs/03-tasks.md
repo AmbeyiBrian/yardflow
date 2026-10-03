@@ -1316,7 +1316,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* a GS1 or URL label shows the serial it found; two scanners on one screen have
   distinct ids; existing gate-in and gate-out scanning still works.
 
-- [ ] **T11.13 `[F]` Gate-in boxes**
+- [x] **T11.13 `[F]` Gate-in boxes**
   Refs: §4.15.10 · P1, P2, P9, P10
   `Draft.boxes`; "Into a box" on the line sheet; start a box by scanning its code, or leave it blank
   for a generated one; a label listing serials offers them for confirmation; bulk lines into a box;
@@ -1325,7 +1325,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* receiving a pallet with a carton of three units and a carton of bulk posts, and a
   reload mid-way loses nothing (E2E in T11.18).
 
-- [ ] **T11.14 `[F]` Box screens**
+- [x] **T11.14 `[F]` Box screens**
   Refs: §4.15.10 · P4, P7, P8
   `/stock/boxes` and `/stock/boxes/:code`: tree, counts received versus now, units, bulk, history,
   and take out, empty and move. Stock lookup opens a scanned box; serial history shows the unit's
@@ -1333,7 +1333,7 @@ builds on it. Everything else is additive — new tables, new optional fields, n
   *Done when:* scanning a box on the stock screen opens it; taking a unit out shows in both the box's
   history and the unit's.
 
-- [ ] **T11.15 `[F]` Gate-out by box**
+- [x] **T11.15 `[F]` Gate-out by box**
   Refs: §4.15.10 · P5, P6, P9, P10
   The line sheet's lookup handles a box: the proposal, the exclusions with reasons, and "Add all";
   a scanned unit shows which box it is in; the request and detail group lines under their box.
