@@ -10,6 +10,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 // `host: true` accepts any Host header so those names resolve, and the proxy
 // forwards the Host unchanged — without that, Django would resolve the wrong
 // tenant, or none.
+// Where the dev server sends API calls. 8000 by default; an E2E run can point
+// it at a backend on another port when 8000 is taken (VITE_API_TARGET).
+const API_TARGET = process.env.VITE_API_TARGET ?? 'http://127.0.0.1:8000';
+
 export default defineConfig({
   plugins: [
     react(),
@@ -71,11 +75,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: API_TARGET,
         changeOrigin: false,
       },
       '/attachments': {
-        target: 'http://127.0.0.1:8000',
+        target: API_TARGET,
         changeOrigin: false,
       },
       // A tenant's logo (A4). Django serves it under MEDIA_URL on 8000; without
@@ -83,7 +87,7 @@ export default defineConfig({
       // every screen that previews a document. In production the file comes
       // from S3 as a pre-signed URL, so nothing is proxied there.
       '/media': {
-        target: 'http://127.0.0.1:8000',
+        target: API_TARGET,
         changeOrigin: false,
       },
     },
