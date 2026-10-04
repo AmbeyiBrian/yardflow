@@ -15,6 +15,7 @@ import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Spinner } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import { boxLabel, buildTree, describeCounts, type BoxNode, type DraftBox } from './gateInBoxes';
+import { lineSiteText } from './lineSite';
 import type { GateIn, GateInLineInput } from './types';
 
 export default function GateInListPage() {
@@ -227,7 +228,7 @@ export function GateInDetailPage() {
             },
             {
               header: 'For site',
-              cell: (row) => row.for_site_name || document.for_site_name || '—',
+              cell: (row) => lineSiteText(row, document.for_site_name),
             },
             {
               header: 'Box',

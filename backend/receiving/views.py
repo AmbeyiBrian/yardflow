@@ -14,7 +14,12 @@ from __future__ import annotations
 
 from django.db import transaction
 from django.http import HttpResponse
-from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_field,
+)
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -43,6 +48,67 @@ def _check_for_site(site):  # type: ignore[no-untyped-def]
             f"{site.internal_ref} is decommissioned; material cannot be earmarked for it."
         )
     return site
+
+
+def _earmarks_by_line(gate_in) -> dict[int, list[dict]]:  # type: ignore[no-untyped-def]
+    """Q2: ``{line id: [{site, name}]}`` of where each line's material is earmarked now.
+
+    Four queries however many lines: units by serial number, drums by drum number,
+    the receipt movements (to find each bulk line's node) and the bulk claims.
+    Bulk is approximate by design: a claim is on a lot, not on a delivery."""
+    from catalogue.models import TrackingMode
+    from stock.models import BulkEarmark, MovementType, Reel, SerialUnit, StockMovement
+
+    lines = list(gate_in.lines.all())
+    found: dict[int, dict[int, str]] = {line.pk: {} for line in lines}
+
+    serial_line = {
+        s.serial_number: line.pk for line in lines for s in line.serials.all()
+    }
+    if serial_line:
+        for number, site_id, name in SerialUnit.objects.filter(
+            serial_number__in=serial_line, earmark_site__isnull=False
+        ).values_list("serial_number", "earmark_site_id", "earmark_site__name"):
+            found[serial_line[number]][site_id] = name
+
+    drum_line = {r.drum_number: line.pk for line in lines for r in line.reels.all()}
+    if drum_line:
+        for number, site_id, name in Reel.objects.filter(
+            drum_number__in=drum_line, earmark_site__isnull=False
+        ).values_list("drum_number", "earmark_site_id", "earmark_site__name"):
+            found[drum_line[number]][site_id] = name
+
+    bulk_lines = [line for line in lines if line.tracking_mode == TrackingMode.BULK]
+    if bulk_lines and gate_in.status != DocumentStatus.DRAFT:
+        node_by_line = dict(
+            StockMovement.objects.filter(
+                movement_type=MovementType.RECEIPT,
+                document_type="receiving.GateIn",
+                document_id=str(gate_in.pk),
+                document_line_id__in=[str(line.pk) for line in bulk_lines],
+            ).values_list("document_line_id", "to_node_id")
+        )
+        claims: dict[tuple, dict[int, str]] = {}
+        for node_id, item_id, owner_id, condition, site_id, name in BulkEarmark.objects.filter(
+            node_id__in=set(node_by_line.values()),
+            item_type_id__in={line.item_type_id for line in bulk_lines},
+        ).values_list(
+            "node_id", "item_type_id", "owner_client_id", "condition", "site_id", "site__name"
+        ):
+            claims.setdefault((node_id, item_id, owner_id, condition), {})[site_id] = name
+        for line in bulk_lines:
+            node_id = node_by_line.get(str(line.pk))
+            if node_id is not None:
+                key = (node_id, line.item_type_id, line.owner_client_id, line.condition)
+                found[line.pk].update(claims.get(key, {}))
+
+    return {
+        line_id: [
+            {"site": site_id, "name": name}
+            for site_id, name in sorted(sites.items(), key=lambda kv: (kv[1], kv[0]))
+        ]
+        for line_id, sites in found.items()
+    }
 
 
 class GateInSerialSerializer(serializers.ModelSerializer):
@@ -83,9 +149,24 @@ class GateInLineSerializer(serializers.ModelSerializer):
         source="owner_client.name", read_only=True, default=""
     )
     for_site_name = serializers.CharField(source="for_site.name", read_only=True, default="")
+    # Q2: where this line's material is earmarked *now* (the delivery's own site is
+    # `for_site`). Worked out once per document; the detail view only.
+    earmarked_now = serializers.SerializerMethodField()
 
     def validate_for_site(self, site):  # type: ignore[no-untyped-def]
         return _check_for_site(site)
+
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_earmarked_now(self, line) -> list[dict]:  # type: ignore[no-untyped-def]
+        view = self.context.get("view")
+        if view is None or getattr(view, "action", None) != "retrieve":
+            return []
+        gate_in = line.gate_in
+        cache = getattr(gate_in, "_earmarked_by_line", None)
+        if cache is None:
+            cache = _earmarks_by_line(gate_in)
+            gate_in._earmarked_by_line = cache
+        return cache.get(line.pk, [])
 
     class Meta:
         model = GateInLine
@@ -104,6 +185,7 @@ class GateInLineSerializer(serializers.ModelSerializer):
             "owner_client_name",
             "for_site",
             "for_site_name",
+            "earmarked_now",
             "custom_field_values",
             "no_serial_reason",
             "declared_unit_value",

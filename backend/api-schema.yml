@@ -11380,6 +11380,12 @@ components:
           type: string
           readOnly: true
           default: ''
+        earmarked_now:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
         custom_field_values: {}
         no_serial_reason:
           type: string
@@ -11406,6 +11412,7 @@ components:
           items:
             $ref: '#/components/schemas/GateInReel'
       required:
+      - earmarked_now
       - for_site_name
       - id
       - is_unserviceable
