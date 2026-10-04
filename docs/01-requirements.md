@@ -1107,6 +1107,9 @@ answer "is site X's material here?".
 - Stock on hand shows a bulk quantity's split: "40 ea — 25 for Site X, 15 free".
 - Earmarked stock moved inside the yard (to another store, to quarantine and back) keeps its
   earmark.
+- A delivery's lines show where their material is earmarked **now** when that differs from what the
+  delivery said — e.g. "Atlantis Business Park (earmarked later)" — so a delivery received before
+  its site was known still answers "who is this for". The posted record itself is not changed.
 
 **Q3.** As a storekeeper raising a gate-out, I want material earmarked for the destination site to
 be used first, and to say why when I use another site's, so that diversions are deliberate and
