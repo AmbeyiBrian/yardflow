@@ -15,7 +15,7 @@ import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Spinner } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import { boxLabel, buildTree, describeCounts, type BoxNode, type DraftBox } from './gateInBoxes';
-import { lineSiteText } from './lineSite';
+import { deliverySiteText, lineSiteText } from './lineSite';
 import type { GateIn, GateInLineInput } from './types';
 
 export default function GateInListPage() {
@@ -178,7 +178,7 @@ export function GateInDetailPage() {
 
       <Card className="grid gap-3 sm:grid-cols-2">
         <Detail label="Received into" value={document.to_location_name} />
-        <Detail label="For site" value={document.for_site_name || 'Not for a particular site'} />
+        <Detail label="For site" value={deliverySiteText(document.for_site_name, document.lines ?? [])} />
         <Detail label="Received at" value={document.received_at?.slice(0, 16).replace('T', ' ')} />
         <Detail
           label="From"
