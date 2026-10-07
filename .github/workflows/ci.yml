@@ -120,8 +120,12 @@ jobs:
 
       - name: Tests
         working-directory: backend
+        # Across the runner's cores, one test database per worker; files stay
+        # whole on a worker (loadfile) so a module's fixtures are built once.
+        # The isolation suite and the schema check run below as their own
+        # steps, so they are left out here rather than run twice.
         run: |
-          pytest --cov=. --cov-report=term-missing --cov-report=xml
+          pytest -n auto --dist loadfile             --ignore=core/tests/test_isolation_suite.py             --ignore=core/tests/test_schema.py             --cov=. --cov-report=term-missing --cov-report=xml
 
       # A3 is non-negotiable and runs as its own step so a failure is
       # unmistakable in the log rather than buried in the full suite.
