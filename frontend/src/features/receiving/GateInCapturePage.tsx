@@ -25,7 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '../../api/client';
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
@@ -177,6 +177,19 @@ function emptyDraft(): Draft {
   };
 }
 
+/** Drop the phone's unsaved form if it is the delivery with this identity. */
+function forgetLocalCopy(clientUuid: string | null | undefined) {
+  if (!clientUuid) return;
+  try {
+    const stored = localStorage.getItem(DRAFT_KEY);
+    if (stored && (JSON.parse(stored) as Draft).client_uuid === clientUuid) {
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  } catch {
+    /* nothing to forget */
+  }
+}
+
 function readDraft(): Draft {
   try {
     const stored = localStorage.getItem(DRAFT_KEY);
@@ -208,7 +221,12 @@ export default function GateInCapturePage() {
   const [lineSheet, setLineSheet] = useState(false);
   /** The line being changed (D9), or null when the sheet is adding one. */
   const [editingLine, setEditingLine] = useState<number | null>(null);
-  const [banner, setBanner] = useState<string | null>(null);
+  // A refusal on posting a new delivery reopens it here as a saved draft,
+  // carrying the refusal so the storekeeper still sees what to fix.
+  const location = useLocation();
+  const [banner, setBanner] = useState<string | null>(
+    (location.state as { banner?: string } | null)?.banner ?? null,
+  );
   const [restored, setRestored] = useState(() =>
     editingId ? false : readDraft().lines.length > 0,
   );
@@ -397,6 +415,9 @@ export default function GateInCapturePage() {
 
   async function saveAndPost() {
     setBanner(null);
+    // Set once the delivery exists on the server, so a refused post can hand
+    // over to that saved draft instead of leaving a second copy on the phone.
+    let savedId: number | undefined;
     try {
       // Correcting a draft that is already on the server is an online job: the
       // queue can only replay a *create*, so queueing an edit would quietly
@@ -404,6 +425,9 @@ export default function GateInCapturePage() {
       if (editingId) {
         const saved = await store();
         const posted = await post.mutateAsync({ id: saved.id });
+        // The phone may still hold the form this draft began as; it is the
+        // same delivery, now received, so it must not come back as a new one.
+        forgetLocalCopy(existing.data?.client_uuid);
         navigate(`/gate-in/${posted.id}`);
         return;
       }
@@ -414,6 +438,7 @@ export default function GateInCapturePage() {
       // cannot capture is a delivery that goes unrecorded.
       const outcome = await submitOrQueue('GATE_IN', payload(), async () => {
         const saved = await store();
+        savedId = saved.id;
         return post.mutateAsync({ id: saved.id });
       });
 
@@ -437,13 +462,23 @@ export default function GateInCapturePage() {
         error instanceof ApiError
           ? boxErrorMessages(error.fieldErrors, draft.boxes, draft.lines)
           : [];
-      setBanner(
+      const message =
         boxProblems.length > 0
           ? `${boxProblems.join(' ')} The delivery has been saved as a draft.`
           : error instanceof ApiError
             ? `${error.message} The delivery has been saved as a draft.`
-            : errorMessage(error),
-      );
+            : errorMessage(error);
+      if (!editingId && savedId !== undefined) {
+        // It is on the server now: correct it there. Keeping the phone's copy
+        // too is how a later "new" delivery opened full of this one's lines.
+        clearDraft();
+        // The same page instance may carry on under the new address, so set
+        // the message here as well as handing it over in the navigation state.
+        setBanner(message);
+        navigate(`/gate-in/${savedId}/edit`, { state: { banner: message } });
+        return;
+      }
+      setBanner(message);
     }
   }
 

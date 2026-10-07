@@ -510,3 +510,40 @@ test.describe('Correcting a draft', () => {
     await expect(page.getByRole('button', { name: /^Change the .* line$/ })).toHaveCount(2);
   });
 });
+
+test.describe('A refused delivery does not haunt the next one', () => {
+  test('a refusal opens the saved draft, and a new delivery starts empty', async ({ page }) => {
+    // Reported 2026-10-07: GRN-000002 was refused for an empty box, corrected
+    // from its saved draft and received — and every new delivery afterwards
+    // opened with its lines, because the phone kept its own copy.
+    await signIn(page, PEOPLE.storekeeper);
+    await open(page, '/gate-in/new');
+    await page.getByLabel('Source').selectOption('PURCHASE');
+    await page.getByLabel('Supplier').fill(unique('Refused supplier'));
+    await chooseFirst(page.getByLabel('Received into'));
+
+    await page.getByRole('button', { name: 'Add a line' }).click();
+    const sheet = page.getByRole('dialog');
+    const found = await pickItem(sheet, 'Item', 'Cable clamp');
+    test.skip(!found, 'no bulk item in the seeded catalogue');
+    await sheet.getByLabel(/^Quantity/).fill('3');
+    // An empty box is what the server refuses.
+    await sheet.getByRole('button', { name: 'Start a box' }).click();
+    await sheet.getByLabel('Box code').fill(unique('EMPTY'));
+    await sheet.getByRole('button', { name: /^Start box/ }).click();
+    await sheet.getByLabel('Into a box').selectOption({ index: 0 });
+    await sheet.getByRole('button', { name: 'Add line' }).click();
+    await expect(sheet).toBeHidden();
+
+    await page.getByRole('button', { name: /receive it/i }).click();
+
+    // Handed over to the saved draft, with the reason.
+    await expect(page).toHaveURL(/\/gate-in\/\d+\/edit$/, { timeout: 30_000 });
+    await expect(page.getByText(/saved as a draft/i).first()).toBeVisible();
+
+    // And the next delivery is a new one.
+    await open(page, '/gate-in/new');
+    await expect(page.getByRole('button', { name: 'Discard' })).toHaveCount(0);
+    await expect(page.getByText('Cable clamp')).toHaveCount(0);
+  });
+});
