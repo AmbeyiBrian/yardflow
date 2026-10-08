@@ -93,6 +93,17 @@ STORAGES = {
             "querystring_expire": env.int("AWS_S3_URL_EXPIRY_SECONDS", default=300),
             "file_overwrite": False,
             "signature_version": "s3v4",
+            # The bucket's own region in every link. Through the global
+            # s3.amazonaws.com address a new bucket outside us-east-1 answers a
+            # signed GET with SignatureDoesNotMatch, so a saved photo uploaded
+            # fine and then showed as a broken image.
+            "endpoint_url": env(
+                "AWS_S3_ENDPOINT_URL",
+                default="https://s3.{}.amazonaws.com".format(
+                    env("AWS_S3_REGION_NAME", default="eu-west-1")
+                ),
+            ),
+            "addressing_style": "virtual",
         },
     },
     "staticfiles": {
