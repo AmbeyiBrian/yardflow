@@ -547,3 +547,35 @@ test.describe('A refused delivery does not haunt the next one', () => {
     await expect(page.getByText('Cable clamp')).toHaveCount(0);
   });
 });
+
+test.describe('Photos on a delivery', () => {
+  test('a photo stays after the page is refreshed', async ({ page }) => {
+    // Reported 2026-10-08: an upload showed, then vanished on refresh — the
+    // list only held this visit's uploads and never asked what was saved.
+    await signIn(page, PEOPLE.storekeeper);
+    await open(page, '/gate-in/new');
+    await page.getByLabel('Source').selectOption('PURCHASE');
+    await page.getByLabel('Supplier').fill(unique('Photo supplier'));
+    await chooseFirst(page.getByLabel('Received into'));
+    await page.getByRole('button', { name: 'Add a line' }).click();
+    const sheet = page.getByRole('dialog');
+    const found = await pickItem(sheet, 'Item', 'Cable clamp');
+    test.skip(!found, 'no bulk item in the seeded catalogue');
+    await sheet.getByLabel(/^Quantity/).fill('1');
+    await sheet.getByRole('button', { name: 'Add line' }).click();
+    await page.getByRole('button', { name: 'Save as draft' }).click();
+    await expect(page).toHaveURL(/\/gate-in\/\d+$/, { timeout: 30_000 });
+
+    const name = `${unique('delivery-note')}.png`;
+    // A 1x1 PNG: enough to be a real image upload.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    await page.locator('input[type="file"]').first().setInputFiles({ name, mimeType: 'image/png', buffer: png });
+    await expect(page.getByRole('button', { name: 'Remove' }).first()).toBeVisible({ timeout: 30_000 });
+
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Remove' }).first()).toBeVisible({ timeout: 30_000 });
+  });
+});

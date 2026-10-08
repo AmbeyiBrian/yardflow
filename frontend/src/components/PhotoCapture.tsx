@@ -25,7 +25,7 @@
  * in the meantime.
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ApiError, api } from '../api/client';
 import { errorMessage } from '../api/hooks';
@@ -59,6 +59,22 @@ async function upload(
   return api.post<Attachment>('/attachments', form);
 }
 
+/** What is already attached to this record, of this kind (N-7). */
+async function attachedTo(
+  targetType: string,
+  targetId: string | number,
+  kind: string,
+): Promise<Attachment[]> {
+  const query = new URLSearchParams({
+    target_type: targetType,
+    target_id: String(targetId),
+    page_size: '100',
+  });
+  const body = await api.get<Attachment[] | { results: Attachment[] }>(`/attachments?${query}`);
+  const rows = Array.isArray(body) ? body : (body.results ?? []);
+  return rows.filter((row) => row.kind === kind);
+}
+
 export function PhotoCapture({
   targetType,
   targetId,
@@ -86,10 +102,31 @@ export function PhotoCapture({
   const [busy, setBusy] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  function publish(next: Attachment[]) {
-    setItems(next);
-    onChange?.(next);
-  }
+  // What was attached before this page was opened. Without it, a photo that was
+  // saved vanished on refresh: the list only ever held this visit's uploads.
+  useEffect(() => {
+    if (!targetId) return;
+    let cancelled = false;
+    attachedTo(targetType, targetId, kind)
+      .then((saved) => {
+        if (cancelled) return;
+        setItems((current) => {
+          const known = new Set(current.map((item) => item.id));
+          const next = [...saved.filter((item) => !known.has(item.id)), ...current];
+          onChange?.(next);
+          return next;
+        });
+      })
+      .catch((failure) => {
+        if (!cancelled) setError(errorMessage(failure));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `onChange` is the caller's callback; reloading when it changes identity
+    // would refetch on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetType, targetId, kind]);
 
   async function onPicked(files: FileList | null) {
     if (!files || !targetId) return;
@@ -102,7 +139,6 @@ export function PhotoCapture({
       setBusy((count) => count + 1);
       try {
         const attachment = await upload(targetType, targetId, file, kind);
-        publish([...items, attachment].slice());
         setItems((current) => {
           const next = current.includes(attachment) ? current : [...current, attachment];
           onChange?.(next);
