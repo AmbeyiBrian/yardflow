@@ -104,6 +104,12 @@ to kill the database.
 
 ### 2.3 S3 and IAM, in account B
 
+> **As deployed (2026-10-08):** the stand-in box runs in the homemanager account
+> (175373004279), and so do its attachments bucket (`yardflow-attachments-175373004279`,
+> IAM user `yardflow-attachments`, that bucket only) and its SES sender
+> (`yardflow.buniva.co.ke`, send-only IAM user `yardflow-ses`). The earlier keys from
+> the other account were deleted, which broke uploads and email until this move.
+
 Two buckets, **both private, no public access**:
 
 * `yardflow-attachments` — photographs and documents (N-7). Versioning on.
