@@ -437,24 +437,35 @@ def _level_approvers(organization, document) -> list:
         document_id=str(document.pk),
         status__in=(ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED),
     ).order_by("level", "id")
-    current = open_levels.first()
-    if current is None:
+    first = open_levels.first()
+    if first is None:
         return []
+    # Every open request at the lowest level: a work day spanning two PMs has
+    # two parallel level-1 slices, and both are told (R13, §4.18.5 change 5).
+    # Every other document has one request per level, as before.
+    current_requests = list(open_levels.filter(level=first.level))
 
-    if current.required_user_id is not None:
-        people = list(User.objects.filter(pk=current.required_user_id, is_active=True))
-    elif current.required_permission:
-        people = _users_with_permission(organization, current.required_permission)
-    elif current.required_role_id is not None:
-        people = list(
-            User.objects.filter(
-                organization=organization,
-                is_active=True,
-                user_roles__role_id=current.required_role_id,
-            ).distinct()
-        )
-    else:
-        people = []
+    people: list = []
+    seen: set[int] = set()
+    for current in current_requests:
+        if current.required_user_id is not None:
+            found = list(User.objects.filter(pk=current.required_user_id, is_active=True))
+        elif current.required_permission:
+            found = _users_with_permission(organization, current.required_permission)
+        elif current.required_role_id is not None:
+            found = list(
+                User.objects.filter(
+                    organization=organization,
+                    is_active=True,
+                    user_roles__role_id=current.required_role_id,
+                ).distinct()
+            )
+        else:
+            found = []
+        for person in found:
+            if person.pk not in seen:
+                seen.add(person.pk)
+                people.append(person)
 
     recorder_id = getattr(document, "recorded_by_id", None) or getattr(
         document, "registered_by_id", None

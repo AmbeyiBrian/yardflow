@@ -392,12 +392,54 @@ def _finance_levels(document) -> list[RequiredLevel]:  # type: ignore[no-untyped
     return levels
 
 
-def required_levels(document, *, facts: ApprovalFacts | None = None) -> list[RequiredLevel]:
+#: A person's day of clock-ins (R13, §4.18.5). A day is several parallel
+#: requests, one per project manager, so it cannot use the one-chain-per-document
+#: assumption the other documents share.
+WORK_DAY_DOCUMENT_TYPES = frozenset({"attendance.WorkDay"})
+
+
+def is_work_day_document_type(document_type: str) -> bool:
+    return document_type in WORK_DAY_DOCUMENT_TYPES
+
+
+@dataclass(frozen=True)
+class WorkDaySlice:
+    """Who answers one slice of a day: a named PM, or a role (the Director).
+
+    Exactly one of the two is set; ``route_day`` (T16.6) chooses.
+    """
+
+    user: object | None = None
+    role: Role | None = None
+
+
+def _work_day_levels(document, work_day_slice: WorkDaySlice | None) -> list[RequiredLevel]:  # type: ignore[no-untyped-def]
+    """The slice's single level-1 request (R13, §4.18.5 change 1).
+
+    Level 1 for every slice, so slices run in parallel and never queue behind
+    each other. No ``due_at`` and no delegation (``create_requests``).
+    """
+    if work_day_slice is None or (work_day_slice.user is None) == (work_day_slice.role is None):
+        raise ValueError(
+            "A work day is routed one slice at a time: pass exactly one of user or role."
+        )
+    return [RequiredLevel(level=1, user=work_day_slice.user, role=work_day_slice.role)]
+
+
+def required_levels(
+    document,
+    *,
+    facts: ApprovalFacts | None = None,
+    work_day_slice: WorkDaySlice | None = None,
+) -> list[RequiredLevel]:
     """Which approvals this document needs (§5.1, F3).
 
     Returns an empty list when nothing is required — §5.2's auto-approval case,
     which still writes an ``ApprovalAction`` so the trail has no gap.
     """
+    if is_work_day_document_type(document_type_of(document)):
+        return _work_day_levels(document, work_day_slice)
+
     # R4: money out routes PM then Finance, and never reaches the criticality
     # rules — an expense has no category criticality to match.
     if is_finance_document(document):
@@ -539,14 +581,19 @@ def document_type_of(document) -> str:
     return document._meta.label
 
 
-def create_requests(document, *, requested_by=None) -> list[ApprovalRequest]:
-    """Create one pending request per required level (§5.1, F3)."""
+def create_requests(
+    document, *, requested_by=None, work_day_slice: WorkDaySlice | None = None
+) -> list[ApprovalRequest]:
+    """Create one pending request per required level (§5.1, F3).
+
+    A work day passes the ``work_day_slice`` it is creating a request for.
+    """
     settings = document.organization.settings
     escalation_hours = settings.approval_escalation_hours or 24
     due_at = timezone.now() + timedelta(hours=escalation_hours)
 
     requests: list[ApprovalRequest] = []
-    for required in required_levels(document):
+    for required in required_levels(document, work_day_slice=work_day_slice):
         requests.append(
             ApprovalRequest.objects.create(
                 organization_id=document.organization_id,
@@ -562,7 +609,11 @@ def create_requests(document, *, requested_by=None) -> list[ApprovalRequest]:
                 # (R4). `due_at` left null is what the sweep skips on, so this
                 # needs no special case there — and an unanswered request waits,
                 # which is the accepted cost of single-signature control.
-                due_at=None if required.user is not None or required.permission else due_at,
+                due_at=None
+                if required.user is not None
+                or required.permission
+                or is_work_day_document_type(document_type_of(document))
+                else due_at,
             )
         )
     return requests
@@ -601,21 +652,24 @@ def record_auto_approval(document, *, note: str = "") -> ApprovalAction:
     )
 
 
-def next_pending_request(document) -> ApprovalRequest | None:
+def next_pending_request(
+    document, *, approval_request: ApprovalRequest | None = None
+) -> ApprovalRequest | None:
     """The level currently waiting on a decision.
 
     Levels are answered in order, so an owner is not asked before the supervisor
-    has looked at it.
+    has looked at it. A work day has parallel slices, so its caller names the
+    ``approval_request`` (slice) it means; the result is that request if it is
+    still open, else ``None``.
     """
-    return (
-        ApprovalRequest.objects.filter(
-            document_type=document_type_of(document),
-            document_id=str(document.pk),
-            status__in=(ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED),
-        )
-        .order_by("level")
-        .first()
+    open_requests = ApprovalRequest.objects.filter(
+        document_type=document_type_of(document),
+        document_id=str(document.pk),
+        status__in=(ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED),
     )
+    if approval_request is not None:
+        open_requests = open_requests.filter(pk=approval_request.pk)
+    return open_requests.order_by("level", "id").first()
 
 
 def _is_requester(document, user) -> bool:
@@ -637,6 +691,16 @@ def can_approve(user, approval_request: ApprovalRequest, *, document=None) -> tu
     2. **Role**, including any active delegation (F5).
     """
     from accounts.services import resolve_permissions
+
+    # R13: nobody approves their own day. First, before the `required_user`
+    # branch, so a PM can never reach it through the "PM may self-approve"
+    # exception below, and whatever `allow_self_approval` says.
+    if is_work_day_document_type(approval_request.document_type):
+        owner_id = (
+            getattr(document, "requested_by_id", None) or approval_request.requested_by_id
+        )
+        if owner_id is not None and owner_id == user.pk:
+            return False, "self"
 
     # R4: finance entries. The recorder never approves their own entry at either
     # level — not by `allow_self_approval`, which is a gate-out setting, and not
@@ -700,7 +764,10 @@ def can_approve(user, approval_request: ApprovalRequest, *, document=None) -> tu
     # prefers permissions to roles is not locked out of its own approvals (B4).
     from accounts.permissions_registry import PERM
 
-    if resolve_permissions(user).has(PERM.GATE_OUT_APPROVE):
+    # Not for a work day (R13): the Director slice is the Director role's alone.
+    if not is_work_day_document_type(
+        approval_request.document_type
+    ) and resolve_permissions(user).has(PERM.GATE_OUT_APPROVE):
         return True, ""
 
     return False, "role"
@@ -731,6 +798,7 @@ def record_decision(
     webauthn_credential=None,
     ip=None,
     user_agent: str = "",
+    approval_request: ApprovalRequest | None = None,
 ) -> tuple[ApprovalRequest, ApprovalRequest | None]:
     """Record one approval or rejection and resolve that level.
 
@@ -748,10 +816,17 @@ def record_decision(
 
     The caller keeps what is genuinely its own: which status the document moves
     to, and what it emits.
+
+    A work day is several parallel requests, so its caller passes the
+    ``approval_request`` (slice) being decided, and a rejection supersedes only
+    that slice, never the other manager's (R13, §4.18.5 change 3).
     """
     from core.models import AuthMethod
 
-    approval_request = next_pending_request(document)
+    is_work_day = is_work_day_document_type(document_type_of(document))
+    if is_work_day and approval_request is None:
+        raise ValueError("A work day is decided one slice at a time: pass approval_request.")
+    approval_request = next_pending_request(document, approval_request=approval_request)
     if approval_request is None:
         raise NothingToApprove()
 
@@ -805,6 +880,10 @@ def record_decision(
     approval_request.resolved_at = timezone.now()
     approval_request.save(update_fields=["status", "resolved_at", "updated_at"])
 
+    if is_work_day:
+        # The slice is the whole chain: nothing later, and no other slice moot.
+        return approval_request, None
+
     if decision != ApprovalDecision.APPROVED:
         # Later levels are moot. Leaving them pending would put a request in
         # front of an approver that has already been refused.
@@ -851,6 +930,7 @@ def readdress_project_requests(project, *, old_manager_id, actor=None, request=N
         status__in=(ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED),
     )
 
+    work_session_model = apps.get_model("attendance.WorkSession")
     moved: list[ApprovalRequest] = []
     documents: dict[tuple[str, str], object | None] = {}
     for pending in open_requests:
@@ -863,6 +943,14 @@ def readdress_project_requests(project, *, old_manager_id, actor=None, request=N
             else:
                 documents[key] = model.objects.filter(pk=pending.document_id).first()
         document = documents[key]
+        if is_work_day_document_type(pending.document_type):
+            # R13: a day is not costed to one project; this slice is, through
+            # its sessions. `WorkSession.project` stays as clocked.
+            if work_session_model.objects.filter(
+                approval_request_id=pending.pk, project_id=project.pk
+            ).exists():
+                moved.append(pending)
+            continue
         owner = project_of(document) if document is not None else None
         if owner is not None and owner.pk == project.pk:
             moved.append(pending)

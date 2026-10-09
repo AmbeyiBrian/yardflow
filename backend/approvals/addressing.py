@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from accounts.permissions_registry import PERM
 from accounts.services import resolve_permissions
+from approvals.engine import WORK_DAY_DOCUMENT_TYPES
 from approvals.models import ApprovalRequest, ApprovalRequestStatus
 
 OPEN_STATUSES = (ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED)
@@ -43,11 +44,15 @@ def open_requests_addressed_to(user, queryset: QuerySet) -> QuerySet:  # type: i
     # B4: a blanket approval permission may act on any *role* level
     # (`can_approve`), so those stay visible to its holder. A person- or
     # permission-addressed level is never theirs by that route.
+    # Not a work day (R13): a Director slice is the Director role's alone.
     if permissions.has(PERM.GATE_OUT_APPROVE):
-        addressed |= Q(required_role__isnull=False)
+        addressed |= Q(required_role__isnull=False) & ~Q(
+            document_type__in=WORK_DAY_DOCUMENT_TYPES
+        )
 
     # Levels answer in order, so a Finance request is not the caller's business
-    # while the PM is still to answer: it could not be acted on.
+    # while the PM is still to answer: it could not be acted on. Work-day slices
+    # are all level 1, so one slice never waits on another (R13).
     earlier_open = ApprovalRequest.objects.filter(
         document_type=OuterRef("document_type"),
         document_id=OuterRef("document_id"),
