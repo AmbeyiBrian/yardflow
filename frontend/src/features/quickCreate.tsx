@@ -73,6 +73,15 @@ export const QUICK_CREATE: Record<string, QuickCreateEntry> = {
       import('./settings/NetworkPage').then((m) => ({ default: m.SubcontractorSheet })),
     ),
   },
+  // R15 (§4.20.5): gate-in's "Add new supplier".
+  suppliers: {
+    noun: 'supplier',
+    // Adding is open to any member (§4.20.3); gate-in clerks are who needs it.
+    permission: PERM.GATE_IN_POST,
+    Sheet: sheet(() =>
+      import('./settings/SuppliersPanel').then((m) => ({ default: m.SupplierSheet })),
+    ),
+  },
   locations: {
     noun: 'location',
     permission: PERM.CATALOGUE_MANAGE,

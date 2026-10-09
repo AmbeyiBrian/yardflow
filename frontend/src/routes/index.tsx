@@ -98,6 +98,9 @@ const MyTimePage = lazyRoute(() => import('../features/attendance/MyTimePage'));
 const MoneyHomePage = lazyRoute(() => import('../features/money/MoneyHomePage'));
 const RequestAllowancePage = lazyRoute(() => import('../features/money/RequestAllowancePage'));
 const AddCasualPage = lazyRoute(() => import('../features/money/CasualPages'));
+// R14 (T17.14): the asset register.
+const AssetsPage = lazyRoute(() => import('../features/assets/AssetsPage'));
+const AssetDetailPage = lazyRoute(() => import('../features/assets/AssetDetailPage'));
 const ExpenseDetailPage = lazyRoute(() =>
   import('../features/money/DetailPages').then((m) => ({ default: m.ExpenseDetailPage })),
 );
@@ -306,6 +309,9 @@ export function AppRoutes() {
             <Route path="money/requests/new" element={<RequestAllowancePage />} />
             <Route path="money/requests/:id" element={<RequestDetailPage />} />
             <Route path="money/casuals/new" element={<AddCasualPage />} />
+            {/* R14: every member reads the register; writes are gated inside. */}
+            <Route path="assets" element={<AssetsPage />} />
+            <Route path="assets/:id" element={<AssetDetailPage />} />
             {/*
               The project queues are tabs on Approvals now, not a screen. Kept
               as a redirect rather than deleted: the link was in the sidebar and

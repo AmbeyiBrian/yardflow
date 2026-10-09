@@ -31,9 +31,10 @@ import {
   coordinatesRequired,
   hasArea,
 } from './coordinates';
+import { SuppliersPanel } from './SuppliersPanel';
 import type { Client, Location, Site, Project } from './types';
 
-type Tab = 'sites' | 'clients' | 'projects' | 'subcontractors' | 'locations';
+type Tab = 'sites' | 'clients' | 'projects' | 'subcontractors' | 'suppliers' | 'locations';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'sites', label: 'Sites' },
@@ -42,6 +43,8 @@ const TABS: { key: Tab; label: string }[] = [
   // O4: the register had an API and no screen, so a job could be marked
   // subcontracted only if somebody had already made a contractor another way.
   { key: 'subcontractors', label: 'Subcontractors' },
+  // R15 (§4.20.10): the panel lives in SuppliersPanel.tsx.
+  { key: 'suppliers', label: 'Suppliers' },
   { key: 'locations', label: 'Locations' },
 ];
 
@@ -70,6 +73,7 @@ export default function NetworkPage() {
         {tab === 'clients' ? <ClientsTab /> : null}
         {tab === 'projects' ? <ProjectsTab /> : null}
         {tab === 'subcontractors' ? <SubcontractorsTab /> : null}
+        {tab === 'suppliers' ? <SuppliersPanel /> : null}
         {tab === 'locations' ? <LocationsTab /> : null}
       </SwipePane>
     </div>

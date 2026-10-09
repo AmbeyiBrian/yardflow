@@ -61,6 +61,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/money', label: 'Money', icon: <GlyphCoins /> },
   // R13: everyone in the field clocks in, so no permission gates it.
   { to: '/time', label: 'Time', icon: <GlyphClock /> },
+  // R14 (§4.20.10): every member reads the register; writes are gated inside.
+  { to: '/assets', label: 'Assets', icon: <GlyphWrench /> },
   {
     // Everything waiting on one person: gate passes, disposals, and — since
     // O16 — project expenses and closeout costs. A manager who approves only
@@ -518,6 +520,9 @@ function GlyphCheck() {
 }
 function GlyphBoxes() {
   return glyph(<><path d="M3 8h8v8H3zM13 8h8v8h-8z" /><path d="M3 8l4-4h8l4 4" /></>);
+}
+function GlyphWrench() {
+  return glyph(<><path d="M14.5 6.5a4 4 0 0 0 5 5L10 21l-3-3z" /><path d="M14.5 6.5 17 9" /></>);
 }
 function GlyphCoins() {
   return glyph(<><circle cx="9" cy="9" r="5" /><path d="M14 6.3A5 5 0 0 1 14 15.7M9 7v4M7.5 9h3" /><path d="M5 14.5V18c0 1.1 2 2 4.5 2 2 0 3.700-.5 4.300-1.300" /></>);

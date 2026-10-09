@@ -77,6 +77,9 @@ const TRAIL: Record<string, Step> = {
   '/money/requests/new': { label: 'Request an allowance', parent: '/money' },
   '/money/requests/:id': { label: 'Request', parent: '/money' },
   '/money/casuals/new': { label: 'Add a casual', parent: '/money' },
+  // R14 (§4.20.10)
+  '/assets': { label: 'Assets', parent: null },
+  '/assets/:id': { label: null, parent: '/assets' },
 
   '/stock': { label: 'Stock', parent: null },
   '/stock/boxes': { label: 'Boxes', parent: '/stock' },

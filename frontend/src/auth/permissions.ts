@@ -37,6 +37,9 @@ export const PERM = {
   // Epic R. Second approval, payment and float settlement.
   FINANCE_APPROVE: 'finance.approve',
 
+  // R14 (§4.20.7). Writes to the asset register; every member may read it.
+  ASSET_MANAGE: 'asset.manage',
+
   CATALOGUE_MANAGE: 'catalogue.manage',
   SETTINGS_MANAGE: 'settings.manage',
   USERS_MANAGE: 'users.manage',
