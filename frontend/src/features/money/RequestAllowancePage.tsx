@@ -6,18 +6,26 @@
  * that touch an earlier request of the same type — using the same pure rules
  * the server enforces (`rules.ts`). They are warnings only: the server decides,
  * and its refusal (ALLOWANCE_LIMIT, ALLOWANCE_OVERLAP) is shown as it words it.
+ *
+ * Offline (R6) the request is queued and sent when there is network. The limits
+ * come from the cached finance settings if this visit has them; without them the
+ * warning is simply skipped, since the server still decides on arrival.
  */
 
 import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Banner, Button, Card, Field, Select, Spinner, Textarea, Input } from '../../components/ui';
 import { PageHeader } from '../../components/ui/data';
 import { MoneyInput } from '../../components/ui/money';
 import { newUuid } from '../../offline/db';
+import { useOffline } from '../../offline/OfflineProvider';
 import { useAllowanceRequests, useCreateAllowanceRequest, useFinanceSettings } from './api';
+import { SAVED_ON_PHONE, allowancePrefill, isNetworkError } from './drafts';
 import { moneyError } from './errors';
+import { queueAllowanceRequest, resendCorrected, type QueuedAllowanceBody } from './offline';
+import { useQueuedEntry } from './queued';
 import { checkLimit, daysBetween, findOverlap } from './rules';
 import { SiteProjectFields, useSiteProject } from './SiteProject';
 import type { AllowanceType, TransportScope } from './types';
@@ -44,8 +52,47 @@ function today(): string {
 }
 
 export default function RequestAllowancePage() {
+  const [params] = useSearchParams();
+  const resend = params.get('resend');
+  const { entry, settled } = useQueuedEntry(resend);
+
+  // "Fix and resend" starts from the queued payload, so wait for it.
+  if (resend && !entry) {
+    return (
+      <div className="flex flex-col gap-4">
+        <PageHeader title="Request an allowance" />
+        {settled ? (
+          <Banner tone="info">That entry is no longer on this phone.</Banner>
+        ) : (
+          <Spinner className="text-slate-400" />
+        )}
+      </div>
+    );
+  }
+  return (
+    <RequestForm
+      key={entry?.client_uuid ?? 'new'}
+      resendOf={entry?.client_uuid}
+      payload={entry?.payload}
+    />
+  );
+}
+
+function RequestForm({
+  resendOf,
+  payload,
+}: {
+  resendOf?: string;
+  payload?: Record<string, unknown>;
+}) {
   const navigate = useNavigate();
-  const place = useSiteProject();
+  const { online } = useOffline();
+  const prefill = payload ? allowancePrefill(payload) : null;
+  const place = useSiteProject(
+    '',
+    prefill ? { site: prefill.site, project: prefill.project } : undefined,
+  );
+  const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
   const uuid = useRef(newUuid());
@@ -55,7 +102,7 @@ export default function RequestAllowancePage() {
   const create = useCreateAllowanceRequest();
 
   const form = useForm<Values>({
-    defaultValues: {
+    defaultValues: (prefill?.values as Partial<Values> | undefined) ?? {
       type: 'FLOAT',
       transport_scope: '',
       from_date: today(),
@@ -92,22 +139,48 @@ export default function RequestAllowancePage() {
     setLocalErrors(errors);
     if (place.blocked || Object.keys(errors).length) return;
 
+    const body: QueuedAllowanceBody = {
+      type: values.type,
+      transport_scope: values.type === 'TRANSPORT' ? (values.transport_scope as TransportScope) : null,
+      amount: values.amount,
+      from_date: values.from_date,
+      to_date: values.to_date,
+      site: place.site && !place.direct ? Number(place.site) : null,
+      project: place.project ? Number(place.project) : null,
+      reason: values.reason,
+    };
+
+    setBusy(true);
     try {
-      const saved = await create.mutateAsync({
-        type: values.type,
-        transport_scope: values.type === 'TRANSPORT' ? (values.transport_scope as TransportScope) : null,
-        amount: values.amount,
-        from_date: values.from_date,
-        to_date: values.to_date,
-        site: place.site && !place.direct ? Number(place.site) : null,
-        project: place.project ? Number(place.project) : null,
-        reason: values.reason,
-        client_uuid: uuid.current,
-      });
-      navigate(`/money/requests/${saved.id}`);
+      if (resendOf) {
+        await resendCorrected(resendOf, body);
+        return leaveQueued();
+      }
+      if (online) {
+        try {
+          const saved = await create.mutateAsync({ ...body, client_uuid: uuid.current });
+          navigate(`/money/requests/${saved.id}`);
+          return;
+        } catch (error) {
+          if (!isNetworkError(error)) {
+            setBanner(moneyError(error, form.setError));
+            return;
+          }
+          // No signal after all: queue it under the same uuid, so a request that
+          // did land cannot become a second one.
+        }
+      }
+      await queueAllowanceRequest(body, uuid.current);
+      leaveQueued();
     } catch (error) {
-      setBanner(moneyError(error, form.setError));
+      setBanner(error instanceof Error ? error.message : 'That could not be saved.');
+    } finally {
+      setBusy(false);
     }
+  }
+
+  function leaveQueued() {
+    navigate('/money', { state: { notice: SAVED_ON_PHONE } });
   }
 
   return (
@@ -190,10 +263,10 @@ export default function RequestAllowancePage() {
 
           <Button
             block
-            disabled={create.isPending || place.blocked || place.loading}
+            disabled={busy || place.blocked || place.loading}
             onClick={form.handleSubmit(submit)}
           >
-            {create.isPending ? <Spinner /> : 'Send request'}
+            {busy ? <Spinner /> : resendOf ? 'Fix and resend' : 'Send request'}
           </Button>
         </form>
       </Card>

@@ -5,13 +5,16 @@
  * register. A rejected entry shows its reason and a Resubmit action, because a
  * rejection returns the entry to whoever recorded it (R4). Cards take an
  * optional `queued` flag so entries still on the phone read "Waiting to send"
- * (R6, T15.10) — `useQueuedMoney` is where those will come from.
+ * (R6, T15.10); a refused one shows the server's reason and "Fix and resend",
+ * which reopens the form from what was captured (§4.17.8).
  */
 
 import { useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 
 import { errorMessage } from '../../api/hooks';
+import { PERM } from '../../auth/permissions';
+import { usePermission } from '../../auth/session';
 import { Banner, Button } from '../../components/ui';
 import { EmptyState, ListState, PageHeader, StatusBadge } from '../../components/ui/data';
 import { TabStrip, type TabItem } from '../../components/ui/TabStrip';
@@ -24,9 +27,9 @@ import {
   useResubmitExpense,
 } from './api';
 import { TYPE_LABELS } from './RequestAllowancePage';
-import { useQueuedMoney, type MaybeQueued } from './queued';
+import { useQueuedMoney, type QueuedCard } from './queued';
 import { statusLabel } from './rules';
-import type { AllowanceRequest, ExpenseStatus, ProjectExpense } from './types';
+import type { ExpenseStatus } from './types';
 
 type Tab = 'expenses' | 'requests' | 'casuals';
 
@@ -109,6 +112,30 @@ export function EntryCard({
   );
 }
 
+/** An entry still on this phone: waiting to send, or refused with a way to fix it (R6). */
+export function QueuedEntryCard({ card }: { card: QueuedCard }) {
+  return (
+    <EntryCard
+      title={card.title}
+      meta={card.meta}
+      amount={card.amount}
+      // A refusal reads as one; a waiting entry has no server status yet.
+      status={card.refused ? 'REJECTED' : 'PENDING_PM'}
+      queued={!card.refused}
+      reason={card.reason}
+    >
+      {card.refused ? (
+        <Link
+          to={card.fixTo}
+          className="mt-2 inline-flex min-h-[44px] items-center text-sm font-medium underline"
+        >
+          Fix and resend
+        </Link>
+      ) : null}
+    </EntryCard>
+  );
+}
+
 export function ResubmitButton({
   id,
   kind,
@@ -136,98 +163,111 @@ export function ResubmitButton({
 function ExpensesTab() {
   const query = useExpenses({ mine: true, page_size: 50 });
   const queued = useQueuedMoney().expenses;
-  const rows: MaybeQueued<ProjectExpense>[] = [...queued, ...(query.data?.results ?? [])];
+  const rows = query.data?.results ?? [];
 
   return (
-    <ListState query={query}>
-      {rows.length === 0 ? (
-        <EmptyState
-          title="No expenses yet."
-          hint="Record one when you pay for something on a project."
-          action={
-            <Link to="/money/expenses/new" className="text-sm font-medium underline">
-              Record an expense
-            </Link>
-          }
-        />
-      ) : (
+    <div className="flex flex-col gap-2">
+      {queued.length > 0 ? (
         <ul className="flex flex-col gap-2">
-          {rows.map((row) => (
-            <EntryCard
-              key={row.queued ? `q${row.client_uuid}` : row.id}
-              to={`/money/expenses/${row.id}`}
-              title={`${row.category_name ?? 'Expense'} · ${row.project_reference ?? ''}`.trim()}
-              meta={[row.incurred_on, row.site_name].filter(Boolean).join(' · ')}
-              amount={row.amount}
-              status={row.status}
-              queued={row.queued}
-              reason={row.decision_reason}
-            >
-              {row.status === 'REJECTED' && !row.queued ? (
-                <ResubmitButton id={row.id} kind="expense" />
-              ) : null}
-            </EntryCard>
+          {queued.map((card) => (
+            <QueuedEntryCard key={`q${card.client_uuid}`} card={card} />
           ))}
         </ul>
-      )}
-    </ListState>
+      ) : null}
+      <ListState query={query}>
+        {rows.length === 0 && queued.length === 0 ? (
+          <EmptyState
+            title="No expenses yet."
+            hint="Record one when you pay for something on a project."
+            action={
+              <Link to="/money/expenses/new" className="text-sm font-medium underline">
+                Record an expense
+              </Link>
+            }
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {rows.map((row) => (
+              <EntryCard
+                key={row.id}
+                to={`/money/expenses/${row.id}`}
+                title={`${row.category_name ?? 'Expense'} · ${row.project_reference ?? ''}`.trim()}
+                meta={[row.incurred_on, row.site_name].filter(Boolean).join(' · ')}
+                amount={row.amount}
+                status={row.status}
+                reason={row.decision_reason}
+              >
+                {row.status === 'REJECTED' ? <ResubmitButton id={row.id} kind="expense" /> : null}
+              </EntryCard>
+            ))}
+          </ul>
+        )}
+      </ListState>
+    </div>
   );
 }
 
 function RequestsTab() {
   const query = useAllowanceRequests({ mine: true, page_size: 50 });
   const queued = useQueuedMoney().requests;
-  const rows: MaybeQueued<AllowanceRequest>[] = [...queued, ...(query.data?.results ?? [])];
+  const rows = query.data?.results ?? [];
 
   return (
-    <ListState query={query}>
-      {rows.length === 0 ? (
-        <EmptyState
-          title="No requests yet."
-          hint="Ask for a float or an allowance before you spend."
-          action={
-            <Link to="/money/requests/new" className="text-sm font-medium underline">
-              Request an allowance
-            </Link>
-          }
-        />
-      ) : (
+    <div className="flex flex-col gap-2">
+      {queued.length > 0 ? (
         <ul className="flex flex-col gap-2">
-          {rows.map((row) => {
-            const isFloat = row.type === 'FLOAT';
-            return (
-              <EntryCard
-                key={row.queued ? `q${row.client_uuid}` : row.id}
-                to={`/money/requests/${row.id}`}
-                title={`${TYPE_LABELS[row.type]} ${row.number ?? ''}`.trim()}
-                meta={`${row.from_date} to ${row.to_date}`}
-                amount={row.amount}
-                status={row.status}
-                queued={row.queued}
-                reason={row.decision_reason}
-                extra={
-                  isFloat && row.status === 'PAID' && !row.closed_at && row.balance !== undefined ? (
-                    <p className="mt-2 text-sm text-slate-700">
-                      Balance <Money value={row.balance} />
-                    </p>
-                  ) : null
-                }
-              >
-                {row.status === 'REJECTED' && !row.queued ? (
-                  <ResubmitButton id={row.id} kind="request" />
-                ) : null}
-              </EntryCard>
-            );
-          })}
+          {queued.map((card) => (
+            <QueuedEntryCard key={`q${card.client_uuid}`} card={card} />
+          ))}
         </ul>
-      )}
-    </ListState>
+      ) : null}
+      <ListState query={query}>
+        {rows.length === 0 && queued.length === 0 ? (
+          <EmptyState
+            title="No requests yet."
+            hint="Ask for a float or an allowance before you spend."
+            action={
+              <Link to="/money/requests/new" className="text-sm font-medium underline">
+                Request an allowance
+              </Link>
+            }
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {rows.map((row) => {
+              const isFloat = row.type === 'FLOAT';
+              return (
+                <EntryCard
+                  key={row.id}
+                  to={`/money/requests/${row.id}`}
+                  title={`${TYPE_LABELS[row.type]} ${row.number ?? ''}`.trim()}
+                  meta={`${row.from_date} to ${row.to_date}`}
+                  amount={row.amount}
+                  status={row.status}
+                  reason={row.decision_reason}
+                  extra={
+                    isFloat && row.status === 'PAID' && !row.closed_at && row.balance !== undefined ? (
+                      <p className="mt-2 text-sm text-slate-700">
+                        Balance <Money value={row.balance} />
+                      </p>
+                    ) : null
+                  }
+                >
+                  {row.status === 'REJECTED' ? <ResubmitButton id={row.id} kind="request" /> : null}
+                </EntryCard>
+              );
+            })}
+          </ul>
+        )}
+      </ListState>
+    </div>
   );
 }
 
 function CasualsTab() {
   const [search, setSearch] = useState('');
   const query = useCasuals(search);
+  const queued = useQueuedMoney().casuals;
   return (
     <div className="flex flex-col gap-3">
       <input
@@ -238,6 +278,31 @@ function CasualsTab() {
         onChange={(event) => setSearch(event.target.value)}
         className="min-h-[44px] rounded-lg border border-slate-300 px-3 text-base"
       />
+      {queued.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {queued.map((card) => (
+            <li key={`q${card.client_uuid}`} className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-sm font-medium text-slate-900">{card.title}</p>
+              <p className="text-sm text-slate-500">{card.meta}</p>
+              {card.refused ? (
+                <>
+                  <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900">
+                    Refused: {card.reason}
+                  </p>
+                  <Link
+                    to={card.fixTo}
+                    className="mt-2 inline-flex min-h-[44px] items-center text-sm font-medium underline"
+                  >
+                    Fix and resend
+                  </Link>
+                </>
+              ) : (
+                <p className="mt-1 text-xs font-medium text-slate-700">Waiting to send</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <ListState query={query}>
         {(query.data?.results ?? []).length === 0 ? (
           <EmptyState title="No casuals found." hint="Register someone once, then pick them on any expense." />
@@ -263,10 +328,15 @@ export default function MoneyHomePage() {
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab');
   const tab: Tab = TABS.some((t) => t.key === requested) ? (requested as Tab) : 'expenses';
+  const canApprove = usePermission(PERM.FINANCE_APPROVE);
+  // Set by a form that saved to the phone (R6), so the person is told it is safe.
+  const notice = (useLocation().state as { notice?: string } | null)?.notice;
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Money" subtitle="What you have spent, asked for and been given." />
+
+      {notice ? <Banner tone="success">{notice}</Banner> : null}
 
       <div className="flex flex-wrap gap-2">
         <Link
@@ -287,6 +357,14 @@ export default function MoneyHomePage() {
         >
           Add casual
         </Link>
+        {canApprove ? (
+          <Link
+            to="/money/to-pay"
+            className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-4 text-base font-medium text-slate-900"
+          >
+            To pay
+          </Link>
+        ) : null}
       </div>
 
       <TabStrip<Tab>

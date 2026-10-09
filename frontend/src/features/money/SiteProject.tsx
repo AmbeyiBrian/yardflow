@@ -41,10 +41,16 @@ export interface SiteProjectState {
   fixed: boolean;
 }
 
-export function useSiteProject(fixedProject = ''): SiteProjectState {
-  const [site, setSite] = useState('');
-  const [direct, setDirect] = useState(Boolean(fixedProject));
-  const [pick, setPick] = useState(fixedProject);
+export function useSiteProject(
+  fixedProject = '',
+  /** "Fix and resend": start from what was queued (R6). */
+  initial?: { site: string; project: string },
+): SiteProjectState {
+  const [site, setSite] = useState(initial?.site ?? '');
+  const [direct, setDirect] = useState(
+    Boolean(fixedProject) || Boolean(initial && !initial.site && initial.project),
+  );
+  const [pick, setPick] = useState(fixedProject || initial?.project || '');
 
   const forSite = useList<Project>(
     'projects',

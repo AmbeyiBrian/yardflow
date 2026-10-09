@@ -87,7 +87,7 @@ export function isPermanentUploadFailure(status: number): boolean {
 /* Plain words for the Sync screen and the money lists                         */
 /* -------------------------------------------------------------------------- */
 
-const ALLOWANCE_WORDS: Record<string, string> = {
+export const ALLOWANCE_WORDS: Record<string, string> = {
   FLOAT: 'Float',
   TRANSPORT: 'Transport allowance',
   NIGHT_OUT: 'Night-out allowance',

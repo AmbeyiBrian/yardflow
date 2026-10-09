@@ -16,6 +16,31 @@ import { ApiError, api } from '../api/client';
 import { allQueued, markPhoto, queuedPhotos } from './db';
 import { isPermanentUploadFailure, photosReadyToUpload } from './financeQueue';
 
+export interface AttachmentUpload {
+  targetType: string;
+  targetId: string | number;
+  caption: string;
+  client_uuid: string;
+  blob: Blob;
+  filename: string;
+}
+
+/**
+ * One photo to `/attachments`. The drain and the money forms (photos taken
+ * before saving, §4.17.8) both come through here, so there is one place that
+ * knows the form fields and that `client_uuid` makes a retry land once.
+ */
+export function postAttachment(upload: AttachmentUpload): Promise<unknown> {
+  const form = new FormData();
+  form.set('target_type', upload.targetType);
+  form.set('target_id', String(upload.targetId));
+  form.set('kind', 'PHOTO');
+  form.set('caption', upload.caption);
+  form.set('client_uuid', upload.client_uuid);
+  form.set('file', new File([upload.blob], upload.filename, { type: upload.blob.type }));
+  return api.post('/attachments', form);
+}
+
 export interface PhotoOutcome {
   uploaded: number;
   /** Still queued: no entry applied yet for them, or the upload failed. */
@@ -34,17 +59,16 @@ export async function drainPhotos(): Promise<PhotoOutcome> {
   let failed = 0;
 
   for (const { photo, targetType, targetId } of ready) {
-    const form = new FormData();
-    form.set('target_type', targetType);
-    form.set('target_id', targetId);
-    form.set('kind', 'PHOTO');
-    form.set('caption', photo.caption);
-    // Reused on every retry: this is what makes the upload idempotent.
-    form.set('client_uuid', photo.client_uuid);
-    form.set('file', new File([photo.blob], photo.filename, { type: photo.blob.type }));
-
     try {
-      await api.post('/attachments', form);
+      await postAttachment({
+        targetType,
+        targetId,
+        caption: photo.caption,
+        // Reused on every retry: this is what makes the upload idempotent.
+        client_uuid: photo.client_uuid,
+        blob: photo.blob,
+        filename: photo.filename,
+      });
       await markPhoto(photo.client_uuid, { status: 'UPLOADED' });
       uploaded += 1;
     } catch (error) {

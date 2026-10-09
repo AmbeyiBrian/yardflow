@@ -6,7 +6,9 @@
  * — those are never offline (§8.3), so there is deliberately no function for
  * them.
  *
- * Each entry's `client_uuid` is minted here, once, and travels twice: as the
+ * Each entry's `client_uuid` is minted here, once — or passed in by a form that
+ * already tried the server with it, so a response lost on the way back cannot
+ * become a second entry — and travels twice: as the
  * queue row's idempotency key (N2) and inside the payload, because the entity
  * has its own unique `client_uuid` on the server (§4.17.8). A retry reuses it.
  */
@@ -71,8 +73,11 @@ async function queueFinance(
 }
 
 /** Queue an expense with its photos. Returns its `client_uuid`. */
-export function queueExpense(body: QueuedExpenseBody, photos: PhotoDraft[] = []): Promise<string> {
-  const client_uuid = newUuid();
+export function queueExpense(
+  body: QueuedExpenseBody,
+  photos: PhotoDraft[] = [],
+  client_uuid: string = newUuid(),
+): Promise<string> {
   // "arriving" vs "no evidence" on the approver's screen (§4.17.8) depends on
   // this count, so it is set from what was actually captured unless the screen
   // says otherwise.
@@ -81,8 +86,11 @@ export function queueExpense(body: QueuedExpenseBody, photos: PhotoDraft[] = [])
 }
 
 /** Queue an allowance or float request. Returns its `client_uuid`. */
-export function queueAllowanceRequest(body: QueuedAllowanceBody): Promise<string> {
-  return queueFinance('ALLOWANCE_REQUEST', body, newUuid(), []);
+export function queueAllowanceRequest(
+  body: QueuedAllowanceBody,
+  client_uuid: string = newUuid(),
+): Promise<string> {
+  return queueFinance('ALLOWANCE_REQUEST', body, client_uuid, []);
 }
 
 /**
@@ -90,8 +98,12 @@ export function queueAllowanceRequest(body: QueuedAllowanceBody): Promise<string
  * `client_uuid`, which a later expense in the same queue names as
  * `casual_client_uuid`.
  */
-export function queueCasual(body: QueuedCasualBody, idPhoto?: PhotoDraft): Promise<string> {
-  return queueFinance('CASUAL', body, newUuid(), idPhoto ? [idPhoto] : []);
+export function queueCasual(
+  body: QueuedCasualBody,
+  idPhoto?: PhotoDraft,
+  client_uuid: string = newUuid(),
+): Promise<string> {
+  return queueFinance('CASUAL', body, client_uuid, idPhoto ? [idPhoto] : []);
 }
 
 /**

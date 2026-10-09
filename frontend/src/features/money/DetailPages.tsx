@@ -8,15 +8,18 @@
  * carried by the list endpoints.
  */
 
-import type { ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
+
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useResource } from '../../api/hooks';
-import type { Attachment } from '../../components/PhotoCapture';
-import { Card, Spinner, Banner } from '../../components/ui';
+import { PhotoCapture, type Attachment } from '../../components/PhotoCapture';
+import { Banner, Button, Card, Spinner } from '../../components/ui';
 import { EmptyState, ListState, PageHeader } from '../../components/ui/data';
 import { Money } from '../../components/ui/money';
 import { useAllowanceRequest, useExpense, useExpenses } from './api';
+import { sendTo, uploadItems, type UploadItem } from './drafts';
 import { ResubmitButton, StatusPill } from './MoneyHomePage';
 import { TYPE_LABELS } from './RequestAllowancePage';
 import type { AllowanceRequest, ProjectExpense } from './types';
@@ -82,6 +85,41 @@ function Photos({ targetType, targetId }: { targetType: string; targetId: number
   );
 }
 
+/**
+ * Photos taken in the form that did not go up (R1). The expense is saved either
+ * way; this says how many are left and retries them with the same `client_uuid`s,
+ * so one that did land on a lost response is not attached twice.
+ */
+function FailedPhotos({ targetId, items }: { targetId: number; items: UploadItem[] }) {
+  const [left, setLeft] = useState(items);
+  const [busy, setBusy] = useState(false);
+  const client = useQueryClient();
+
+  if (left.length === 0) return null;
+
+  async function retry() {
+    setBusy(true);
+    setLeft(await uploadItems(left, sendTo('commercials.ProjectExpense', targetId)));
+    setBusy(false);
+    await client.invalidateQueries({ queryKey: ['attachments'] });
+  }
+
+  return (
+    <Banner tone="error">
+      <span className="flex flex-col items-start gap-2">
+        <span>
+          {left.length} {left.length === 1 ? 'photo' : 'photos'} did not send:{' '}
+          {left.map((item) => `${item.caption} (${item.filename})`).join(', ')}. The expense is
+          saved.
+        </span>
+        <Button variant="secondary" loading={busy} onClick={() => void retry()}>
+          Send again
+        </Button>
+      </span>
+    </Banner>
+  );
+}
+
 function Decision({
   row,
 }: {
@@ -124,6 +162,8 @@ function Loading<T>({
 export function ExpenseDetailPage() {
   const { id } = useParams();
   const query = useExpense(id);
+  const failedPhotos = (useLocation().state as { failedPhotos?: UploadItem[] } | null)
+    ?.failedPhotos;
 
   return (
     <Loading query={query}>
@@ -182,7 +222,18 @@ export function ExpenseDetailPage() {
             <Decision row={e} />
             {e.status === 'REJECTED' ? <ResubmitButton id={e.id} kind="expense" /> : null}
           </Card>
-          <Photos targetType="commercials.ProjectExpense" targetId={e.id} />
+          {failedPhotos?.length ? <FailedPhotos targetId={e.id} items={failedPhotos} /> : null}
+          {/* While it is still pending more photos can be added (R1); after that, read-only. */}
+          {e.status === 'PENDING_PM' || e.status === 'PENDING_FINANCE' ? (
+            <PhotoCapture
+              targetType="commercials.ProjectExpense"
+              targetId={e.id}
+              label="Photos"
+              caption="Other"
+            />
+          ) : (
+            <Photos targetType="commercials.ProjectExpense" targetId={e.id} />
+          )}
         </div>
       )}
     </Loading>

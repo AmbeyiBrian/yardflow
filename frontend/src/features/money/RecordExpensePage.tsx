@@ -6,13 +6,15 @@
  * it (`SiteProject`); a category's `kind` decides the extra questions — fuel
  * wants the vehicle, casual labour wants the casuals and their days.
  *
- * The expense is created first and the photos attached to it afterwards: an
- * attachment needs something to hang off, and asking for the image first would
- * mean holding it in memory on a phone that may not survive the walk back. The
- * receipt is asked for, not required (O16): a real cost that would not
- * photograph is still a real cost, and the approvers are told it has no
- * evidence. `photos_expected` says how many are coming so "arriving" is not
- * mistaken for "none".
+ * Photos are taken in the form, before saving (§4.17.8): receipt, fuel pump,
+ * work done. Online the expense is created and the photos sent right after,
+ * since an attachment needs something to hang off; a photo that fails leaves the
+ * expense saved and a retry on its page. Offline, the expense and its photos go
+ * to the phone's queue together and send when there is network (R6). The receipt
+ * is asked for, not required (O16): a real cost that would not photograph is
+ * still a real cost, and the approvers are told it has no evidence.
+ * `photos_expected` is the number of photos taken, so "arriving" is not mistaken
+ * for "none".
  */
 
 import { useMemo, useRef, useState } from 'react';
@@ -20,20 +22,40 @@ import { useForm } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useDetail, useList } from '../../api/hooks';
-import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
 import { PageHeader, Sheet } from '../../components/ui/data';
 import { MoneyInput } from '../../components/ui/money';
 import { newUuid } from '../../offline/db';
+import { useOffline } from '../../offline/OfflineProvider';
 import type { Project, ProjectJob } from '../projects/types';
 import { useAllowanceRequests, useCasuals, useCreateExpense } from './api';
 import { CasualForm } from './CasualPages';
+import { DraftPhotos } from './DraftPhotos';
+import {
+  SAVED_ON_PHONE,
+  casualRef,
+  expensePrefill,
+  isNetworkError,
+  mergeCasualOptions,
+  queuedCasualOptions,
+  sendTo,
+  shouldQueue,
+  toUploadItems,
+  uploadItems,
+  type CasualOption,
+} from './drafts';
 import { moneyError } from './errors';
+import {
+  queueExpense,
+  resendCorrected,
+  useQueuedFinance,
+  type PhotoDraft,
+  type QueuedExpenseBody,
+} from './offline';
+import { useQueuedEntry } from './queued';
 import { fromCents, toCents } from './rules';
 import { SiteProjectFields, useSiteProject } from './SiteProject';
-import type { Casual, ExpenseCategory, ProjectExpense } from './types';
-
-export const CAPTIONS = ['Receipt', 'Fuel pump', 'Work done', 'Other'] as const;
+import type { ExpenseCategory } from './types';
 
 interface Line {
   key: number;
@@ -52,7 +74,6 @@ interface Values {
   vehicle_reg: string;
   litres: string;
   float_request: string;
-  photos_expected: string;
 }
 
 function today(): string {
@@ -60,25 +81,67 @@ function today(): string {
 }
 
 export default function RecordExpensePage() {
-  const navigate = useNavigate();
   const [params] = useSearchParams();
+  const resend = params.get('resend');
+  const { entry, settled } = useQueuedEntry(resend);
+
+  // "Fix and resend" starts from the queued payload, so wait for it.
+  if (resend && !entry) {
+    return (
+      <div className="flex flex-col gap-4">
+        <PageHeader title="Record an expense" />
+        {settled ? (
+          <Banner tone="info">That entry is no longer on this phone.</Banner>
+        ) : (
+          <Spinner className="text-slate-400" />
+        )}
+      </div>
+    );
+  }
+  return (
+    <ExpenseForm
+      key={entry?.client_uuid ?? 'new'}
+      resendOf={entry?.client_uuid}
+      payload={entry?.payload}
+    />
+  );
+}
+
+function ExpenseForm({
+  resendOf,
+  payload,
+}: {
+  resendOf?: string;
+  payload?: Record<string, unknown>;
+}) {
+  const navigate = useNavigate();
+  const { online } = useOffline();
+  const [params] = useSearchParams();
+  const prefill = payload ? expensePrefill(payload) : null;
   // Arrived from a project's own screen: that project is the answer, and asking
   // again invites picking the wrong one off a list of two hundred.
   const fixedProject = params.get('project') ?? '';
-  const place = useSiteProject(fixedProject);
+  const place = useSiteProject(
+    fixedProject,
+    prefill ? { site: prefill.site, project: prefill.project } : undefined,
+  );
 
-  const [saved, setSaved] = useState<ProjectExpense | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
-  const [caption, setCaption] = useState<string>('Receipt');
-  const [lines, setLines] = useState<Line[]>([{ key: 1, casual: '', days: '1', amount: '' }]);
+  const [drafts, setDrafts] = useState<PhotoDraft[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [lines, setLines] = useState<Line[]>(
+    prefill?.lines.length
+      ? prefill.lines.map((l, i) => ({ key: i + 1, ...l }))
+      : [{ key: 1, casual: '', days: '1', amount: '' }],
+  );
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState<number | null>(null);
   // Casuals chosen or just added stay nameable when a later search drops them.
-  const [known, setKnown] = useState<Record<string, Casual>>({});
+  const [known, setKnown] = useState<Record<string, CasualOption>>({});
   // One uuid per form, so a retry after a dropped response cannot record twice.
   const uuid = useRef(newUuid());
-  const nextKey = useRef(2);
+  const nextKey = useRef(prefill ? prefill.lines.length + 1 : 2);
 
   const categories = useList<ExpenseCategory>('expense-categories', {
     is_active: true,
@@ -86,10 +149,11 @@ export default function RecordExpensePage() {
   });
   const floats = useAllowanceRequests({ mine: true, type: 'FLOAT', page_size: 100 });
   const casuals = useCasuals(search);
+  const queuedEntries = useQueuedFinance();
   const create = useCreateExpense();
 
   const form = useForm<Values>({
-    defaultValues: {
+    defaultValues: prefill?.values ?? {
       job: '',
       category: '',
       amount: '',
@@ -99,7 +163,6 @@ export default function RecordExpensePage() {
       vehicle_reg: '',
       litres: '',
       float_request: '',
-      photos_expected: '1',
     },
   });
 
@@ -120,11 +183,21 @@ export default function RecordExpensePage() {
     (f) => f.type === 'FLOAT' && f.status === 'PAID' && !f.closed_at,
   );
 
-  const casualOptions = useMemo(() => {
-    const byId = new Map<string, Casual>(Object.entries(known));
-    for (const c of casuals.data?.results ?? []) byId.set(String(c.id), c);
-    return [...byId.values()];
-  }, [known, casuals.data]);
+  // Server casuals, then those still on this phone (§4.17.8). The reference
+  // bundle carries no casuals list, so offline the picker is what was seen
+  // this visit plus what is queued.
+  const casualOptions = useMemo(
+    () =>
+      mergeCasualOptions(
+        Object.values(known),
+        (casuals.data?.results ?? []).map((c) => ({
+          value: String(c.id),
+          label: `${c.name} ${c.id_number}`,
+        })),
+        queuedCasualOptions(queuedEntries),
+      ),
+    [known, casuals.data, queuedEntries],
+  );
 
   const patchLine = (key: number, patch: Partial<Line>) =>
     setLines((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -151,85 +224,78 @@ export default function RecordExpensePage() {
     setLocalErrors(errors);
     if (place.blocked || Object.keys(errors).length) return;
 
+    const body: QueuedExpenseBody = {
+      project: Number(place.project),
+      site: place.site && !place.direct ? Number(place.site) : null,
+      job: values.job ? Number(values.job) : null,
+      category: Number(values.category),
+      amount: values.amount,
+      incurred_on: values.incurred_on,
+      description: values.description,
+      scope_of_work: values.scope_of_work,
+      vehicle_reg: kind === 'FUEL' ? values.vehicle_reg.trim() : '',
+      litres: kind === 'FUEL' && values.litres ? values.litres : null,
+      float_request: values.float_request ? Number(values.float_request) : null,
+      // What was taken here is what the approver is told to expect (R1);
+      // a resent entry keeps the photos it already has.
+      photos_expected: resendOf ? (prefill?.photos_expected ?? 0) : drafts.length,
+      casual_lines:
+        kind === 'CASUAL_LABOUR'
+          ? usable.map((l) => ({
+              ...casualRef(l.casual),
+              days: Number(l.days),
+              amount: l.amount ? l.amount : null,
+            }))
+          : undefined,
+    };
+
+    setBusy(true);
     try {
-      setSaved(
-        await create.mutateAsync({
-          project: Number(place.project),
-          site: place.site && !place.direct ? Number(place.site) : null,
-          job: values.job ? Number(values.job) : null,
-          category: Number(values.category),
-          amount: values.amount,
-          incurred_on: values.incurred_on,
-          description: values.description,
-          scope_of_work: values.scope_of_work,
-          vehicle_reg: kind === 'FUEL' ? values.vehicle_reg.trim() : '',
-          litres: kind === 'FUEL' && values.litres ? values.litres : null,
-          float_request: values.float_request ? Number(values.float_request) : null,
-          photos_expected: Math.max(0, Number(values.photos_expected) || 0),
-          client_uuid: uuid.current,
-          casual_lines:
-            kind === 'CASUAL_LABOUR'
-              ? usable.map((l) => ({
-                  casual: Number(l.casual),
-                  days: Number(l.days),
-                  amount: l.amount ? l.amount : null,
-                }))
-              : undefined,
-        }),
-      );
+      if (resendOf) {
+        await resendCorrected(resendOf, body as Record<string, unknown>);
+        return leaveQueued();
+      }
+      if (!shouldQueue(online, body.casual_lines)) {
+        try {
+          const saved = await create.mutateAsync({
+            ...body,
+            client_uuid: uuid.current,
+            casual_lines: body.casual_lines?.map((l) => ({
+              casual: Number(l.casual),
+              days: l.days,
+              amount: l.amount ?? null,
+            })),
+          });
+          // The expense exists; photos that fail do not undo it. They travel to
+          // the detail page, which says which are left and offers a retry (R1).
+          const failed = await uploadItems(
+            toUploadItems(drafts, newUuid),
+            sendTo('commercials.ProjectExpense', saved.id),
+          );
+          navigate(`/money/expenses/${saved.id}`, {
+            state: failed.length ? { failedPhotos: failed } : undefined,
+          });
+          return;
+        } catch (error) {
+          if (!isNetworkError(error)) {
+            setBanner(moneyError(error, form.setError));
+            return;
+          }
+          // No signal after all: queue it under the same uuid, so a request that
+          // did land cannot become a second expense.
+        }
+      }
+      await queueExpense(body, drafts, uuid.current);
+      leaveQueued();
     } catch (error) {
-      setBanner(moneyError(error, form.setError));
+      setBanner(error instanceof Error ? error.message : 'That could not be saved.');
+    } finally {
+      setBusy(false);
     }
   }
 
-  if (saved) {
-    return (
-      <div className="flex flex-col gap-4">
-        <PageHeader title="Record an expense" />
-        <Card>
-          <Banner tone="success">
-            Recorded. It reaches the project&rsquo;s cost once it has been approved.
-          </Banner>
-          <div className="mt-3 flex flex-col gap-3">
-            <Field label="What the next photo shows" htmlFor="ex-caption">
-              <Select
-                id="ex-caption"
-                value={caption}
-                onChange={(event) => setCaption(event.target.value)}
-              >
-                {CAPTIONS.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </Select>
-            </Field>
-            <PhotoCapture
-              targetType="commercials.ProjectExpense"
-              targetId={String(saved.id)}
-              label="Photos"
-              caption={caption}
-              minimum={saved.photos_expected}
-            />
-            <Button
-              variant="ghost"
-              onClick={() => {
-                uuid.current = newUuid();
-                setSaved(null);
-                form.reset({ ...form.getValues(), amount: '', description: '' });
-              }}
-            >
-              Record another
-            </Button>
-            <Button
-              onClick={() =>
-                navigate(fixedProject ? `/projects/${fixedProject}` : `/money/expenses/${saved.id}`)
-              }
-            >
-              Done
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
+  function leaveQueued() {
+    navigate('/money', { state: { notice: SAVED_ON_PHONE } });
   }
 
   return (
@@ -325,15 +391,15 @@ export default function RecordExpensePage() {
                     aria-label={`Casual ${index + 1}`}
                     value={line.casual}
                     onChange={(event) => {
-                      const picked = casualOptions.find((c) => String(c.id) === event.target.value);
-                      if (picked) setKnown((k) => ({ ...k, [String(picked.id)]: picked }));
+                      const picked = casualOptions.find((c) => c.value === event.target.value);
+                      if (picked) setKnown((k) => ({ ...k, [picked.value]: picked }));
                       patchLine(line.key, { casual: event.target.value });
                     }}
                   >
                     <option value="">Choose…</option>
                     {casualOptions.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.id_number}
+                      <option key={c.value} value={c.value}>
+                        {c.label}
                       </option>
                     ))}
                   </Select>
@@ -429,26 +495,24 @@ export default function RecordExpensePage() {
             </Field>
           ) : null}
 
-          <Field
-            label="Photos to attach"
-            htmlFor="ex-photos"
-            hint="Receipt, fuel pump, work done. You add them on the next screen. 0 if there are none."
-          >
-            <Input
-              id="ex-photos"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              {...form.register('photos_expected')}
+          {resendOf ? (
+            <p className="text-sm text-slate-600">
+              {prefill?.photos_expected ?? 0} photo(s) already taken stay with this entry.
+            </p>
+          ) : (
+            <DraftPhotos
+              hint="Receipt, fuel pump, work done. Taken now, sent with the expense. None is fine if there is nothing to photograph."
+              drafts={drafts}
+              onChange={setDrafts}
             />
-          </Field>
+          )}
 
           <Button
             block
-            disabled={create.isPending || place.blocked || place.loading}
+            disabled={busy || place.blocked || place.loading}
             onClick={form.handleSubmit(submit)}
           >
-            {create.isPending ? <Spinner /> : 'Record it'}
+            {busy ? <Spinner /> : resendOf ? 'Fix and resend' : 'Record it'}
           </Button>
         </form>
       </Card>
@@ -456,8 +520,11 @@ export default function RecordExpensePage() {
       <Sheet open={adding !== null} title="Add a casual" onClose={() => setAdding(null)}>
         <CasualForm
           onDone={(casual) => {
-            setKnown((k) => ({ ...k, [String(casual.id)]: casual }));
-            if (adding !== null) patchLine(adding, { casual: String(casual.id) });
+            setKnown((k) => ({
+              ...k,
+              [casual.value]: { value: casual.value, label: `${casual.name} ${casual.id_number}` },
+            }));
+            if (adding !== null) patchLine(adding, { casual: casual.value });
             setAdding(null);
           }}
         />
