@@ -1154,13 +1154,14 @@ class TestLimits:
             ask(tech, site, type=type_, amount="10000", start=date(2026, 12, 1))
 
     def test_float_and_other_are_unlimited(self, tenant, project, site, tech, finance_user):
-        ask(tech, site, type="FLOAT", amount="9999999")
-        ask(tech, site, type="OTHER", amount="0.01")
+        ask(tech, site, type="FLOAT", amount="9999999", over_budget_reason="Big job")
+        ask(tech, site, type="OTHER", amount="0.01", over_budget_reason="Big job")
 
     def test_expenses_are_not_limit_checked(
         self, tenant, project, site, tech, category, finance_user
     ):
-        assert spend(tech, category, site, "9999999").status == ExpenseStatus.PENDING_PM
+        made = spend(tech, category, site, "9999999", over_budget_reason="Big job")
+        assert made.status == ExpenseStatus.PENDING_PM
 
     def test_the_limits_are_judged_on_replay_as_well(
         self, tenant, project, site, tech, finance_user

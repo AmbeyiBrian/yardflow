@@ -6,6 +6,7 @@ from django.db.models import Q
 from django_filters import rest_framework as filters
 from rest_framework import serializers
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
@@ -504,6 +505,40 @@ class ProjectViewSet(TenantScopedViewSet):
         return Response(
             ProjectPerformanceSerializer(result, context={"request": request}).data
         )
+
+    @action(detail=True, methods=["get"])
+    def budget(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """R9: committed, spent and remaining (§4.19.5). Cost viewers only."""
+        from commercials.budget import budget_position
+
+        project = self.get_object()
+        if not may_see_project_cost(request, project):
+            raise PermissionDenied("You may not see this project's cost.")
+        return Response(budget_position(project).as_dict())
+
+    @action(detail=True, methods=["post"], url_path="budget-check")
+    def budget_check(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """R9's early warning: ``{amount}`` gives ``{over, over_by?}``.
+
+        Anyone who can see the project may ask; the overrun itself is only
+        named to those who may see its cost.
+        """
+        from decimal import Decimal, InvalidOperation
+
+        from commercials.budget import would_exceed
+
+        project = self.get_object()
+        try:
+            amount = Decimal(str(request.data.get("amount")))
+        except InvalidOperation:
+            raise serializers.ValidationError({"amount": "Enter an amount."}) from None
+        if not amount.is_finite() or amount <= 0:
+            raise serializers.ValidationError({"amount": "Enter an amount."})
+        over_by = would_exceed(project, amount)
+        data: dict = {"over": over_by is not None}
+        if over_by is not None and may_see_project_cost(request, project):
+            data["over_by"] = str(over_by)
+        return Response(data)
 
     @action(detail=True, methods=["get"])
     def unreconciled(self, request, pk=None):  # type: ignore[no-untyped-def]

@@ -6923,6 +6923,66 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/projects/{id}/budget:
+    get:
+      operationId: projects_budget_retrieve
+      description: 'R9: committed, spent and remaining (§4.19.5). Cost viewers only.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}/budget-check:
+    post:
+      operationId: projects_budget_check_create
+      description: |-
+        R9's early warning: ``{amount}`` gives ``{over, over_by?}``.
+
+        Anyone who can see the project may ask; the overrun itself is only
+        named to those who may see its cost.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
   /api/v1/projects/{id}/close:
     post:
       operationId: projects_close_create
@@ -9948,6 +10008,18 @@ components:
         balance:
           type: string
           readOnly: true
+        is_over_budget:
+          type: boolean
+          readOnly: true
+        over_budget_by:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        over_budget_reason:
+          type: string
+          maxLength: 500
         created_at:
           type: string
           format: date-time
@@ -9965,8 +10037,10 @@ components:
       - decision_reason
       - from_date
       - id
+      - is_over_budget
       - number
       - open_float_warning
+      - over_budget_by
       - paid_at
       - paid_by
       - payment_reference
@@ -10015,6 +10089,9 @@ components:
           type: string
           format: uuid
           nullable: true
+        over_budget_reason:
+          type: string
+          maxLength: 500
       required:
       - amount
       - from_date
@@ -16461,6 +16538,18 @@ components:
         pm_level_skipped:
           type: boolean
           readOnly: true
+        is_over_budget:
+          type: boolean
+          readOnly: true
+        over_budget_by:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        over_budget_reason:
+          type: string
+          maxLength: 500
         created_at:
           type: string
           format: date-time
@@ -16478,7 +16567,9 @@ components:
       - id
       - incurred_on
       - is_evidenced
+      - is_over_budget
       - is_reversal
+      - over_budget_by
       - paid_at
       - paid_by
       - payment_reference
@@ -16539,6 +16630,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ExpenseCasualLineRequest'
+        over_budget_reason:
+          type: string
+          maxLength: 500
       required:
       - amount
       - category

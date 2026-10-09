@@ -68,8 +68,8 @@ def expense(tenant, tech, pm, fin):
         reference="WO-9901",
         po_number="PO-990",
         manager=pm,
-        contract_value=D("1.00"),
-        cost_budget=D("1.00"),
+        contract_value=D("100000.00"),
+        cost_budget=D("100000.00"),
     )
     site = SiteFactory(name="Ruiru")
     project.sites.add(

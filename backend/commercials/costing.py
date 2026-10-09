@@ -50,6 +50,9 @@ class ProjectCost:
     subcontractor: Decimal = ZERO
     labour: Decimal = ZERO
     expenses: Decimal = ZERO
+    #: R7: goods bought on the spot and used at the site (§4.19.3). INTO_YARD
+    #: purchases are not here: they become cost when issued, through the ledger.
+    purchases: Decimal = ZERO
 
     #: Issued and not yet accounted for. **Not** part of ``total``.
     exposure: Decimal = ZERO
@@ -71,6 +74,7 @@ class ProjectCost:
             + self.subcontractor
             + self.labour
             + self.expenses
+            + self.purchases
         )
 
     @property
@@ -89,6 +93,7 @@ class ProjectCost:
             "subcontractor": str(self.subcontractor),
             "labour": str(self.labour),
             "expenses": str(self.expenses),
+            "purchases": str(self.purchases),
             "total": str(self.total),
             "exposure": str(self.exposure),
             "is_fully_valued": self.is_fully_valued,
@@ -263,6 +268,23 @@ def expense_cost(project) -> Decimal:
     return _money(total)
 
 
+def purchase_cost(project) -> Decimal:
+    """Approved and paid USED_AT_SITE purchases, net of reversals (§4.19.3).
+
+    INTO_YARD purchases are deliberately absent: their goods reach cost when
+    issued to the project (``material_cost``), and counting the purchase too
+    would count the same money twice.
+    """
+    from commercials.models import COSTED_STATUSES, PurchaseDestination, SitePurchase
+
+    approved = SitePurchase.objects.filter(
+        project=project,
+        destination=PurchaseDestination.USED_AT_SITE,
+        status__in=COSTED_STATUSES,
+    )
+    return _money(sum((purchase.signed_amount for purchase in approved), ZERO))
+
+
 def exposure(project) -> Decimal:
     """Material issued to the project and not yet accounted for (O11).
 
@@ -320,6 +342,7 @@ def cost_for(project) -> ProjectCost:
         subcontractor=subcontractor_cost(project),
         labour=labour,
         expenses=expense_cost(project),
+        purchases=purchase_cost(project),
         exposure=exposure(project),
         unvalued_movements=unvalued_movements + unvalued_expectations,
         uncosted_labour_entries=uncosted_labour,
@@ -338,6 +361,7 @@ def from_snapshot(snapshot) -> ProjectCost:
         subcontractor=Decimal(figures.get("subcontractor", "0.00")),
         labour=Decimal(figures.get("labour", "0.00")),
         expenses=Decimal(figures.get("expenses", "0.00")),
+        purchases=Decimal(figures.get("purchases", "0.00")),
         exposure=Decimal(figures.get("exposure", "0.00")),
         unvalued_movements=figures.get("unvalued_movements", 0),
         uncosted_labour_entries=figures.get("uncosted_labour_entries", 0),

@@ -267,6 +267,18 @@ class ExpenseCasualLineSerializer(serializers.ModelSerializer):
         fields = ("id", "casual", "casual_name", "days", "amount")
 
 
+def _hide_overrun(data: dict, entry, context) -> dict:  # type: ignore[no-untyped-def]
+    """R9: the recorder sees their own reason, not the figures (§4.19.5)."""
+    from commercials.visibility import may_see_project_cost
+
+    # Only an overrun has a figure to hide; the rest need no project lookup.
+    if data.get("over_budget_by") is not None and not may_see_project_cost(
+        context.get("request"), entry.project
+    ):
+        data.pop("over_budget_by", None)
+    return data
+
+
 class ProjectExpenseSerializer(serializers.ModelSerializer):
     project_reference = serializers.CharField(source="project.__str__", read_only=True)
     site_name = serializers.CharField(source="site.name", read_only=True, default="")
@@ -281,6 +293,7 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
     evidence_state = serializers.SerializerMethodField()
     #: R4: the PM level was skipped, so this went straight to Finance.
     pm_level_skipped = serializers.SerializerMethodField()
+    is_over_budget = serializers.SerializerMethodField()
     casual_lines = ExpenseCasualLineSerializer(many=True, required=False)
 
     class Meta:
@@ -319,9 +332,13 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
             "is_evidenced",
             "evidence_state",
             "pm_level_skipped",
+            "is_over_budget",
+            "over_budget_by",
+            "over_budget_reason",
             "created_at",
         )
         read_only_fields = (
+            "over_budget_by",
             "recorded_by",
             "status",
             "decided_by",
@@ -341,6 +358,12 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
             "site": {"required": False, "allow_null": True},
             "client_uuid": {"required": False, "allow_null": True},
         }
+
+    def get_is_over_budget(self, entry) -> bool:  # type: ignore[no-untyped-def]
+        return entry.over_budget_by is not None
+
+    def to_representation(self, instance):  # type: ignore[no-untyped-def]
+        return _hide_overrun(super().to_representation(instance), instance, self.context)
 
     def get_is_reversal(self, expense: ProjectExpense) -> bool:
         return bool(expense.reverses_id)
@@ -382,6 +405,7 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
             photos_expected=validated_data.get("photos_expected", 0),
             casual_lines=lines,
             client_uuid=validated_data.get("client_uuid"),
+            over_budget_reason=validated_data.get("over_budget_reason", ""),
             request=request,
         )
 
@@ -620,6 +644,7 @@ class AllowanceRequestSerializer(serializers.ModelSerializer):
     pm_level_skipped = serializers.SerializerMethodField()
     spent = serializers.SerializerMethodField()
     balance = serializers.SerializerMethodField()
+    is_over_budget = serializers.SerializerMethodField()
 
     class Meta:
         model = AllowanceRequest
@@ -655,9 +680,13 @@ class AllowanceRequestSerializer(serializers.ModelSerializer):
             "pm_level_skipped",
             "spent",
             "balance",
+            "is_over_budget",
+            "over_budget_by",
+            "over_budget_reason",
             "created_at",
         )
         read_only_fields = (
+            "over_budget_by",
             "number",
             "recorded_by",
             "status",
@@ -679,8 +708,11 @@ class AllowanceRequestSerializer(serializers.ModelSerializer):
 
     # -- reads ---------------------------------------------------------------
 
+    def get_is_over_budget(self, entry) -> bool:  # type: ignore[no-untyped-def]
+        return entry.over_budget_by is not None
+
     def to_representation(self, instance):  # type: ignore[no-untyped-def]
-        data = super().to_representation(instance)
+        data = _hide_overrun(super().to_representation(instance), instance, self.context)
         # "" is how the column says "no scope"; a client reads null.
         if not data.get("transport_scope"):
             data["transport_scope"] = None
@@ -753,6 +785,7 @@ class AllowanceRequestSerializer(serializers.ModelSerializer):
             reason=validated_data.get("reason", ""),
             transport_scope=validated_data.get("transport_scope") or "",
             client_uuid=validated_data.get("client_uuid"),
+            over_budget_reason=validated_data.get("over_budget_reason", ""),
             request=request,
         )
 

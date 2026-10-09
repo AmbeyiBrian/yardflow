@@ -424,6 +424,8 @@ def _apply_expense(payload: dict, *, submitted_by=None, request=None):
         photos_expected=_int_id(payload.get("photos_expected") or 0, "photos_expected"),
         casual_lines=lines,
         client_uuid=_uuid(payload, "client_uuid"),
+        over_budget_reason=payload.get("over_budget_reason") or "",
+        offline=True,
         request=request,
     )
 
@@ -444,6 +446,8 @@ def _apply_allowance_request(payload: dict, *, submitted_by=None, request=None):
         reason=payload.get("reason") or "",
         transport_scope=payload.get("transport_scope") or "",
         client_uuid=_uuid(payload, "client_uuid"),
+        over_budget_reason=payload.get("over_budget_reason") or "",
+        offline=True,
         request=request,
     )
 

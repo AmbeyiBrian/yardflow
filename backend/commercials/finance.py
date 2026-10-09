@@ -142,6 +142,14 @@ class FloatBackedNotPayable(DomainError):
     default_message = "This was spent from a float that is already paid, so it is not paid again."
 
 
+class OverBudgetReasonRequired(DomainError):
+    """R9: past the budget is allowed, but never silently (§4.19.5)."""
+
+    code = "OVER_BUDGET_REASON_REQUIRED"
+    status_code = 400
+    default_message = "This is over the project's budget. Say why."
+
+
 class RejectionReasonRequired(DomainError):
     code = "REJECTION_REASON_REQUIRED"
     status_code = 400
@@ -291,6 +299,39 @@ def _notify(entry, event_key: str) -> None:  # type: ignore[no-untyped-def]
     emit(event_key, entry)
 
 
+def over_budget_check(  # type: ignore[no-untyped-def]
+    project,
+    amount: Decimal,
+    *,
+    reason: str,
+    offline: bool,
+    request=None,
+) -> tuple[Decimal | None, str]:
+    """R9 (§4.19.5): what to record on an entry that may break the budget.
+
+    Returns ``(over_budget_by, reason)``. Online, going over without a reason
+    raises ``OVER_BUDGET_REASON_REQUIRED``. On **replay** it never refuses: the
+    phone's figures may be stale, so the overrun is recorded with whatever
+    reason there is (possibly none) for the approver to see. The overrun is
+    named in the error only for those who may see project cost.
+    """
+    from commercials import budget
+    from commercials.visibility import may_see_project_cost
+
+    reason = (reason or "").strip()
+    over_by = budget.would_exceed(project, amount)
+    if over_by is None:
+        return None, ""
+    if not reason and not offline:
+        details: dict[str, Any] = {"over": True}
+        if may_see_project_cost(request, project):
+            details["over_by"] = str(over_by)
+        raise OverBudgetReasonRequired(
+            details=details, field_errors={"over_budget_reason": ["Say why."]}
+        )
+    return over_by, reason
+
+
 def _existing(model, client_uuid):  # type: ignore[no-untyped-def]
     if client_uuid is None:
         return None
@@ -367,6 +408,8 @@ def record_expense(
     photos_expected: int = 0,
     casual_lines: Iterable[CasualLineInput] = (),
     client_uuid: UUID | None = None,
+    over_budget_reason: str = "",
+    offline: bool = False,
     request=None,  # type: ignore[no-untyped-def]
 ) -> ProjectExpense:
     """Record an expense and send it for approval (R1, R4, §4.17.3).
@@ -406,6 +449,15 @@ def record_expense(
     if float_request is not None:
         _check_float(float_request, actor)
     _require_other_approver(actor)
+    # R9: a float-backed expense spends money already budgeted when the float
+    # was requested, so it is not checked again (§4.19.5).
+    over_by, over_reason = (
+        (None, "")
+        if float_request is not None
+        else over_budget_check(
+            resolved, amount, reason=over_budget_reason, offline=offline, request=request
+        )
+    )
 
     try:
         with transaction.atomic():
@@ -424,6 +476,8 @@ def record_expense(
                 photos_expected=photos_expected,
                 client_uuid=client_uuid,
                 recorded_by=actor,
+                over_budget_by=over_by,
+                over_budget_reason=over_reason,
             )
             for line in lines:
                 ExpenseCasualLine.objects.create(
@@ -516,6 +570,8 @@ def request_allowance(
     reason: str = "",
     transport_scope: str = "",
     client_uuid: UUID | None = None,
+    over_budget_reason: str = "",
+    offline: bool = False,
     request=None,  # type: ignore[no-untyped-def]
 ) -> AllowanceRequest:
     """Ask for money before it is spent, subject to the R5 rules (§4.17.5).
@@ -555,6 +611,13 @@ def request_allowance(
                 from_date=from_date,
                 to_date=to_date,
             )
+            over_by, over_reason = over_budget_check(
+                resolved,
+                amount,
+                reason=over_budget_reason,
+                offline=offline,
+                request=request,
+            )
             allowance = AllowanceRequest.objects.create(
                 number=allocate_number(DocumentType.ALLOWANCE),
                 type=type,
@@ -567,6 +630,8 @@ def request_allowance(
                 reason=reason,
                 recorded_by=actor,
                 client_uuid=client_uuid,
+                over_budget_by=over_by,
+                over_budget_reason=over_reason,
             )
             _route(allowance, actor)
             _audit(

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from commercials.budget import budget_position
 from commercials.visibility import may_see_project_cost, may_see_project_margin
 
 
@@ -29,6 +30,7 @@ class ProjectPerformanceSerializer(serializers.Serializer):
         "subcontractor",
         "labour",
         "expenses",
+        "purchases",
         "cost_to_date",
         "exposure",
         "cost_budget",
@@ -38,6 +40,7 @@ class ProjectPerformanceSerializer(serializers.Serializer):
         "unvalued_movements",
         "uncosted_labour_entries",
         "jobs_closed_without_labour",
+        "budget_position",
     )
 
     def to_representation(self, performance):  # type: ignore[no-untyped-def]
@@ -57,6 +60,7 @@ class ProjectPerformanceSerializer(serializers.Serializer):
             "subcontractor": _text(cost.subcontractor),
             "labour": _text(cost.labour),
             "expenses": _text(cost.expenses),
+            "purchases": _text(cost.purchases),
             "cost_to_date": _text(cost.total),
             "exposure": _text(cost.exposure),
             "is_fully_valued": cost.is_fully_valued,
@@ -69,6 +73,7 @@ class ProjectPerformanceSerializer(serializers.Serializer):
             "contract_value": _text(performance.contract_value),
             "margin": _text(performance.margin),
             "margin_percent": _text(performance.margin_percent),
+            "budget_position": budget_position(performance.project).as_dict(),
         }
 
         request = self.context.get("request")
