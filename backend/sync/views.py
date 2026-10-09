@@ -315,6 +315,10 @@ class OfflineBundleView(APIView):
                     "releasable_gate_outs": serializers.ListField(
                         child=serializers.DictField()
                     ),
+                    "expense_categories": serializers.ListField(child=serializers.DictField()),
+                    "casuals": serializers.ListField(child=serializers.DictField()),
+                    "my_floats": serializers.ListField(child=serializers.DictField()),
+                    "finance_limits": serializers.DictField(),
                 },
             )
         }
@@ -327,7 +331,7 @@ class OfflineBundleView(APIView):
         from dispatch.box_paths import BOX_PREFETCH, box_path
         from dispatch.models import RELEASABLE_STATUSES, GateOut
         from locations.models import Location
-        from network.models import Client, Site
+        from network.models import Client, Project, ProjectStatus, Site
 
         item_types = [
             {
@@ -349,12 +353,33 @@ class OfflineBundleView(APIView):
             for row in Location.objects.filter(is_active=True)
         ]
         clients = [{"id": row.pk, "name": row.name} for row in Client.objects.all()]
+        # R1: a phone picks the project when a site has more than one open. One
+        # query over the through table rather than one per site.
+        open_projects: dict[int, list[dict]] = {}
+        for link in (
+            Project.sites.through.objects.filter(
+                project__organization=request.user.organization,
+                project__status=ProjectStatus.OPEN,
+            )
+            .select_related("project")
+            .order_by("project__reference")
+        ):
+            open_projects.setdefault(link.site_id, []).append(
+                {
+                    "id": link.project_id,
+                    "reference": link.project.reference,
+                    "po_number": link.project.po_number,
+                    "title": link.project.title,
+                    "label": str(link.project),
+                }
+            )
         sites = [
             {
                 "id": row.pk,
                 "name": row.name,
                 "internal_ref": row.internal_ref,
                 "client": row.client_id,
+                "open_projects": open_projects.get(row.pk, []),
             }
             for row in Site.objects.all()
         ]
@@ -438,5 +463,61 @@ class OfflineBundleView(APIView):
                 "sites": sites,
                 "people": people,
                 "releasable_gate_outs": releasable,
+                **self._finance(request.user),
             }
         )
+
+    @staticmethod
+    def _finance(user) -> dict:  # type: ignore[no-untyped-def]
+        """What the money forms need offline (R6, §4.17.8).
+
+        Casual ID numbers are masked to their last three characters: the form
+        needs to tell two Johns apart, not to carry a national-ID list around on
+        a phone that can be lost.
+        """
+        from commercials import finance
+        from commercials.models import (
+            AllowanceRequest,
+            AllowanceType,
+            Casual,
+            ExpenseCategory,
+            ExpenseStatus,
+        )
+
+        categories = [
+            {"id": row.pk, "name": row.name, "kind": row.kind}
+            for row in ExpenseCategory.objects.filter(is_active=True).order_by("name")
+        ]
+        casuals = [
+            {
+                "id": row.pk,
+                "name": row.name,
+                "phone": row.phone,
+                "id_number": _mask(row.id_number),
+            }
+            for row in Casual.objects.order_by("name")
+        ]
+        my_floats = [
+            {
+                "id": row.pk,
+                "number": row.number,
+                "amount": str(row.amount),
+                "balance": str(finance.float_balance(row)),
+            }
+            for row in AllowanceRequest.objects.filter(
+                recorded_by=user,
+                type=AllowanceType.FLOAT,
+                status=ExpenseStatus.PAID,
+                closed_at__isnull=True,
+            ).order_by("number")
+        ]
+        return {
+            "expense_categories": categories,
+            "casuals": casuals,
+            "my_floats": my_floats,
+            "finance_limits": user.organization.settings.allowance_limits or {},
+        }
+
+
+def _mask(id_number: str) -> str:
+    return "*" * max(len(id_number) - 3, 0) + id_number[-3:]

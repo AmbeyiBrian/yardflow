@@ -154,6 +154,12 @@ export async function fetchBundle(): Promise<{ ok: boolean; passes: number }> {
       clients: unknown[];
       sites: unknown[];
       people: unknown[];
+      // R6, §4.17.8: what the money forms need with no signal. Optional so a
+      // device that fetched from an older server still stores what it got.
+      expense_categories?: unknown[];
+      casuals?: unknown[];
+      my_floats?: unknown[];
+      finance_limits?: Record<string, unknown>;
       releasable_gate_outs: {
         id: number;
         number: string;
@@ -171,6 +177,10 @@ export async function fetchBundle(): Promise<{ ok: boolean; passes: number }> {
       saveReference('clients', bundle.clients),
       saveReference('sites', bundle.sites),
       saveReference('people', bundle.people),
+      saveReference('expense_categories', bundle.expense_categories ?? []),
+      saveReference('casuals', bundle.casuals ?? []),
+      saveReference('my_floats', bundle.my_floats ?? []),
+      saveReference('finance_limits', [bundle.finance_limits ?? {}]),
     ]);
     // Only what the server says is approved. The device never adds to this.
     await saveReleasable(bundle.releasable_gate_outs);

@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -98,7 +99,8 @@ def apply_submission(
     if handler is None:
         raise SyncRefused(
             f"{operation} cannot be captured offline. §8 keeps the queue to "
-            f"gate-in and gate-out, because a queue that accepted everything "
+            f"gate-in, gate-out and recording money entries (§4.17.8) — never "
+            f"approving or paying — because a queue that accepted everything "
             f"would be a second write path around every control.",
             details={"operation": operation, "allowed": sorted(_HANDLERS)},
         )
@@ -148,6 +150,7 @@ def apply_submission(
             "updated_at",
         ]
     )
+    _resolve_superseded(submission, payload, submitted_by, request)
     return submission, False
 
 
@@ -250,6 +253,192 @@ def _apply_gate_out_release(payload: dict, *, submitted_by=None, request=None):
     )
 
 
+# --------------------------------------------------------------------------
+# Money entries (R6, §4.17.8). The same services the online forms call;
+# nothing here approves, pays or closes anything (§8.3).
+# --------------------------------------------------------------------------
+
+
+def _bad(field: str, message: str) -> SyncRefused:
+    return SyncRefused(message, details={"field_errors": {field: message}})
+
+
+def _uuid(payload: dict, key: str, *, required: bool = False):
+    from uuid import UUID
+
+    raw = payload.get(key)
+    if raw in (None, ""):
+        if required:
+            raise _bad(key, "This is required.")
+        return None
+    try:
+        return UUID(str(raw))
+    except ValueError:
+        raise _bad(key, "Not a valid uuid.") from None
+
+
+def _decimal(payload: dict, key: str, *, required: bool = False):
+    from decimal import Decimal, InvalidOperation
+
+    raw = payload.get(key)
+    if raw in (None, ""):
+        if required:
+            raise _bad(key, "This is required.")
+        return None
+    try:
+        return Decimal(str(raw))
+    except InvalidOperation:
+        raise _bad(key, "Not a valid number.") from None
+
+
+def _date(payload: dict, key: str):
+    from datetime import date
+
+    try:
+        return date.fromisoformat(str(payload.get(key)))
+    except ValueError:
+        raise _bad(key, "Enter a valid date (YYYY-MM-DD).") from None
+
+
+def _int_id(value, field: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise _bad(field, "Not a valid id.") from None
+
+
+def _tenant_object(model, payload: dict, key: str, *, required: bool = False):
+    """The row ``payload[key]`` names, or ``None`` when absent.
+
+    ``objects`` is the tenant-scoped manager, so another organization's id is
+    simply not found, and is refused like a row that no longer exists (A3).
+    """
+    raw = payload.get(key)
+    if raw in (None, ""):
+        if required:
+            raise _bad(key, "This is required.")
+        return None
+    found = model.objects.filter(pk=_int_id(raw, key)).first()
+    if found is None:
+        raise SyncRefused(
+            f"The {key.replace('_', ' ')} you chose no longer exists here.",
+            details={"field_errors": {key: "Not found."}},
+        )
+    return found
+
+
+def _apply_expense(payload: dict, *, submitted_by=None, request=None):
+    """An expense captured with no signal (R1, R6, §4.17.8)."""
+    from commercials.finance import CasualLineInput, record_expense
+    from commercials.models import AllowanceRequest, Casual, ExpenseCategory
+    from jobs.models import Job
+    from network.models import Project, Site
+
+    category = _tenant_object(ExpenseCategory, payload, "category", required=True)
+    lines = []
+    for raw in payload.get("casual_lines") or []:
+        if raw.get("casual") not in (None, ""):
+            casual = Casual.objects.filter(pk=_int_id(raw["casual"], "casual_lines")).first()
+        else:
+            # Registered earlier in this same queue; the batch applies in capture
+            # order, so it exists by now — or its registration was refused, which
+            # is a clear reason to refuse this entry too.
+            casual = Casual.objects.filter(
+                client_uuid=_uuid(raw, "casual_client_uuid", required=True)
+            ).first()
+        if casual is None:
+            raise SyncRefused(
+                "A casual on this expense is not registered here. The "
+                "registration may have been refused; fix that first.",
+                details={"field_errors": {"casual_lines": "Casual not found."}},
+            )
+        lines.append(
+            CasualLineInput(
+                casual=casual,
+                days=_int_id(raw.get("days"), "casual_lines"),
+                amount=_decimal(raw, "amount"),
+            )
+        )
+
+    return record_expense(
+        actor=submitted_by,
+        category=category,
+        amount=_decimal(payload, "amount", required=True),
+        incurred_on=_date(payload, "incurred_on"),
+        site=_tenant_object(Site, payload, "site"),
+        project=_tenant_object(Project, payload, "project"),
+        job=_tenant_object(Job, payload, "job"),
+        description=payload.get("description") or "",
+        scope_of_work=payload.get("scope_of_work") or "",
+        vehicle_reg=payload.get("vehicle_reg") or "",
+        litres=_decimal(payload, "litres"),
+        float_request=_tenant_object(AllowanceRequest, payload, "float_request"),
+        photos_expected=_int_id(payload.get("photos_expected") or 0, "photos_expected"),
+        casual_lines=lines,
+        client_uuid=_uuid(payload, "client_uuid"),
+        request=request,
+    )
+
+
+def _apply_allowance_request(payload: dict, *, submitted_by=None, request=None):
+    """An allowance or float request raised offline (R2, R5, R6)."""
+    from commercials.finance import request_allowance
+    from network.models import Project, Site
+
+    return request_allowance(
+        actor=submitted_by,
+        type=payload.get("type") or "",
+        amount=_decimal(payload, "amount", required=True),
+        from_date=_date(payload, "from_date"),
+        to_date=_date(payload, "to_date"),
+        site=_tenant_object(Site, payload, "site"),
+        project=_tenant_object(Project, payload, "project"),
+        reason=payload.get("reason") or "",
+        transport_scope=payload.get("transport_scope") or "",
+        client_uuid=_uuid(payload, "client_uuid"),
+        request=request,
+    )
+
+
+def _apply_casual(payload: dict, *, submitted_by=None, request=None):
+    """A casual registered on site (R3, R6)."""
+    from commercials.finance import register_casual
+
+    return register_casual(
+        actor=submitted_by,
+        name=str(payload.get("name") or ""),
+        id_number=str(payload.get("id_number") or ""),
+        phone=str(payload.get("phone") or ""),
+        client_uuid=_uuid(payload, "client_uuid"),
+        request=request,
+    )
+
+
+def _resolve_superseded(submission, payload: dict, resolved_by, request) -> None:
+    """"Fix and resend" (R6): the corrected entry landing closes the old refusal.
+
+    Only after a successful apply, so a correction that is itself refused leaves
+    the original exception open. No exception to find (the old one applied, or
+    never arrived) is fine.
+    """
+    old = payload.get("supersedes_client_uuid")
+    if not old:
+        return
+    try:
+        exception = SyncException.objects.filter(
+            submission__client_uuid=old, status=ExceptionStatus.OPEN
+        ).first()
+    except (ValueError, DjangoValidationError):
+        return
+    if exception is None:
+        return
+    resolve_exception(
+        exception, resolution="Corrected and resent", resolved_by=resolved_by, request=request
+    )
+    exception.replacement_submission = submission
+    exception.save(update_fields=["replacement_submission", "updated_at"])
+
+
 def _validate(serializer) -> None:
     """Turn a serializer failure into a domain refusal.
 
@@ -278,6 +467,9 @@ _HANDLERS: dict[str, Any] = {
     str(SyncOperation.GATE_IN): _apply_gate_in,
     str(SyncOperation.GATE_OUT_REQUEST): _apply_gate_out_request,
     str(SyncOperation.GATE_OUT_RELEASE): _apply_gate_out_release,
+    str(SyncOperation.EXPENSE): _apply_expense,
+    str(SyncOperation.ALLOWANCE_REQUEST): _apply_allowance_request,
+    str(SyncOperation.CASUAL): _apply_casual,
 }
 
 

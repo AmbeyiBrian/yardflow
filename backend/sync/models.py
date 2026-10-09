@@ -38,6 +38,11 @@ class SyncOperation(models.TextChoices):
     GATE_IN = "GATE_IN", "Receive a delivery"
     GATE_OUT_REQUEST = "GATE_OUT_REQUEST", "Request material"
     GATE_OUT_RELEASE = "GATE_OUT_RELEASE", "Release an already-approved pass"
+    # R6, §4.17.8: money *entries* captured without signal. Approving, paying
+    # and closing a float are deliberately absent — they need a connection (§8.3).
+    EXPENSE = "EXPENSE", "Record an expense"
+    ALLOWANCE_REQUEST = "ALLOWANCE_REQUEST", "Request an allowance or float"
+    CASUAL = "CASUAL", "Register a casual"
 
 
 class SubmissionStatus(models.TextChoices):

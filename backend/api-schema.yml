@@ -8586,6 +8586,9 @@ paths:
         schema:
           type: string
           enum:
+          - ALLOWANCE_REQUEST
+          - CASUAL
+          - EXPENSE
           - GATE_IN
           - GATE_OUT_RELEASE
           - GATE_OUT_REQUEST
@@ -8593,6 +8596,9 @@ paths:
           * `GATE_IN` - Receive a delivery
           * `GATE_OUT_REQUEST` - Request material
           * `GATE_OUT_RELEASE` - Release an already-approved pass
+          * `EXPENSE` - Record an expense
+          * `ALLOWANCE_REQUEST` - Request an allowance or float
+          * `CASUAL` - Register a casual
       - name: ordering
         required: false
         in: query
@@ -13166,11 +13172,33 @@ components:
           items:
             type: object
             additionalProperties: {}
+        expense_categories:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        casuals:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        my_floats:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        finance_limits:
+          type: object
+          additionalProperties: {}
       required:
+      - casuals
       - clients
+      - expense_categories
+      - finance_limits
       - generated_at
       - item_types
       - locations
+      - my_floats
       - people
       - releasable_gate_outs
       - sites
@@ -13179,11 +13207,17 @@ components:
       - GATE_IN
       - GATE_OUT_REQUEST
       - GATE_OUT_RELEASE
+      - EXPENSE
+      - ALLOWANCE_REQUEST
+      - CASUAL
       type: string
       description: |-
         * `GATE_IN` - Receive a delivery
         * `GATE_OUT_REQUEST` - Request material
         * `GATE_OUT_RELEASE` - Release an already-approved pass
+        * `EXPENSE` - Record an expense
+        * `ALLOWANCE_REQUEST` - Request an allowance or float
+        * `CASUAL` - Register a casual
     Organization:
       type: object
       description: A tenant as the console sees it.
