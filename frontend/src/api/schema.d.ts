@@ -5185,14 +5185,22 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description ``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+         * @description ``/api/v1/work-days`` (R13, §4.18.7).
          *
-         *     Decide, add and the correction flow arrive with the approval task; they
-         *     will be ``@action`` routes here, on the same visibility.
+         *     Read, plus ``decide`` (a manager or the Director answers the slices
+         *     addressed to them) and ``add`` (the Director adds a day for someone),
+         *     on the same visibility as the reads.
          */
         get: operations["work_days_list"];
         put?: never;
-        post?: never;
+        /**
+         * @description ``/api/v1/work-days`` (R13, §4.18.7).
+         *
+         *     Read, plus ``decide`` (a manager or the Director answers the slices
+         *     addressed to them) and ``add`` (the Director adds a day for someone),
+         *     on the same visibility as the reads.
+         */
+        post: operations["work_days_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5207,14 +5215,49 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description ``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+         * @description ``/api/v1/work-days`` (R13, §4.18.7).
          *
-         *     Decide, add and the correction flow arrive with the approval task; they
-         *     will be ``@action`` routes here, on the same visibility.
+         *     Read, plus ``decide`` (a manager or the Director answers the slices
+         *     addressed to them) and ``add`` (the Director adds a day for someone),
+         *     on the same visibility as the reads.
          */
         get: operations["work_days_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-days/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Approve or reject the open slices addressed to me (§4.18.5). */
+        post: operations["work_days_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-days/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The Director adds a session for someone who could not clock in (§4.18.6a). */
+        post: operations["work_days_add_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5265,6 +5308,28 @@ export interface paths {
         get: operations["work_sessions_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-sessions/{id}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Correct a session of my rejected slice and send it back (§4.18.6).
+         *
+         *     Returns the day, whose slice is open again. An ``ADD`` with no ``place``
+         *     is at this session's place.
+         */
+        post: operations["work_sessions_correct_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5343,6 +5408,19 @@ export interface components {
         AcceptCostRequest: {
             accepted: boolean;
             reason?: string;
+        };
+        AddDayRequest: {
+            person: number;
+            /** Format: date */
+            date: string;
+            place: components["schemas"]["_PlaceRequest"];
+            project?: number | null;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @default  */
+            reason: string;
         };
         AllowanceRequest: {
             readonly id: number;
@@ -5979,6 +6057,23 @@ export interface components {
          * @enum {string}
          */
         CorrectionKindEnum: "EDIT" | "ADD";
+        /**
+         * @description * `EDIT` - EDIT
+         *     * `ADD` - ADD
+         * @enum {string}
+         */
+        CorrectionSessionKindEnum: "EDIT" | "ADD";
+        CorrectionSessionRequest: {
+            kind: components["schemas"]["CorrectionSessionKindEnum"];
+            /** Format: date-time */
+            corrected_in_at?: string | null;
+            /** Format: date-time */
+            corrected_out_at?: string | null;
+            /** @default  */
+            reason: string;
+            place?: components["schemas"]["_PlaceRequest"] | null;
+            project?: number | null;
+        };
         /**
          * @description * `NOT_REQUIRED` - No project manager to accept it
          *     * `PENDING` - Waiting on the project manager
@@ -7442,6 +7537,9 @@ export interface components {
             attendance: {
                 [key: string]: unknown;
             };
+            project_headroom: {
+                [key: string]: unknown;
+            }[];
         };
         OpenWorkSession: {
             id?: number;
@@ -9508,7 +9606,7 @@ export interface components {
          * @enum {string}
          */
         SiteTypeEnum: "GREENFIELD" | "ROOFTOP" | "INDOOR" | "OTHER";
-        /** @description One approver's part of a day (§4.18.5). Empty until routing lands (T16.6). */
+        /** @description One approver's part of a day (§4.18.5). */
         Slice: {
             id: number;
             approver: number | null;
@@ -10126,6 +10224,11 @@ export interface components {
             readonly sessions: components["schemas"]["WorkSession"][];
             readonly slices: components["schemas"]["Slice"][];
         };
+        WorkDayDecideRequest: {
+            approved: boolean;
+            /** @default  */
+            reason: string;
+        };
         /**
          * @description * `OPEN` - Open
          *     * `PENDING` - Waiting on approval
@@ -10171,6 +10274,10 @@ export interface components {
             lng: number;
             /** Format: double */
             radius_m: number;
+        };
+        _PlaceRequest: {
+            site?: number | null;
+            location?: number | null;
         };
     };
     responses: never;
@@ -19701,6 +19808,25 @@ export interface operations {
             };
         };
     };
+    work_days_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkDay"];
+                };
+            };
+        };
+    };
     work_days_retrieve: {
         parameters: {
             query?: never;
@@ -19714,6 +19840,59 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkDay"];
+                };
+            };
+        };
+    };
+    work_days_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this work day. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkDayDecideRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WorkDayDecideRequest"];
+                "multipart/form-data": components["schemas"]["WorkDayDecideRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkDay"];
+                };
+            };
+        };
+    };
+    work_days_add_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddDayRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AddDayRequest"];
+                "multipart/form-data": components["schemas"]["AddDayRequest"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19788,6 +19967,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkSession"];
+                };
+            };
+        };
+    };
+    work_sessions_correct_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this work session. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionSessionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CorrectionSessionRequest"];
+                "multipart/form-data": components["schemas"]["CorrectionSessionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkDay"];
                 };
             };
         };

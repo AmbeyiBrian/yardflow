@@ -5,7 +5,11 @@
  * keys below are the frontend's reading of them. Money is a decimal string.
  */
 
-import { useAction, useList, useResource } from '../../api/hooks';
+import { useQuery } from '@tanstack/react-query';
+
+import { api } from '../../api/client';
+import type { ApiError } from '../../api/client';
+import { useAction, useList } from '../../api/hooks';
 
 export type SubcontractStatus = 'ACTIVE' | 'CLOSED';
 // A reversal is its own APPROVED row with a negative amount and `reverses` set.
@@ -88,9 +92,19 @@ export const useSubcontracts = (project: string | number | undefined, enabled = 
     { enabled: enabled && project !== undefined && project !== '' },
   );
 
-/** Detail carries the position, jobs and payments (§4.19.10). */
+/**
+ * Detail carries the position, jobs and payments (§4.19.10).
+ *
+ * Keyed under `subcontracts` so that recording or deciding a payment, which
+ * invalidates that key, refreshes the open card (a `subcontracts/{id}` key would
+ * not match it).
+ */
 export const useSubcontract = (id: number | undefined) =>
-  useResource<Subcontract>(`subcontracts/${id}`, undefined, { enabled: id !== undefined });
+  useQuery<Subcontract, ApiError>({
+    queryKey: ['subcontracts', 'detail', id],
+    queryFn: () => api.get<Subcontract>(`/subcontracts/${id}`),
+    enabled: id !== undefined,
+  });
 
 export const useCreateSubcontract = () =>
   useAction<SubcontractInput, Subcontract>({
