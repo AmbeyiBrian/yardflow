@@ -1533,7 +1533,7 @@ one task at a time; push once after T15.11. T15.1 and T15.2 change shared tables
 engine, so each lands alone with the full backend suite green. After T15.3, the backend tasks
 (T15.4–T15.6) run in parallel, and so do the frontend tasks (T15.8–T15.10).
 
-- [ ] **T15.1 `[B]` Finance models and migrations** — Refs: §4.17.2, §4.17.7, §4.17.11 · R1–R4
+- [x] **T15.1 `[B]` Finance models and migrations** — Refs: §4.17.2, §4.17.7, §4.17.11 · R1–R4
   - `ExpenseStatus` five states; `ExpenseCategory.kind`; the new `ProjectExpense` fields;
     `ExpenseCasualLine`; `Casual`; `AllowanceRequest` (`DocumentType.ALLOWANCE`, series `AR`).
   - `ApprovalRequest.required_permission`, with its CHECK; `OrganizationSettings`
@@ -1545,7 +1545,7 @@ engine, so each lands alone with the full backend suite green. After T15.3, the 
   *Done when:* migrations apply to a copy of production-shaped data; RLS, isolation and the
   save-guard tests pass; the full backend suite passes.
 
-- [ ] **T15.2 `[B]` Approval engine: finance levels and the pending fix** — Refs: §4.17.3, §4.17.6 · R4
+- [x] **T15.2 `[B]` Approval engine: finance levels and the pending fix** — Refs: §4.17.3, §4.17.6 · R4
   - `required_levels` finance branch: PM, then `finance.approve`, with the PM and Director skip.
   - `can_approve`: no self-approval on finance entries; `required_permission` matching.
   - Rewrite `approvals/pending` so it returns only the caller's role, user or permission levels.
@@ -1554,7 +1554,7 @@ engine, so each lands alone with the full backend suite green. After T15.3, the 
   *Done when:* each routing case is tested; the pending leak is gone with gate-out PM approvals
   unchanged; the full backend suite passes.
 
-- [ ] **T15.3 `[B]` Finance services and rules** — Refs: §4.17.3–§4.17.5, §4.17.11 · R1–R5
+- [x] **T15.3 `[B]` Finance services and rules** — Refs: §4.17.3–§4.17.5, §4.17.11 · R1–R5
   - In `commercials/finance.py` and `finance_rules.py`: record, request, decide, resubmit, mark
     paid, close float, register casual, `resolve_project`.
   - Overlap (locked), limits, the float balance and the open-float warning.
@@ -1562,7 +1562,7 @@ engine, so each lands alone with the full backend suite green. After T15.3, the 
 
   *Done when:* the §4.17.13 backend service and rule cases pass.
 
-- [ ] **T15.4 `[B]` Endpoints** — Refs: §4.17.6, §4.17.7 · R1–R5
+- [x] **T15.4 `[B]` Endpoints** — Refs: §4.17.6, §4.17.7 · R1–R5
   - Expense, allowance-request, casual and finance-settings endpoints.
   - Attachment owner rule, captions and the Casual target; project `site`/`status` filters; casual
     ID masking.
@@ -1570,41 +1570,41 @@ engine, so each lands alone with the full backend suite green. After T15.3, the 
 
   *Done when:* each endpoint and permission is tested, isolation holds, and the schema check passes.
 
-- [ ] **T15.5 `[B]` Notifications** — Refs: §4.17.9 · R4
+- [x] **T15.5 `[B]` Notifications** — Refs: §4.17.9 · R4
   *Done when:* `LEVEL_APPROVERS` resolves correctly, never to the recorder, and each event emails
   or notifies as the matrix says.
 
-- [ ] **T15.6 `[B]` Offline sync for finance** — Refs: §4.17.8 · R6
+- [x] **T15.6 `[B]` Offline sync for finance** — Refs: §4.17.8 · R6
   - Handlers for EXPENSE, ALLOWANCE_REQUEST and CASUAL; casual references within a queue;
     `supersedes_client_uuid`; the bundle additions.
 
   *Done when:* replay, refusal, supersede and in-batch reference tests pass, and approving offline
   is refused.
 
-- [ ] **T15.7 `[F]` Money types, API hooks and rules** — Refs: §4.17.10 · R1–R5
+- [x] **T15.7 `[F]` Money types, API hooks and rules** — Refs: §4.17.10 · R1–R5
   `features/money/types.ts`, hooks and `rules.ts`, with Vitest.
 
   *Done when:* the helper tests pass and the typecheck is clean.
 
-- [ ] **T15.8 `[F]` Money screens** — Refs: §4.17.10 · R1–R3
+- [x] **T15.8 `[F]` Money screens** — Refs: §4.17.10 · R1–R3
   - My expenses; My requests and floats; Casuals.
   - Record expense (moved, with a redirect from the old route), Request allowance, Add casual.
   - Site-first project choice, fuel and casual fields, captioned photos; a Money nav entry.
 
   *Done when:* each form works against a local backend; typecheck, Vitest and build pass.
 
-- [ ] **T15.9 `[F]` Approvals, To pay and Settings → Finance** — Refs: §4.17.6, §4.17.10 · R2, R4, R5
+- [x] **T15.9 `[F]` Approvals, To pay and Settings → Finance** — Refs: §4.17.6, §4.17.10 · R2, R4, R5
   *Done when:* a PM and then Finance can approve from the Approvals screen; Finance can mark paid and
   close a float; the limits and the Director role can be set.
 
-- [ ] **T15.10 `[F]` Offline capture for finance** — Refs: §4.17.8 · R6
+- [x] **T15.10 `[F]` Offline capture for finance** — Refs: §4.17.8 · R6
   - Queue the three new operations; Dexie version 2 with a photos table; `drainPhotos`.
   - "Waiting to send" in the lists; "Fix and resend" on a refused entry.
 
   *Done when:* a Vitest test covers the photo step and queue ordering; an entry saved offline lands
   with its photos.
 
-- [ ] **T15.11 `[E2E]` Phone run** — Refs: §4.17.13 · R1–R6
+- [x] **T15.11 `[E2E]` Phone run** — Refs: §4.17.13 · R1–R6
   *Done when:* the §4.17.13 E2E scenario passes and the phone suite stays green. Then push once and
   check on Silvertech.
 
