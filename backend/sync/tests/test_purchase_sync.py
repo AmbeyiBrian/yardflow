@@ -229,3 +229,64 @@ class TestPurchaseReplay:
 
         assert submission.status == SubmissionStatus.REJECTED
         assert SyncException.objects.get().code == "FINANCE_NO_OTHER_APPROVER"
+
+
+class TestBundleHeadroom:
+    """T18.14 (bundle) — per-project budget headroom, only for who may see cost (R9)."""
+
+    def get(self, tenant, user, settings):
+        from rest_framework.test import APIClient
+
+        settings.TENANT_BASE_DOMAIN = "localhost"
+        client = APIClient(HTTP_HOST="silvertech.localhost")
+        client.force_authenticate(user)
+        return client.get("/api/v1/sync/bundle").json()["project_headroom"]
+
+    def grant(self, tenant, *codenames):
+        user = UserFactory(organization=tenant)
+        UserRoleFactory(user=user, role=RoleFactory(codenames=list(codenames)))
+        return user
+
+    def test_a_margin_holder_gets_budget_less_spent_and_pending(
+        self, tenant, clerk, site, supplier, project, settings
+    ):
+        send(
+            tenant, clerk,
+            purchase_body(
+                site, supplier=supplier.pk,
+                lines=[
+                    {
+                        "item_type": None, "description": "Cable",
+                        "quantity": "2", "unit_price": "1500",
+                    }
+                ],
+            ),
+        )
+        viewer = self.grant(tenant, PERM.PROJECT_VIEW_MARGIN)
+
+        rows = self.get(tenant, viewer, settings)
+
+        assert rows == [{"id": project.pk, "headroom": "7000.00"}]
+
+    def test_a_manager_sees_only_their_own_projects(self, tenant, site, project, settings):
+        ProjectFactory(
+            reference="WO-8002", manager=UserFactory(organization=tenant), cost_budget=D("500.00")
+        )
+        manager = self.grant(tenant, PERM.PROJECT_VIEW_COST)
+        project.manager = manager
+        project.save()
+
+        rows = self.get(tenant, manager, settings)
+
+        assert [r["id"] for r in rows] == [project.pk]
+
+    def test_nobody_without_cost_access_gets_a_figure(self, tenant, clerk, project, settings):
+        assert self.get(tenant, clerk, settings) == []
+
+    def test_a_project_with_no_budget_is_left_out(self, tenant, project, settings):
+        project.po_number = ""
+        project.cost_budget = None
+        project.save()
+        viewer = self.grant(tenant, PERM.PROJECT_VIEW_MARGIN)
+
+        assert self.get(tenant, viewer, settings) == []

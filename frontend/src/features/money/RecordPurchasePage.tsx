@@ -48,7 +48,8 @@ import {
 import { useBudgetCheck, useCreateSitePurchase } from './purchasesApi';
 import { needsQueue, purchaseBody } from './purchasesOffline';
 import { useQueuedEntry } from './queued';
-import { useReceivableLocations, useSupplierOptions } from './reference';
+import { useBundleHeadroom, useReceivableLocations, useSupplierOptions } from './reference';
+import { overHeadroom } from './bundle';
 import { fromCents } from './rules';
 import { SiteProjectFields, useSiteProject } from './SiteProject';
 import { OfflineSupplierSheet } from './SupplierPages';
@@ -151,6 +152,7 @@ function PurchaseForm({
   const receivable = useReceivableLocations().locations;
   const create = useCreateSitePurchase();
   const budgetCheck = useBudgetCheck();
+  const headroom = useBundleHeadroom();
 
   // §4.19.3: supplier active and not REJECTED (PENDING is fine to buy from).
   const supplierOptions = suppliers.options;
@@ -202,6 +204,15 @@ function PurchaseForm({
           }
         } catch {
           // No answer is no reason to stop; the server asks again if it must.
+        }
+      }
+
+      // Offline: the headroom the last bundle stored. A warning only; the
+      // server decides on replay and flags (R9).
+      if (!online && !resendOf && !reason.trim()) {
+        if (overHeadroom(headroom, Number(body.project), totalText(used))) {
+          setNeedReason(true);
+          return;
         }
       }
 

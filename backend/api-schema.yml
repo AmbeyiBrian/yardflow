@@ -18029,6 +18029,11 @@ components:
         attendance:
           type: object
           additionalProperties: {}
+        project_headroom:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
       required:
       - attendance
       - casuals
@@ -18041,6 +18046,7 @@ components:
       - my_floats
       - offices
       - people
+      - project_headroom
       - releasable_gate_outs
       - sites
       - suppliers

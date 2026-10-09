@@ -19,6 +19,8 @@ export interface ProjectChoice {
   title: string;
 }
 
+import { toCents } from './rules';
+
 export interface SiteChoice {
   id: number;
   name: string;
@@ -118,4 +120,28 @@ export function bundleReceivable(rows: readonly BundleLocation[]): { id: number;
   return rows
     .filter((l) => l.type === 'YARD' || l.type === 'STORE')
     .map((l) => ({ id: l.id, label: l.name }));
+}
+
+/** A project's remaining budget as the bundle stores it (`project_headroom`, R9). */
+export interface BundleHeadroom {
+  id: number;
+  headroom: string;
+}
+
+/**
+ * Whether `amount` would take the project past its budget, by the headroom the
+ * last bundle stored. `null` means "cannot tell": no figure for the project (no
+ * budget, or the caller may not see its cost) or an amount that is not a number.
+ * Exactly using up the headroom is not over (as `would_exceed`). The phone only
+ * warns; the server still decides, and flags, on replay.
+ */
+export function overHeadroom(
+  rows: readonly BundleHeadroom[],
+  projectId: number,
+  amount: string,
+): boolean | null {
+  const row = rows.find((r) => r.id === projectId);
+  if (!row || !amount.trim() || Number.isNaN(Number(amount)) || Number.isNaN(Number(row.headroom)))
+    return null;
+  return toCents(amount) > toCents(row.headroom);
 }

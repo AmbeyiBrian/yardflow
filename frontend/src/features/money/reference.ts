@@ -39,6 +39,7 @@ import {
   bundleSiteProjects,
   bundleReceivable,
   bundleVehicles,
+  type BundleHeadroom,
   type BundleLocation,
   type BundleSite,
   type BundleVehicle,
@@ -260,4 +261,14 @@ export function useReceivableLocations(): {
         loading: network.isLoading,
       }
     : { locations: bundleReceivable(stored.data ?? []), loading: stored.isLoading };
+}
+
+/**
+ * Per-project budget headroom from the bundle, for the offline over-budget
+ * warning (R9, §4.19.11). Empty when online (the server answers `budget-check`)
+ * and for a caller who may not see cost.
+ */
+export function useBundleHeadroom(): BundleHeadroom[] {
+  const { online } = useOffline();
+  return useBundleRows<BundleHeadroom>('project_headroom', !online).data ?? [];
 }

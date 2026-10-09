@@ -6,6 +6,7 @@ import {
   bundleLimits,
   bundleOpenProjects,
   bundleSiteProjects,
+  overHeadroom,
   type BundleSite,
 } from './bundle';
 
@@ -72,5 +73,29 @@ describe('bundle lists', () => {
     expect(bundleLimits([limits])).toEqual(limits);
     expect(bundleLimits([{}])).toBeUndefined();
     expect(bundleLimits([])).toBeUndefined();
+  });
+});
+
+describe('overHeadroom', () => {
+  const rows = [
+    { id: 10, headroom: '1000.00' },
+    { id: 11, headroom: '-50.00' },
+  ];
+
+  it('is over only when the amount passes the headroom', () => {
+    expect(overHeadroom(rows, 10, '1000.01')).toBe(true);
+    expect(overHeadroom(rows, 10, '1000')).toBe(false);
+    expect(overHeadroom(rows, 10, '999.99')).toBe(false);
+  });
+
+  it('is over for any positive amount once the budget is already passed', () => {
+    expect(overHeadroom(rows, 11, '0.01')).toBe(true);
+  });
+
+  it('cannot tell without a figure or a usable amount', () => {
+    expect(overHeadroom(rows, 99, '5')).toBeNull();
+    expect(overHeadroom([], 10, '5')).toBeNull();
+    expect(overHeadroom(rows, 10, '')).toBeNull();
+    expect(overHeadroom(rows, 10, 'abc')).toBeNull();
   });
 });

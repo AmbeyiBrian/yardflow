@@ -323,6 +323,7 @@ class OfflineBundleView(APIView):
                     "vehicles": serializers.ListField(child=serializers.DictField()),
                     "offices": serializers.ListField(child=serializers.DictField()),
                     "attendance": serializers.DictField(),
+                    "project_headroom": serializers.ListField(child=serializers.DictField()),
                 },
             )
         }
@@ -470,8 +471,35 @@ class OfflineBundleView(APIView):
                 "releasable_gate_outs": releasable,
                 **self._finance(request.user),
                 **self._attendance(request.user),
+                "project_headroom": self._headroom(request),
             }
         )
+
+    @staticmethod
+    def _headroom(request) -> list[dict]:  # type: ignore[no-untyped-def]
+        """Per open project, what is left of its budget, for the offline warning (R9, §4.19.11).
+
+        ``budget - (spent + committed + pending)``, the same sum ``would_exceed``
+        uses. A figure that reveals a budget, so only for projects this viewer may
+        see cost on (O14); a project with no budget has no rules (R12) and is
+        left out. The phone only warns; the server still decides on replay.
+        """
+        from commercials.budget import budget_position
+        from commercials.visibility import may_see_project_cost
+        from network.models import Project, ProjectStatus
+
+        rows = []
+        for project in Project.objects.filter(
+            organization=request.user.organization, status=ProjectStatus.OPEN
+        ).order_by("reference"):
+            if not may_see_project_cost(request, project):
+                continue
+            position = budget_position(project)
+            if position.budget is None:
+                continue
+            headroom = position.budget - position.spent - position.committed - position.pending
+            rows.append({"id": project.pk, "headroom": str(headroom)})
+        return rows
 
     @staticmethod
     def _attendance(user) -> dict:  # type: ignore[no-untyped-def]

@@ -173,6 +173,9 @@ export async function fetchBundle(): Promise<{ ok: boolean; passes: number }> {
       // ACTIVE vehicles and generators (id, tag, name, type). Optional for an
       // older server.
       suppliers?: unknown[];
+      // R9, §4.19.11: `{id, headroom}` per open project, only for a caller who may see
+      // its cost. Optional for an older server.
+      project_headroom?: unknown[];
       vehicles?: unknown[];
       // R13, §4.18.9: the area the phone checks a clock-in against. `sites` and
       // `locations` carry latitude/longitude/radius_m; `locations` leaves out
@@ -202,6 +205,7 @@ export async function fetchBundle(): Promise<{ ok: boolean; passes: number }> {
       saveReference('finance_limits', [bundle.finance_limits ?? {}]),
       saveReference('suppliers', bundle.suppliers ?? []),
       saveReference('vehicles', bundle.vehicles ?? []),
+      saveReference('project_headroom', bundle.project_headroom ?? []),
       saveReference('offices', bundle.offices ?? []),
       saveReference('attendance', bundle.attendance ? [bundle.attendance] : []),
     ]);
