@@ -50,7 +50,7 @@ export function EvidenceNote({ state }: { state: EvidenceState }) {
   );
 }
 
-function Row({ label, value }: { label: string; value: ReactNode }) {
+export function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-3">
       <dt className="text-slate-500">{label}</dt>
@@ -60,7 +60,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 }
 
 /** Read-only thumbnails of what is attached (signed, expiring URLs, N-7). */
-function AttachedPhotos({ targetType, targetId }: { targetType: string; targetId: number }) {
+export function AttachedPhotos({ targetType, targetId }: { targetType: string; targetId: number }) {
   const [items, setItems] = useState<Attachment[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -112,7 +112,7 @@ function AttachedPhotos({ targetType, targetId }: { targetType: string; targetId
 }
 
 /** Finance-only shortcut to the payment queue, from Approvals. */
-function ToPayLink() {
+export function ToPayLink() {
   const { has } = useSession();
   if (!has(PERM.FINANCE_APPROVE)) return null;
   return (
@@ -159,7 +159,7 @@ interface DecideProps {
   children: ReactNode;
 }
 
-function DecideSheet({ title, open, isOwn, busy, error, onClose, onDecide, children }: DecideProps) {
+export function DecideSheet({ title, open, isOwn, busy, error, onClose, onDecide, children }: DecideProps) {
   const [reason, setReason] = useState('');
   const [needReason, setNeedReason] = useState(false);
 

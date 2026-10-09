@@ -85,6 +85,8 @@ export interface GateIn {
   supplier?: number | null;
   supplier_name: string;
   supplier_status?: string;
+  /** §4.19.3: set when an INTO_YARD site purchase made this draft. */
+  source_purchase_number?: string | null;
   client: number | null;
   client_name?: string;
   returned_by: number | null;

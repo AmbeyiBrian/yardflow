@@ -58,7 +58,10 @@ export interface SitePurchase {
   over_budget_by?: string | null;
   photos_expected: number;
   client_uuid: string | null;
+  recorded_by?: number;
   recorded_by_name?: string;
+  /** Set by the server when the PM level was skipped (R4). */
+  pm_level_skipped?: boolean;
   created_at?: string;
 }
 

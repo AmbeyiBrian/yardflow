@@ -1,6 +1,7 @@
 /**
- * To pay (Epic R; R2, R4; design §4.17.6, §4.17.10): approved, unpaid
- * expenses and requests, with Mark paid, and paid floats still open, with
+ * To pay (Epic R; R2, R4, R7; design §4.17.6, §4.17.10, §4.19.13): approved,
+ * unpaid expenses, requests and site purchases (a purchase waits while its
+ * supplier is unapproved, R15), with Mark paid, and paid floats still open, with
  * Close float. `finance.approve` only; the server re-checks.
  *
  * YardFlow records the payment; it does not send money, so the reference
@@ -24,6 +25,9 @@ import {
   useMarkAllowancePaid,
   useMarkExpensePaid,
 } from './api';
+import { useMarkPurchasePaid } from './purchaseApprovalsApi';
+import { payBlockedReason, supplierNote } from './purchaseApprovalsRules';
+import { useSitePurchases, type SitePurchase } from './purchasesApi';
 import type { AllowanceRequest, ProjectExpense } from './types';
 
 /** Today as the phone's calendar reads it, not UTC. */
@@ -36,11 +40,13 @@ function today(): string {
 
 type Payable =
   | { kind: 'expense'; row: ProjectExpense }
-  | { kind: 'request'; row: AllowanceRequest };
+  | { kind: 'request'; row: AllowanceRequest }
+  | { kind: 'purchase'; row: SitePurchase };
 
 export default function ToPayPage() {
   const expenses = useExpenses({ payable: true, page_size: 100 });
   const requests = useAllowanceRequests({ payable: true, page_size: 100 });
+  const purchases = useSitePurchases({ payable: true, page_size: 100 });
   const floats = useAllowanceRequests({ type: 'FLOAT', status: 'PAID', page_size: 100 });
   const [paying, setPaying] = useState<Payable | null>(null);
   const [closing, setClosing] = useState<AllowanceRequest | null>(null);
@@ -99,6 +105,37 @@ export default function ToPayPage() {
         </ListState>
       </section>
 
+      <section className="flex flex-col gap-2" aria-label="Purchases to pay">
+        <h2 className="text-base font-semibold text-slate-900">Purchases</h2>
+        <ListState query={purchases}>
+          <DataList<SitePurchase>
+            rows={purchases.data?.results ?? []}
+            rowKey={(purchase) => purchase.id}
+            onRowClick={(purchase) => setPaying({ kind: 'purchase', row: purchase })}
+            empty={<EmptyState title="Nothing to pay." hint="Approved purchases appear here." />}
+            columns={[
+              {
+                header: 'Purchase',
+                cell: (purchase) => (
+                  <span className="flex flex-col">
+                    <span>
+                      {purchase.number} · {purchase.supplier_name ?? ''}
+                    </span>
+                    {supplierNote(purchase.supplier_status) ? (
+                      <span className="text-xs text-amber-800">
+                        Supplier {supplierNote(purchase.supplier_status)}
+                      </span>
+                    ) : null}
+                  </span>
+                ),
+              },
+              { header: 'Amount', cell: (purchase) => <Money value={purchase.amount} /> },
+              { header: 'Who', cell: (purchase) => purchase.recorded_by_name ?? '' },
+            ]}
+          />
+        </ListState>
+      </section>
+
       <section className="flex flex-col gap-2" aria-label="Open floats">
         <h2 className="text-base font-semibold text-slate-900">Open floats</h2>
         <ListState query={floats}>
@@ -131,7 +168,10 @@ function MarkPaidSheet({ target, onClose }: { target: Payable | null; onClose: (
   const [error, setError] = useState('');
   const payExpense = useMarkExpensePaid();
   const payRequest = useMarkAllowancePaid();
-  const busy = payExpense.isPending || payRequest.isPending;
+  const payPurchase = useMarkPurchasePaid();
+  const busy = payExpense.isPending || payRequest.isPending || payPurchase.isPending;
+  // R15 / §4.19.10: a purchase cannot be paid until its supplier is approved.
+  const blocked = target?.kind === 'purchase' ? payBlockedReason(target.row) : '';
 
   function close() {
     setReference('');
@@ -150,6 +190,7 @@ function MarkPaidSheet({ target, onClose }: { target: Payable | null; onClose: (
     const body = { id: target.row.id, payment_reference: reference.trim(), paid_at: paidAt };
     try {
       if (target.kind === 'expense') await payExpense.mutateAsync(body);
+      else if (target.kind === 'purchase') await payPurchase.mutateAsync(body);
       else await payRequest.mutateAsync(body);
       close();
     } catch (caught) {
@@ -158,7 +199,9 @@ function MarkPaidSheet({ target, onClose }: { target: Payable | null; onClose: (
   }
 
   const title =
-    target?.kind === 'request' ? `Mark ${target.row.number} paid` : 'Mark expense paid';
+    target?.kind === 'request' || target?.kind === 'purchase'
+      ? `Mark ${target.row.number} paid`
+      : 'Mark expense paid';
 
   return (
     <Sheet
@@ -170,7 +213,7 @@ function MarkPaidSheet({ target, onClose }: { target: Payable | null; onClose: (
           <Button variant="secondary" className="flex-1" onClick={close}>
             Back
           </Button>
-          <Button className="flex-1" disabled={busy} onClick={submit}>
+          <Button className="flex-1" disabled={busy || blocked !== ''} onClick={submit}>
             {busy ? <Spinner /> : 'Mark paid'}
           </Button>
         </>
@@ -181,12 +224,17 @@ function MarkPaidSheet({ target, onClose }: { target: Payable | null; onClose: (
           <Card>
             <p className="text-sm text-slate-600">
               {target.row.recorded_by_name ?? ''} ·{' '}
-              {target.kind === 'expense' ? (target.row.category_name ?? '') : typeLabel(target.row)}
+              {target.kind === 'expense'
+                ? (target.row.category_name ?? '')
+                : target.kind === 'purchase'
+                  ? (target.row.supplier_name ?? '')
+                  : typeLabel(target.row)}
             </p>
             <p className="text-base font-semibold text-slate-900">
               <Money value={target.row.amount} />
             </p>
           </Card>
+          {blocked ? <Banner tone="warning">{blocked}</Banner> : null}
           <Field label="Payment reference" htmlFor="pay-ref" hint="For example the M-Pesa code.">
             <Input
               id="pay-ref"

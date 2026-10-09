@@ -27,6 +27,7 @@ import { SwipePane } from '../../components/ui/SwipePane';
 import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 import { CloseoutQueue } from '../projects/ProjectQueuesPage';
 import { FinanceExpenseQueue, FinanceRequestQueue } from './FinanceApprovals';
+import { PurchaseApprovalQueue, SubcontractPaymentQueue } from '../money/PurchaseApprovals';
 import { SupplierApprovalQueue } from '../settings/SupplierApprovals';
 import { biometricsAvailable, signApproval } from '../../auth/webauthn';
 import { useSession } from '../../auth/session';
@@ -70,7 +71,14 @@ function decisionLine(action: {
   return `${verb} by ${who}${action.reason ? ` — ${action.reason}` : ''}`;
 }
 
-type Tab = 'material' | 'expenses' | 'requests' | 'closeouts' | 'suppliers';
+type Tab =
+  | 'material'
+  | 'expenses'
+  | 'requests'
+  | 'purchases'
+  | 'subpayments'
+  | 'closeouts'
+  | 'suppliers';
 
 /**
  * Every decision waiting on one person, in one place.
@@ -97,8 +105,15 @@ export default function ApprovalsPage() {
           { key: 'requests' as Tab, label: 'Requests' },
         ]
       : []),
+    // R7 / §4.19.13: purchases go PM then Finance; R8: the PM approves subcontract payments.
+    ...(has(PERM.PROJECT_VIEW_COST) || has(PERM.FINANCE_APPROVE)
+      ? [{ key: 'purchases' as Tab, label: 'Purchases' }]
+      : []),
     ...(has(PERM.PROJECT_VIEW_COST)
-      ? [{ key: 'closeouts' as Tab, label: 'Closeout costs' }]
+      ? [
+          { key: 'subpayments' as Tab, label: 'Subcontract payments' },
+          { key: 'closeouts' as Tab, label: 'Closeout costs' },
+        ]
       : []),
     // R15 / §4.20.3: Finance checks new suppliers.
     ...(has(PERM.FINANCE_APPROVE) ? [{ key: 'suppliers' as Tab, label: 'Suppliers' }] : []),
@@ -128,6 +143,8 @@ export default function ApprovalsPage() {
       <SwipePane {...swipe.pane} className="flex-1">
         {tab === 'expenses' ? <FinanceExpenseQueue /> : null}
         {tab === 'requests' ? <FinanceRequestQueue /> : null}
+        {tab === 'purchases' ? <PurchaseApprovalQueue /> : null}
+        {tab === 'subpayments' ? <SubcontractPaymentQueue /> : null}
         {tab === 'closeouts' ? <CloseoutQueue /> : null}
         {tab === 'material' ? <MaterialQueue /> : null}
         {tab === 'suppliers' ? <SupplierApprovalQueue /> : null}

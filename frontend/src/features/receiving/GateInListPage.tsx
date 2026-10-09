@@ -15,6 +15,7 @@ import { PhotoCapture } from '../../components/PhotoCapture';
 import { Banner, Button, Card, Field, Input, Spinner } from '../../components/ui';
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import { boxLabel, buildTree, describeCounts, type BoxNode, type DraftBox } from './gateInBoxes';
+import { fromPurchaseNumber } from './fromPurchase';
 import { deliverySiteText, lineSiteText } from './lineSite';
 import type { GateIn, GateInLineInput } from './types';
 
@@ -53,7 +54,23 @@ export default function GateInListPage() {
           }
           columns={[
             { header: 'Number', cell: (row) => row.number || 'draft' },
-            { header: 'Status', cell: (row) => <StatusBadge status={row.status} /> },
+            {
+              header: 'Status',
+              cell: (row) => {
+                // §4.19.3 / R7: a draft an INTO_YARD purchase made says so.
+                const purchase = fromPurchaseNumber(row);
+                return (
+                  <span className="flex flex-wrap items-center gap-1">
+                    <StatusBadge status={row.status} />
+                    {purchase ? (
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-900">
+                        From purchase {purchase}
+                      </span>
+                    ) : null}
+                  </span>
+                );
+              },
+            },
             {
               header: 'From',
               cell: (row) => row.supplier_name || row.client_name || row.origin_site_ref || '—',
@@ -118,6 +135,7 @@ export function GateInDetailPage() {
           <span className="flex items-center gap-2">
             <StatusBadge status={document.status} />
             {document.source_type.replaceAll('_', ' ').toLowerCase()}
+            {fromPurchaseNumber(document) ? ` · from purchase ${fromPurchaseNumber(document)}` : ''}
           </span>
         }
         actions={
