@@ -49,6 +49,9 @@ class DocumentType(models.TextChoices):
     # Epic R. Money asked for before it is spent (D37); an expense is not
     # numbered, an allowance request is.
     ALLOWANCE = "ALLOWANCE", "Allowance request"
+    # Epic R, stage 2 (§4.19.2, D37).
+    SITE_PURCHASE = "SITE_PURCHASE", "Site purchase"
+    SUBCONTRACT = "SUBCONTRACT", "Subcontract"
 
 
 #: The prefix a tenant starts with. **No longer fixed:** a tenant may change it
@@ -72,6 +75,8 @@ DEFAULT_PREFIXES: dict[str, str] = {
     DocumentType.JOB: "JOB",
     DocumentType.BOX: "BX",
     DocumentType.ALLOWANCE: "AR",
+    DocumentType.SITE_PURCHASE: "SP",
+    DocumentType.SUBCONTRACT: "SC",
 }
 
 #: Kept as an alias: the name is used in tests and reads better at call sites

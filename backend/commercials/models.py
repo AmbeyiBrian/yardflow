@@ -120,6 +120,9 @@ class StatusGuardMixin(models.Model):
     SETTLEMENT_FIELDS: frozenset[str] = frozenset({"updated_at"})
     #: Wording for the error, so each entry kind reads naturally.
     GUARD_NOUN = "entry"
+    #: The moves this row's status may make. A kind with fewer levels (a
+    #: subcontract payment has one) supplies its own table (§4.19.2).
+    TRANSITIONS: dict[str, frozenset[str]] = STATUS_TRANSITIONS
 
     _loaded_state: dict[str, Any] | None = None
 
@@ -162,7 +165,7 @@ class StatusGuardMixin(models.Model):
         after = self.status  # type: ignore[attr-defined]
         noun = self.GUARD_NOUN
 
-        if before != after and after not in STATUS_TRANSITIONS.get(before, frozenset()):
+        if before != after and after not in self.TRANSITIONS.get(before, frozenset()):
             raise ValidationError(
                 f"An {noun} cannot move from {before} to {after} (§4.17.3)."
             )
@@ -320,6 +323,13 @@ class AllowanceRequest(StatusGuardMixin, TenantModel, TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
 
+    # R9 (§4.19.5): how far over budget this was when recorded, and why. Written
+    # once, at recording, and frozen with the row.
+    over_budget_by = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    over_budget_reason = models.CharField(max_length=500, blank=True)
+
     # R6: offline idempotency, as GateIn.client_uuid.
     client_uuid = models.UUIDField(null=True, blank=True)
 
@@ -466,6 +476,13 @@ class ProjectExpense(StatusGuardMixin, TenantModel, TimeStampedModel):
     photos_expected = models.PositiveSmallIntegerField(default=0)
     # R6: offline idempotency, as GateIn.client_uuid.
     client_uuid = models.UUIDField(null=True, blank=True)
+
+    # R9 (§4.19.5): how far over budget this was when recorded, and why. Written
+    # once, at recording, and frozen with the row.
+    over_budget_by = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    over_budget_reason = models.CharField(max_length=500, blank=True)
 
     recorded_by = models.ForeignKey(
         "accounts.User", on_delete=models.PROTECT, related_name="expenses_recorded"
@@ -652,3 +669,607 @@ class ProjectSnapshot(TenantModel, TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.project} as at {self.taken_at:%Y-%m-%d}"
+
+
+# --------------------------------------------------------------------------
+# Finance stage 2 (§4.19, Epic R, R7–R11)
+# --------------------------------------------------------------------------
+
+_DECIDED_STATUSES_ONE_LEVEL = (ExpenseStatus.APPROVED, ExpenseStatus.REJECTED)
+
+
+def _round_money(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.01"))
+
+
+class PurchaseDestination(models.TextChoices):
+    USED_AT_SITE = "USED_AT_SITE", "Used at the site"
+    INTO_YARD = "INTO_YARD", "Brought into the yard"
+
+
+class SitePurchase(StatusGuardMixin, TenantModel, TimeStampedModel):
+    """Goods bought on the spot for a project site (R7, §4.19.2).
+
+    Routed and costed as an expense; an INTO_YARD purchase is also received into
+    stock through ``gate_in``. ``amount`` is stored — the sum of the lines, set
+    by the service — so reports and the budget need no join. The supplier FK is
+    added once ``network.Supplier`` exists (T17.1).
+    """
+
+    GUARD_NOUN = "site purchase"
+
+    number = models.CharField(max_length=50, blank=True)
+    project = models.ForeignKey(
+        "network.Project", on_delete=models.PROTECT, related_name="site_purchases"
+    )
+    site = models.ForeignKey(
+        "network.Site", on_delete=models.PROTECT, related_name="site_purchases"
+    )
+    purchase_date = models.DateField()
+    destination = models.CharField(
+        max_length=20,
+        choices=PurchaseDestination.choices,
+        default=PurchaseDestination.USED_AT_SITE,
+    )
+    receive_into = models.ForeignKey(
+        "locations.Location",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="The sum of the lines, excluding VAT (D24). Set by the service.",
+    )
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="site_purchases_recorded"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ExpenseStatus.choices,
+        default=ExpenseStatus.PENDING_PM,
+        db_index=True,
+    )
+    decided_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_reason = models.CharField(max_length=500, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    paid_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    payment_reference = models.CharField(max_length=100, blank=True)
+    reverses = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reversals",
+    )
+    gate_in = models.OneToOneField(
+        "receiving.GateIn",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="site_purchase",
+    )
+    over_budget_by = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    over_budget_reason = models.CharField(max_length=500, blank=True)
+    photos_expected = models.PositiveSmallIntegerField(default=0)
+    client_uuid = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-purchase_date", "-id")
+        indexes = [
+            models.Index(fields=["organization", "project", "status"]),
+            models.Index(fields=["organization", "status"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "number"],
+                condition=~Q(number=""),
+                name="uniq_site_purchase_number_per_org",
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "client_uuid"],
+                condition=Q(client_uuid__isnull=False),
+                name="uniq_site_purchase_client_uuid_per_org",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    status__in=(
+                        ExpenseStatus.PENDING_PM,
+                        ExpenseStatus.PENDING_FINANCE,
+                    ),
+                    decided_at__isnull=True,
+                )
+                | Q(
+                    status__in=(
+                        ExpenseStatus.APPROVED,
+                        ExpenseStatus.PAID,
+                        ExpenseStatus.REJECTED,
+                    ),
+                    decided_at__isnull=False,
+                ),
+                name="a_decided_site_purchase_records_when",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    destination=PurchaseDestination.INTO_YARD,
+                    receive_into__isnull=False,
+                )
+                | Q(
+                    destination=PurchaseDestination.USED_AT_SITE,
+                    receive_into__isnull=True,
+                ),
+                name="a_yard_purchase_says_where_it_goes",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.number or 'Purchase'} {self.amount}"
+
+    @property
+    def requested_by_id(self) -> int:
+        """The approval engine's name for the recorder (§4.17.3)."""
+        return self.recorded_by_id
+
+    @property
+    def signed_amount(self) -> Decimal:
+        return -self.amount if self.reverses_id else self.amount
+
+    def lines_total(self) -> Decimal:
+        """Σ of the lines — what the service stores in ``amount``."""
+        return sum((line.total for line in self.lines.all()), Decimal("0.00"))
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationError(
+            "Site purchases are never deleted. Reject one that should not stand, "
+            "or reverse one already approved."
+        )
+
+
+class SitePurchaseLine(TenantModel, TimeStampedModel):
+    """One thing bought (R7). Frozen with the purchase from APPROVED."""
+
+    purchase = models.ForeignKey(
+        SitePurchase, on_delete=models.PROTECT, related_name="lines"
+    )
+    item_type = models.ForeignKey(
+        "catalogue.ItemType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    description = models.CharField(max_length=200, blank=True)
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0.001"))],
+    )
+    uom = models.CharField(max_length=30, blank=True)
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+
+    class Meta:
+        ordering = ("id",)
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(quantity__gt=0), name="a_purchase_line_has_a_quantity"
+            ),
+            models.CheckConstraint(
+                condition=Q(unit_price__gte=0),
+                name="a_purchase_line_price_is_not_negative",
+            ),
+            models.CheckConstraint(
+                condition=Q(item_type__isnull=False) | ~Q(description=""),
+                name="a_purchase_line_says_what_it_is",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.description or self.item_type_id} × {self.quantity}"
+
+    @property
+    def total(self) -> Decimal:
+        return _round_money(self.quantity * self.unit_price)
+
+    def _guard(self) -> None:
+        status = (
+            SitePurchase.objects.filter(pk=self.purchase_id)
+            .values_list("status", flat=True)
+            .first()
+        )
+        if status in (ExpenseStatus.APPROVED, ExpenseStatus.PAID):
+            raise ValidationError(
+                "An approved site purchase cannot be changed — its lines are "
+                "frozen with it."
+            )
+
+    def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        self._guard()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        self._guard()
+        return super().delete(*args, **kwargs)
+
+
+class SubcontractStatus(models.TextChoices):
+    ACTIVE = "ACTIVE", "Active"
+    CLOSED = "CLOSED", "Closed"
+
+
+class Subcontract(TenantModel, TimeStampedModel):
+    """A written agreement with a subcontractor on one project (R8, §4.19.4).
+
+    Jobs, payments and what is owed hang off it. Sites must be a subset of the
+    project's sites — a service rule. Never deleted; closed.
+    """
+
+    number = models.CharField(max_length=50, blank=True)
+    project = models.ForeignKey(
+        "network.Project", on_delete=models.PROTECT, related_name="subcontracts"
+    )
+    subcontractor = models.ForeignKey(
+        "network.Subcontractor", on_delete=models.PROTECT, related_name="subcontracts"
+    )
+    sites = models.ManyToManyField(
+        "network.Site", blank=True, related_name="subcontracts"
+    )
+    contract_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="Excluding VAT (D24).",
+    )
+    payment_terms = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=10,
+        choices=SubcontractStatus.choices,
+        default=SubcontractStatus.ACTIVE,
+        db_index=True,
+    )
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="subcontracts_created"
+    )
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        indexes = [models.Index(fields=["organization", "project", "status"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "number"],
+                condition=~Q(number=""),
+                name="uniq_subcontract_number_per_org",
+            ),
+            models.CheckConstraint(
+                condition=Q(contract_value__gt=0),
+                name="a_subcontract_has_a_value",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.number or f"Subcontract {self.pk}"
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationError("Subcontracts are never deleted. Close one that has ended.")
+
+
+#: One PM level, then it counts (§4.19.4). A rejected payment resubmits.
+SUBCONTRACT_PAYMENT_TRANSITIONS: dict[str, frozenset[str]] = {
+    ExpenseStatus.PENDING_PM: frozenset({ExpenseStatus.APPROVED, ExpenseStatus.REJECTED}),
+    ExpenseStatus.APPROVED: frozenset(),
+    ExpenseStatus.REJECTED: frozenset({ExpenseStatus.PENDING_PM}),
+}
+
+
+class SubcontractPayment(StatusGuardMixin, TenantModel, TimeStampedModel):
+    """Money paid to a subcontractor against a subcontract (R8).
+
+    A wrong approved payment is reversed, never edited (O16): the reversal is
+    born APPROVED and counts negatively.
+    """
+
+    GUARD_NOUN = "subcontract payment"
+    TRANSITIONS = SUBCONTRACT_PAYMENT_TRANSITIONS
+    PAID_FIELDS = frozenset({"updated_at"})
+
+    subcontract = models.ForeignKey(
+        Subcontract, on_delete=models.PROTECT, related_name="payments"
+    )
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    paid_on = models.DateField()
+    reference = models.CharField(max_length=100)
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="subcontract_payments"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            (ExpenseStatus.PENDING_PM.value, ExpenseStatus.PENDING_PM.label),
+            (ExpenseStatus.APPROVED.value, ExpenseStatus.APPROVED.label),
+            (ExpenseStatus.REJECTED.value, ExpenseStatus.REJECTED.label),
+        ],
+        default=ExpenseStatus.PENDING_PM,
+        db_index=True,
+    )
+    decided_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_reason = models.CharField(max_length=500, blank=True)
+    reverses = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reversals",
+    )
+    client_uuid = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-paid_on", "-id")
+        indexes = [models.Index(fields=["organization", "subcontract", "status"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "client_uuid"],
+                condition=Q(client_uuid__isnull=False),
+                name="uniq_subcontract_payment_client_uuid_per_org",
+            ),
+            models.CheckConstraint(
+                condition=~Q(reference=""), name="a_subcontract_payment_has_a_reference"
+            ),
+            models.CheckConstraint(
+                condition=Q(status=ExpenseStatus.PENDING_PM, decided_at__isnull=True)
+                | Q(status__in=_DECIDED_STATUSES_ONE_LEVEL, decided_at__isnull=False),
+                name="a_decided_subcontract_payment_records_when",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.reference} {self.amount}"
+
+    @property
+    def project(self) -> Any:
+        """For the approval engine (§4.19.2)."""
+        return self.subcontract.project
+
+    @property
+    def project_id(self) -> int:
+        return self.subcontract.project_id
+
+    @property
+    def requested_by_id(self) -> int:
+        return self.recorded_by_id
+
+    @property
+    def signed_amount(self) -> Decimal:
+        return -self.amount if self.reverses_id else self.amount
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationError(
+            "Subcontract payments are never deleted. Reject one that should not "
+            "stand, or reverse one already approved."
+        )
+
+
+class MilestoneShare(models.TextChoices):
+    PERCENT = "PERCENT", "Percent of the contract value"
+    AMOUNT = "AMOUNT", "Fixed amount"
+
+
+class MilestoneCondition(models.TextChoices):
+    NONE = "NONE", "Due at once"
+    ALL_SITES_ACCEPTED = "ALL_SITES_ACCEPTED", "Due when every site is accepted"
+    DATE = "DATE", "Due on a date"
+
+
+class ProjectMilestone(TenantModel, TimeStampedModel):
+    """One payment the client owes on a PO (R11, §4.19.7).
+
+    Due, overdue, invoiced and received are all queries (D23); only the dates
+    the sweep last notified on are stored.
+    """
+
+    project = models.ForeignKey(
+        "network.Project", on_delete=models.PROTECT, related_name="milestones"
+    )
+    sequence = models.PositiveSmallIntegerField()
+    name = models.CharField(max_length=200)
+    share_type = models.CharField(max_length=10, choices=MilestoneShare.choices)
+    share_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    condition = models.CharField(
+        max_length=20,
+        choices=MilestoneCondition.choices,
+        default=MilestoneCondition.NONE,
+    )
+    condition_date = models.DateField(null=True, blank=True)
+    due_notified_on = models.DateField(null=True, blank=True)
+    overdue_notified_on = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("project_id", "sequence")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "sequence"], name="uniq_milestone_sequence_per_project"
+            ),
+            models.CheckConstraint(
+                condition=Q(condition=MilestoneCondition.DATE, condition_date__isnull=False)
+                | (
+                    ~Q(condition=MilestoneCondition.DATE)
+                    & Q(condition_date__isnull=True)
+                ),
+                name="a_milestone_date_goes_with_a_date_condition",
+            ),
+            models.CheckConstraint(
+                condition=Q(share_value__gt=0), name="a_milestone_has_a_share"
+            ),
+            models.CheckConstraint(
+                condition=Q(share_type=MilestoneShare.AMOUNT) | Q(share_value__lte=100),
+                name="a_milestone_percent_is_at_most_100",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.sequence}. {self.name}"
+
+
+class AppendOnlyVoidMixin(models.Model):
+    """A record nobody edits or deletes: a mistake is voided (§4.19.7).
+
+    Only the void columns may be written, and only once; a voided row is
+    frozen. Like ``StatusGuardMixin`` it needs no second query.
+    """
+
+    VOID_FIELDS: frozenset[str] = frozenset(
+        {"voided_at", "voided_by_id", "void_reason", "updated_at"}
+    )
+    GUARD_NOUN = "record"
+
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    void_reason = models.CharField(max_length=500, blank=True)
+
+    _loaded_state: dict[str, Any] | None = None
+
+    class Meta:
+        abstract = True
+    def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        state = self._loaded_state
+        if state is not None and not self._state.adding:
+            allowed = set() if state.get("voided_at") else self.VOID_FIELDS
+            changed = [
+                f.attname
+                for f in self._meta.concrete_fields
+                if f.attname in state
+                and f.attname not in allowed
+                and getattr(self, f.attname) != state[f.attname]
+            ]
+            if changed:
+                raise ValidationError(
+                    f"A {self.GUARD_NOUN} cannot be changed ({', '.join(changed)}). "
+                    "Void it and record it again."
+                )
+        result = super().save(*args, **kwargs)
+        self._loaded_state = {
+            f.attname: getattr(self, f.attname) for f in self._meta.concrete_fields
+        }
+        return result
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationError(f"A {self.GUARD_NOUN} is never deleted. Void it.")
+
+
+    @property
+    def is_void(self) -> bool:
+        return self.voided_at is not None
+
+    @classmethod
+    def from_db(cls, db, field_names, values):  # type: ignore[no-untyped-def]
+        instance = super().from_db(db, field_names, values)
+        if "voided_at" in field_names:
+            instance._loaded_state = {
+                field.attname: value
+                for field, value in zip(cls._meta.concrete_fields, values, strict=False)
+                if field.attname in field_names
+            }
+        return instance
+
+
+def _void_constraint(prefix: str) -> models.CheckConstraint:
+    """Voided means when, by whom and why; not voided means none of them."""
+    return models.CheckConstraint(
+        condition=Q(voided_at__isnull=True, voided_by__isnull=True, void_reason="")
+        | (Q(voided_at__isnull=False, voided_by__isnull=False) & ~Q(void_reason="")),
+        name=f"a_voided_{prefix}_records_who_when_why",
+    )
+
+
+class MilestoneInvoice(AppendOnlyVoidMixin, TenantModel, TimeStampedModel):
+    """An invoice raised to the client for a milestone (R11). The document is an
+    ``Attachment``."""
+
+    GUARD_NOUN = "milestone invoice"
+
+    milestone = models.ForeignKey(
+        ProjectMilestone, on_delete=models.PROTECT, related_name="invoices"
+    )
+    invoice_number = models.CharField(max_length=100)
+    invoice_date = models.DateField()
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="milestone_invoices"
+    )
+
+    class Meta:
+        ordering = ("invoice_date", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount__gt=0), name="a_milestone_invoice_has_an_amount"
+            ),
+            models.CheckConstraint(
+                condition=~Q(invoice_number=""), name="a_milestone_invoice_has_a_number"
+            ),
+            _void_constraint("milestone_invoice"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.invoice_number} {self.amount}"
+
+
+class MilestoneReceipt(AppendOnlyVoidMixin, TenantModel, TimeStampedModel):
+    """Money received from the client against a milestone (R11). Partial
+    receipts are many rows."""
+
+    GUARD_NOUN = "milestone receipt"
+
+    milestone = models.ForeignKey(
+        ProjectMilestone, on_delete=models.PROTECT, related_name="receipts"
+    )
+    received_on = models.DateField()
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    reference = models.CharField(max_length=100, blank=True)
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="milestone_receipts"
+    )
+
+    class Meta:
+        ordering = ("received_on", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount__gt=0), name="a_milestone_receipt_has_an_amount"
+            ),
+            _void_constraint("milestone_receipt"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.reference or 'Receipt'} {self.amount}"

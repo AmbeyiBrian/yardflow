@@ -83,6 +83,16 @@ class Job(TenantModel, TimeStampedModel):
         blank=True,
         related_name="jobs",
     )
+    # R8 (§4.19.4): the written agreement this job is delivered under. Optional,
+    # so every subcontracted job from before it existed stays valid.
+    subcontract = models.ForeignKey(
+        "commercials.Subcontract",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="jobs",
+    )
+    over_contract_reason = models.CharField(max_length=500, blank=True)
     agreed_price = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -139,6 +149,12 @@ class Job(TenantModel, TimeStampedModel):
                 ),
                 name="delivery_mode_and_its_cost_agree",
             ),
+            # R8: a subcontract belongs only to a subcontracted job.
+            models.CheckConstraint(
+                condition=Q(subcontract__isnull=True)
+                | Q(delivery_mode=DeliveryMode.SUBCONTRACTED),
+                name="only_a_subcontracted_job_has_a_subcontract",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -154,7 +170,14 @@ class Job(TenantModel, TimeStampedModel):
 
     #: The fields the guard compares. Named here because a deferred load must
     #: not be triggered while capturing them — see ``from_db``.
-    _DELIVERY_FIELDS = ("status", "delivery_mode", "subcontractor_id", "agreed_price")
+    _DELIVERY_FIELDS = (
+        "status",
+        "delivery_mode",
+        "subcontractor_id",
+        "agreed_price",
+        "subcontract_id",
+        "over_contract_reason",
+    )
 
     @classmethod
     def from_db(cls, db, field_names, values):  # type: ignore[no-untyped-def]
@@ -183,14 +206,23 @@ class Job(TenantModel, TimeStampedModel):
         """
         if self._loaded_delivery is None:
             return
-        was_status, was_mode, was_subcontractor, was_price = self._loaded_delivery
+        (
+            was_status,
+            was_mode,
+            was_subcontractor,
+            was_price,
+            was_subcontract,
+            was_reason,
+        ) = self._loaded_delivery
         if was_status != JobStatus.CLOSED:
             return
         if (
             self.delivery_mode,
             self.subcontractor_id,
             self.agreed_price,
-        ) != (was_mode, was_subcontractor, was_price):
+            self.subcontract_id,
+            self.over_contract_reason,
+        ) != (was_mode, was_subcontractor, was_price, was_subcontract, was_reason):
             raise ValidationError(
                 "This job is closed, and its delivery cost has already been "
                 "counted against the project. Reopen it first (O3)."
