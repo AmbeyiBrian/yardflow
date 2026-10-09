@@ -428,6 +428,27 @@ class ProjectViewSet(TenantScopedViewSet):
     search_fields = ["reference", "po_number", "title", "description"]
     ordering_fields = ["opened_at", "reference"]
 
+    def perform_update(self, serializer):  # type: ignore[no-untyped-def]
+        """R4, D28: a new manager inherits the approvals waiting on the old one.
+
+        Done in the same transaction as the change, so there is no moment when
+        the project has its new manager and the requests still name the old.
+        """
+        from django.db import transaction
+
+        from approvals.engine import readdress_project_requests
+
+        with transaction.atomic():
+            old_manager_id = serializer.instance.manager_id
+            project = serializer.save()
+            if project.manager_id != old_manager_id:
+                readdress_project_requests(
+                    project,
+                    old_manager_id=old_manager_id,
+                    actor=self.request.user,
+                    request=self.request,
+                )
+
     @action(detail=True, methods=["get"])
     def performance(self, request, pk=None):  # type: ignore[no-untyped-def]
         """O12: cost against value. Figures the caller may not see are absent."""

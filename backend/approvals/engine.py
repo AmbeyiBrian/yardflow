@@ -254,19 +254,23 @@ def predicate_matches(conditions: dict, facts: ApprovalFacts) -> bool:
 class RequiredLevel:
     """One level of approval a document needs.
 
-    Addressed to a **role** by the criticality rules, or to a **person** by the
-    project branch (`O6`). Exactly one of the two is set, which is the same
-    invariant ``ApprovalRequest`` carries in the database.
+    Addressed to a **role** by the criticality rules, to a **person** by the
+    project branch (`O6`), or to whoever holds a **permission** by the finance
+    branch (R4). At most one of the three is set, which is the same invariant
+    ``ApprovalRequest`` carries in the database.
     """
 
     level: int
     role: Role | None = None
     rule: ApprovalRule | None = None
     user: object | None = None
+    permission: str = ""
 
     @property
     def label(self) -> str:
         """Who this level is waiting on, for a log line or a notification."""
+        if self.permission:
+            return f"holders of {self.permission}"
         if self.user is not None:
             return getattr(self.user, "full_name", "") or str(self.user)
         return self.role.name if self.role is not None else "nobody"
@@ -315,12 +319,78 @@ def project_of(document):  # type: ignore[no-untyped-def]
     return getattr(document, "project", None)
 
 
+#: Money-out entries (R4, §4.17.3). Matched on the label the approval tables
+#: already store, so ``can_approve`` can tell them apart from a request alone,
+#: without importing ``commercials`` into the engine.
+FINANCE_DOCUMENT_TYPES = frozenset(
+    {"commercials.ProjectExpense", "commercials.AllowanceRequest"}
+)
+
+#: The permission the second finance level is addressed to (§4.17.7).
+FINANCE_APPROVE_PERMISSION = "finance.approve"
+
+#: Level numbers on a finance entry. Finance stays level 2 when the PM level is
+#: skipped, so "level 1" always means the PM and re-addressing level-1 requests
+#: (``readdress_project_requests``) never touches a Finance request.
+FINANCE_PM_LEVEL = 1
+FINANCE_LEVEL = 2
+
+
+def is_finance_document(document) -> bool:  # type: ignore[no-untyped-def]
+    return document_type_of(document) in FINANCE_DOCUMENT_TYPES
+
+
+def _finance_levels(document) -> list[RequiredLevel]:  # type: ignore[no-untyped-def]
+    """The PM, then Finance (R4, §4.17.3).
+
+    The PM level is **skipped**, not auto-approved, when the recorder is that
+    project's PM or holds the tenant's Finance Director role: asking someone to
+    approve their own entry would be theatre, and "approving" it on their behalf
+    would put a signature on the trail nobody gave. Finance is never skipped, so
+    a second person still sees every entry before it counts.
+
+    No ``due_at`` and no delegation on either level (D22): a signature on a
+    budget is not lendable.
+    """
+    project = document.project
+    recorder_id = document.recorded_by_id
+
+    director_role_id = document.organization.settings.finance_director_role_id
+    skip_pm = project.manager_id == recorder_id or (
+        director_role_id is not None
+        and document.recorded_by.user_roles.filter(role_id=director_role_id).exists()
+    )
+
+    levels: list[RequiredLevel] = []
+    if not skip_pm:
+        pm_level = _project_level(document)
+        if pm_level is None:
+            # D28: no fallback approver. A finance entry with nobody to give the
+            # first signature is refused, not routed round the PM.
+            raise ProjectHasNoActiveManager(
+                f"{project} has no project manager, so nobody can give the "
+                f"first approval. An owner must assign one (D28).",
+                details={"project": str(project)},
+            )
+        levels.append(pm_level)
+
+    levels.append(
+        RequiredLevel(level=FINANCE_LEVEL, permission=FINANCE_APPROVE_PERMISSION)
+    )
+    return levels
+
+
 def required_levels(document, *, facts: ApprovalFacts | None = None) -> list[RequiredLevel]:
     """Which approvals this document needs (§5.1, F3).
 
     Returns an empty list when nothing is required — §5.2's auto-approval case,
     which still writes an ``ApprovalAction`` so the trail has no gap.
     """
+    # R4: money out routes PM then Finance, and never reaches the criticality
+    # rules — an expense has no category criticality to match.
+    if is_finance_document(document):
+        return _finance_levels(document)
+
     # O6, D22: project material routes to that project's manager, as the only
     # level, and never reaches the criticality rules below.
     #
@@ -456,12 +526,13 @@ def create_requests(document, *, requested_by=None) -> list[ApprovalRequest]:
                 level=required.level,
                 required_role=required.role,
                 required_user=required.user,
+                required_permission=required.permission,
                 requested_by=requested_by,
-                # D22: no escalation on a PM level. `due_at` left null is what
-                # the sweep skips on, so this needs no special case there — and
-                # an unanswered request waits, which is the accepted cost of
-                # single-signature control.
-                due_at=None if required.user is not None else due_at,
+                # D22: no escalation on a PM level, and none on a Finance level
+                # (R4). `due_at` left null is what the sweep skips on, so this
+                # needs no special case there — and an unanswered request waits,
+                # which is the accepted cost of single-signature control.
+                due_at=None if required.user is not None or required.permission else due_at,
             )
         )
     return requests
@@ -537,6 +608,18 @@ def can_approve(user, approval_request: ApprovalRequest, *, document=None) -> tu
     """
     from accounts.services import resolve_permissions
 
+    # R4: finance entries. The recorder never approves their own entry at either
+    # level — not by `allow_self_approval`, which is a gate-out setting, and not
+    # by the O6 exception, which exists because a PM is the *only* level on
+    # project material. Here Finance is a second signature, so the exception has
+    # nothing to stand on.
+    if approval_request.document_type in FINANCE_DOCUMENT_TYPES:
+        requester_id = (
+            getattr(document, "requested_by_id", None) or approval_request.requested_by_id
+        )
+        if requester_id is not None and requester_id == user.pk:
+            return False, "self"
+
     # O6: a level addressed to a person is that person's to answer, and nobody
     # else's. No delegation — a delegation lends a *role*, and lending someone's
     # signature on a budget they are accountable for is not the same thing
@@ -548,6 +631,17 @@ def can_approve(user, approval_request: ApprovalRequest, *, document=None) -> tu
         # (O6). It is a deliberate exception, and R2 in the requirements is
         # where the cost of it is written down.
         return True, "self" if _is_requester(document, user) else ""
+
+    # R4: a level addressed to whoever holds a permission. Held *directly*: like
+    # a PM level it is not lendable (D22), so a delegation that carries the
+    # permission does not count. `resolve_permissions` gives an inactive user
+    # nothing, so a deactivated holder cannot act.
+    if approval_request.required_permission:
+        permissions = resolve_permissions(user)
+        code = approval_request.required_permission
+        if permissions.has(code) and not permissions.is_delegated(code):
+            return True, ""
+        return False, "permission"
 
     if document is not None and _is_requester(document, user):
         settings = approval_request.organization.settings
@@ -638,6 +732,11 @@ def record_decision(
                 f"This is for {who} to decide — they manage the project it is "
                 f"costed to (O6)."
             )
+        if why == "permission":
+            raise NotAnApprover(
+                f"Deciding this needs the {approval_request.required_permission} "
+                f"permission (R4)."
+            )
         role = approval_request.required_role
         role_name = role.name if role is not None else "an approver"
         raise NotAnApprover(f"Deciding this needs the {role_name} role.")
@@ -683,3 +782,75 @@ def record_decision(
         return approval_request, None
 
     return approval_request, next_pending_request(document)
+
+
+# --------------------------------------------------------------------------
+# Reassigning a project's manager (R4, D28, §4.17.3)
+# --------------------------------------------------------------------------
+
+
+def readdress_project_requests(project, *, old_manager_id, actor=None, request=None) -> int:  # type: ignore[no-untyped-def]
+    """Hand a project's open PM-level requests to its new manager.
+
+    D28 has no fallback approver, so the only way out when a PM leaves or
+    changes is to point the waiting requests at their replacement; otherwise
+    they would sit addressed to someone who can no longer answer. A request
+    addressed to a person is only ever a PM level (O6, R4), so "open and
+    addressed to the old manager, on a document costed to this project" is
+    exactly the set: gate-out, disposal and finance level 1 alike, which are
+    the same concept, the project manager's signature.
+
+    Finance levels are addressed to a permission, not a person, and are not
+    touched. Returns how many were re-addressed.
+    """
+    from django.apps import apps
+
+    from core.audit import record
+    from core.models import AuditAction
+
+    new_manager_id = project.manager_id
+    if old_manager_id is None or new_manager_id is None or old_manager_id == new_manager_id:
+        return 0
+
+    open_requests = ApprovalRequest.objects.filter(
+        required_user_id=old_manager_id,
+        status__in=(ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED),
+    )
+
+    moved: list[ApprovalRequest] = []
+    documents: dict[tuple[str, str], object | None] = {}
+    for pending in open_requests:
+        key = (pending.document_type, pending.document_id)
+        if key not in documents:
+            try:
+                model = apps.get_model(pending.document_type)
+            except LookupError:
+                documents[key] = None
+            else:
+                documents[key] = model.objects.filter(pk=pending.document_id).first()
+        document = documents[key]
+        owner = project_of(document) if document is not None else None
+        if owner is not None and owner.pk == project.pk:
+            moved.append(pending)
+
+    if not moved:
+        return 0
+
+    ApprovalRequest.objects.filter(pk__in=[item.pk for item in moved]).update(
+        required_user_id=new_manager_id, updated_at=timezone.now()
+    )
+
+    record(
+        AuditAction.STATUS_CHANGED,
+        actor=actor,
+        organization=project.organization_id,
+        target=project,
+        target_label=str(project),
+        request=request,
+        note=(
+            f"Project manager changed: {len(moved)} open approval(s) "
+            f"re-addressed to the new manager ("
+            f"{', '.join(item.document_number or item.document_id for item in moved)})."
+        ),
+    )
+    return len(moved)

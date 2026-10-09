@@ -115,6 +115,69 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
         role = request.required_role
         return role.name if role is not None else None
 
+    def _expense_summary(self, approval_request: ApprovalRequest) -> dict:
+        """R4: what a PM or Finance needs to judge an expense from the list."""
+        from commercials.models import ProjectExpense
+
+        expense = (
+            ProjectExpense.objects.filter(pk=approval_request.document_id)
+            .select_related("project", "site", "category", "recorded_by")
+            .first()
+        )
+        if expense is None:
+            return {"label": approval_request.document_number}
+
+        # "Arriving" is told from "no evidence" by what the phone said it would
+        # send (§4.17.8), so an approver does not reject a receipt in transit.
+        if expense.is_evidenced:
+            evidence = "ATTACHED"
+        elif expense.photos_expected:
+            evidence = "ARRIVING"
+        else:
+            evidence = "NONE"
+
+        return {
+            "id": expense.pk,
+            "kind": "EXPENSE",
+            # An expense has no number of its own (only an allowance does).
+            "number": approval_request.document_number,
+            "description": expense.description,
+            "amount": str(expense.amount),
+            "type": expense.category.name,
+            "requested_by": str(expense.recorded_by),
+            "requested_by_id": expense.recorded_by_id,
+            "project": str(expense.project),
+            "site": expense.site.name if expense.site_id else "",
+            "incurred_on": expense.incurred_on.isoformat(),
+            "evidence": evidence,
+        }
+
+    def _allowance_summary(self, approval_request: ApprovalRequest) -> dict:
+        from commercials.models import AllowanceRequest
+
+        allowance = (
+            AllowanceRequest.objects.filter(pk=approval_request.document_id)
+            .select_related("project", "site", "recorded_by")
+            .first()
+        )
+        if allowance is None:
+            return {"label": approval_request.document_number}
+
+        return {
+            "id": allowance.pk,
+            "kind": "ALLOWANCE",
+            "number": allowance.number,
+            "description": allowance.reason,
+            "amount": str(allowance.amount),
+            "type": allowance.get_type_display(),
+            "requested_by": str(allowance.recorded_by),
+            "requested_by_id": allowance.recorded_by_id,
+            "project": str(allowance.project),
+            "site": allowance.site.name if allowance.site_id else "",
+            "from_date": allowance.from_date.isoformat(),
+            "to_date": allowance.to_date.isoformat(),
+        }
+
     def get_document(self, approval_request: ApprovalRequest) -> dict:
         """Enough of the document to decide without a second request.
 
@@ -122,6 +185,11 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
         carry what an approver needs to judge, not just a reference.
         """
         from dispatch.models import GateOut
+
+        if approval_request.document_type == "commercials.ProjectExpense":
+            return self._expense_summary(approval_request)
+        if approval_request.document_type == "commercials.AllowanceRequest":
+            return self._allowance_summary(approval_request)
 
         if approval_request.document_type != "dispatch.GateOut":
             return {"label": approval_request.document_number}
@@ -213,36 +281,54 @@ class ApprovalRequestViewSet(TenantScopedViewSet):
     def pending(self, request):  # type: ignore[no-untyped-def]
         """What this user can act on now (F4).
 
-        Filtered to the caller's own roles and delegations: a list showing
-        approvals somebody else must make is noise, and noise is what stops
-        people reading the list at all.
+        Only a request whose **next open level** is addressed to the caller: by
+        role (or a delegation of it, F5), by name (O6, R4) or by a permission
+        they hold directly (R4). A list showing approvals somebody else must
+        make is noise, and noise is what stops people reading the list at all.
         """
-        from django.db.models import Q
+        from django.db.models import Exists, OuterRef, Q
 
         from accounts.services import resolve_permissions
 
+        open_statuses = (ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED)
         outstanding = self.filter_queryset(self.get_queryset()).filter(
-            status__in=(
-                ApprovalRequestStatus.PENDING,
-                ApprovalRequestStatus.ESCALATED,
-            )
+            status__in=open_statuses
         )
 
         # Narrowed in the database rather than in Python, because the result has
         # to stay a queryset: cursor pagination orders by a column, and a list
         # cannot be ordered by one (§6, N-2).
-        if not resolve_permissions(request.user).has(PERM.GATE_OUT_APPROVE):
-            now = timezone.now()
-            role_ids = set(request.user.user_roles.values_list("role_id", flat=True))
-            # F5: a delegation confers the role for a period.
-            role_ids.update(
-                request.user.delegations_received.filter(
-                    is_revoked=False, starts_at__lte=now, ends_at__gte=now
-                ).values_list("role_id", flat=True)
-            )
-            outstanding = outstanding.filter(
-                Q(required_role_id__in=role_ids) | Q(required_role__isnull=True)
-            )
+        now = timezone.now()
+        permissions = resolve_permissions(request.user)
+        role_ids = set(request.user.user_roles.values_list("role_id", flat=True))
+        # F5: a delegation confers the role for a period.
+        role_ids.update(
+            request.user.delegations_received.filter(
+                is_revoked=False, starts_at__lte=now, ends_at__gte=now
+            ).values_list("role_id", flat=True)
+        )
+        # A delegation lends a role, never a named signature or a permission
+        # level (D22), so only permissions held directly are matched.
+        held = permissions.codenames - set(permissions.delegated_from)
+
+        addressed = Q(required_role_id__in=role_ids) | Q(required_user=request.user)
+        if held:
+            addressed |= Q(required_permission__in=held)
+        # B4: a blanket approval permission may act on any *role* level
+        # (`can_approve`), so those stay visible to its holder. A person- or
+        # permission-addressed level is never theirs by that route.
+        if permissions.has(PERM.GATE_OUT_APPROVE):
+            addressed |= Q(required_role__isnull=False)
+
+        # Levels answer in order, so a Finance request is not the caller's
+        # business while the PM is still to answer: it could not be acted on.
+        earlier_open = ApprovalRequest.objects.filter(
+            document_type=OuterRef("document_type"),
+            document_id=OuterRef("document_id"),
+            level__lt=OuterRef("level"),
+            status__in=open_statuses,
+        )
+        outstanding = outstanding.filter(addressed).filter(~Exists(earlier_open))
 
         # Self-approval is deliberately *not* filtered out here. §5.3 refuses it
         # at the moment of approving, and seeing your own request in the queue —

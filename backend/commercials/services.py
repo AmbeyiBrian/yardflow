@@ -82,6 +82,19 @@ def decide_expense(
     expense.decision_reason = "" if approved else reason
     expense.save()
 
+    # T15.2: the status is a projection of the approval requests (§4.17.1), so a
+    # decision made here must not leave them open. They would otherwise show
+    # Finance an expense that is already APPROVED. Superseded rather than
+    # approved: this legacy path is one signature, and recording a Finance
+    # approval nobody gave would put a false signature on the trail.
+    from approvals.models import ApprovalRequest, ApprovalRequestStatus
+
+    ApprovalRequest.objects.filter(
+        document_type=expense._meta.label,
+        document_id=str(expense.pk),
+        status__in=(ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED),
+    ).update(status=ApprovalRequestStatus.SUPERSEDED, resolved_at=timezone.now())
+
     record(
         AuditAction.STATUS_CHANGED,
         actor=actor,

@@ -191,9 +191,10 @@ export interface paths {
         /**
          * @description What this user can act on now (F4).
          *
-         *     Filtered to the caller's own roles and delegations: a list showing
-         *     approvals somebody else must make is noise, and noise is what stops
-         *     people reading the list at all.
+         *     Only a request whose **next open level** is addressed to the caller: by
+         *     role (or a delegation of it, F5), by name (O6, R4) or by a permission
+         *     they hold directly (R4). A list showing approvals somebody else must
+         *     make is noise, and noise is what stops people reading the list at all.
          */
         get: operations["approvals_pending_list"];
         put?: never;
