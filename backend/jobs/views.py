@@ -50,6 +50,9 @@ class JobSerializer(serializers.ModelSerializer):
     subcontractor_name = serializers.CharField(
         source="subcontractor.name", read_only=True
     )
+    subcontract_reference = serializers.CharField(
+        source="subcontract.number", read_only=True, default=""
+    )
 
     class Meta:
         model = Job
@@ -65,6 +68,9 @@ class JobSerializer(serializers.ModelSerializer):
             "delivery_mode",
             "subcontractor",
             "subcontractor_name",
+            "subcontract",
+            "subcontract_reference",
+            "over_contract_reason",
             "agreed_price",
             "assignee",
             "assignee_name",
@@ -95,8 +101,51 @@ class JobSerializer(serializers.ModelSerializer):
                 "delivery_mode": self.instance.delivery_mode,
                 "subcontractor": self.instance.subcontractor,
                 "agreed_price": self.instance.agreed_price,
+                "project": self.instance.project,
+                "subcontract": self.instance.subcontract,
+                "over_contract_reason": self.instance.over_contract_reason,
             }
-        _validate_delivery({**current, **attrs})
+        merged = {**current, **attrs}
+        _validate_delivery(merged)
+        return self._link_to_contract(attrs, merged)
+
+    def _link_to_contract(self, attrs: dict, merged: dict) -> dict:
+        """Put a subcontracted job under its contract (R8, §4.19.4).
+
+        Chosen automatically when the project has exactly one active contract
+        with the subcontractor, and only when the job is new or its delivery was
+        just changed: an old unlinked job is not pulled under a contract by an
+        edit to its description. Over the contract's value it needs a reason.
+        """
+        from commercials import contracts
+        from jobs.models import DeliveryMode
+
+        if merged.get("delivery_mode") != DeliveryMode.SUBCONTRACTED:
+            if merged.get("subcontract") is not None or merged.get("over_contract_reason"):
+                attrs["subcontract"] = None
+                attrs["over_contract_reason"] = ""
+            return attrs
+
+        instance = self.instance
+        explicit = "subcontract" in attrs
+        changed = instance is None or any(
+            name in attrs and attrs[name] != getattr(instance, name)
+            for name in ("delivery_mode", "subcontractor", "agreed_price", "project")
+        )
+        if not (explicit or changed or "over_contract_reason" in attrs):
+            return attrs
+
+        subcontract, reason = contracts.resolve_job_link(
+            project=merged.get("project"),
+            subcontractor=merged["subcontractor"],
+            agreed_price=merged["agreed_price"],
+            subcontract=merged.get("subcontract") if explicit else None,
+            explicit=explicit,
+            reason=attrs.get("over_contract_reason", merged.get("over_contract_reason", "")),
+            job=instance,
+        )
+        attrs["subcontract"] = subcontract
+        attrs["over_contract_reason"] = reason
         return attrs
 
 
@@ -300,8 +349,8 @@ class JobViewSet(TenantScopedViewSet):
 
     serializer_class = JobSerializer
     model = Job
-    select_related = ("site", "client", "project", "assignee", "closed_by")
-    filterset_fields = ["status", "site", "client", "project"]
+    select_related = ("site", "client", "project", "assignee", "closed_by", "subcontract")
+    filterset_fields = ["status", "site", "client", "project", "subcontract"]
     # `assignee` is handled in get_queryset so it can accept "me"; leaving it in
     # filterset_fields as well would make django-filter try to cast "me" to an
     # id and 400 the request.

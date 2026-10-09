@@ -119,3 +119,37 @@ def register() -> None:
     register_isolation_fixture("milestone", make_milestone)
     register_isolation_fixture("milestone-invoice", make_milestone_invoice)
     register_isolation_fixture("milestone-receipt", make_milestone_receipt)
+
+    def make_subcontract(organization):
+        from commercials.models import Subcontract
+        from network.models import Subcontractor
+
+        project = make_project_expense(organization).project
+        return Subcontract.objects.create(
+            organization=organization,
+            number="SC-ISO-1",
+            project=project,
+            subcontractor=Subcontractor.objects.create(
+                organization=organization, name="Isolation Subcontractor"
+            ),
+            contract_value=Decimal("1.00"),
+            created_by=User.objects.filter(organization=organization).first(),
+        )
+
+    def make_subcontract_payment(organization):
+        from commercials.models import SubcontractPayment
+
+        return SubcontractPayment.objects.create(
+            organization=organization,
+            subcontract=make_subcontract(organization),
+            amount=Decimal("1.00"),
+            paid_on=date(2026, 1, 1),
+            reference="ISO-PAY-1",
+            recorded_by=User.objects.filter(organization=organization).first(),
+        )
+
+    register_isolation_fixture(
+        "subcontract", make_subcontract, payload={"payment_terms": "Renamed"}
+    )
+    # No PATCH for payments: a wrong one is rejected or reversed (O16).
+    register_isolation_fixture("subcontract-payment", make_subcontract_payment)

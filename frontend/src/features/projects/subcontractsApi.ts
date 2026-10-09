@@ -7,8 +7,9 @@
 
 import { useAction, useList, useResource } from '../../api/hooks';
 
-export type SubcontractStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
-export type PaymentStatus = 'PENDING_PM' | 'APPROVED' | 'REJECTED' | 'REVERSED';
+export type SubcontractStatus = 'ACTIVE' | 'CLOSED';
+// A reversal is its own APPROVED row with a negative amount and `reverses` set.
+export type PaymentStatus = 'PENDING_PM' | 'APPROVED' | 'REJECTED';
 
 /** `contracts.position` (§4.19.4). Withheld (undefined) without `project.view_cost`. */
 export interface SubcontractPosition {

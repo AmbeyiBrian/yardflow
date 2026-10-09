@@ -61,6 +61,7 @@ from commercials.milestones_api import (
     MilestoneReceiptViewSet,
     MilestoneViewSet,
 )
+from commercials.views_contracts import SubcontractPaymentViewSet, SubcontractViewSet
 from core.attachment_api import AttachmentTargetsView, AttachmentViewSet
 from core.number_series_api import NumberSeriesView
 from core.organization_api import OrganizationProfileView
@@ -291,6 +292,10 @@ router.register(
     "allowance-requests", AllowanceRequestViewSet, basename="allowance-request"
 )
 router.register("casuals", CasualViewSet, basename="casual")
+router.register("subcontracts", SubcontractViewSet, basename="subcontract")
+router.register(
+    "subcontract-payments", SubcontractPaymentViewSet, basename="subcontract-payment"
+)
 router.register("locations", LocationViewSet, basename="location")
 router.register("stock-nodes", StockNodeViewSet, basename="stock-node")
 

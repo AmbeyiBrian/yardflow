@@ -5687,6 +5687,10 @@ paths:
           * `AWAITING_CLOSEOUT` - Awaiting closeout
           * `CLOSED` - Closed
           * `CANCELLED` - Cancelled
+      - in: query
+        name: subcontract
+        schema:
+          type: integer
       tags:
       - jobs
       security:
@@ -10272,6 +10276,221 @@ paths:
               schema:
                 $ref: '#/components/schemas/Movement'
           description: ''
+  /api/v1/subcontract-payments:
+    get:
+      operationId: subcontract_payments_list
+      description: |-
+        ``/api/v1/subcontract-payments`` (R8, §4.19.4).
+
+        Finance records; the project's PM decides. No PATCH: a wrong payment is
+        rejected and sent again, or reversed once approved (O16).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: pending
+        schema:
+          type: boolean
+        description: Only payments waiting on the caller (the PM's list).
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - PENDING_PM
+          - REJECTED
+        description: |-
+          * `PENDING_PM` - Waiting on the project manager
+          * `APPROVED` - Approved — counts against the project
+          * `REJECTED` - Rejected
+      - in: query
+        name: subcontract
+        schema:
+          type: integer
+      tags:
+      - subcontract-payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSubcontractPaymentList'
+          description: ''
+    post:
+      operationId: subcontract_payments_create
+      description: |-
+        ``/api/v1/subcontract-payments`` (R8, §4.19.4).
+
+        Finance records; the project's PM decides. No PATCH: a wrong payment is
+        rejected and sent again, or reversed once approved (O16).
+      tags:
+      - subcontract-payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubcontractPaymentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubcontractPaymentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubcontractPaymentCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcontractPayment'
+          description: ''
+  /api/v1/subcontract-payments/{id}:
+    get:
+      operationId: subcontract_payments_retrieve
+      description: |-
+        ``/api/v1/subcontract-payments`` (R8, §4.19.4).
+
+        Finance records; the project's PM decides. No PATCH: a wrong payment is
+        rejected and sent again, or reversed once approved (O16).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontract payment.
+        required: true
+      tags:
+      - subcontract-payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcontractPayment'
+          description: ''
+  /api/v1/subcontract-payments/{id}/decide:
+    post:
+      operationId: subcontract_payments_decide_create
+      description: The project's PM, and only the PM (§4.19.4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontract payment.
+        required: true
+      tags:
+      - subcontract-payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcontractPayment'
+          description: ''
+  /api/v1/subcontract-payments/{id}/resubmit:
+    post:
+      operationId: subcontract_payments_resubmit_create
+      description: |-
+        ``/api/v1/subcontract-payments`` (R8, §4.19.4).
+
+        Finance records; the project's PM decides. No PATCH: a wrong payment is
+        rejected and sent again, or reversed once approved (O16).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontract payment.
+        required: true
+      tags:
+      - subcontract-payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcontractPayment'
+          description: ''
+  /api/v1/subcontract-payments/{id}/reverse:
+    post:
+      operationId: subcontract_payments_reverse_create
+      description: 'O16: corrected by its opposite, never by an edit.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontract payment.
+        required: true
+      tags:
+      - subcontract-payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcontractPayment'
+          description: ''
   /api/v1/subcontractors:
     get:
       operationId: subcontractors_list
@@ -10482,6 +10701,156 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/subcontracts:
+    get:
+      operationId: subcontracts_list
+      description: |-
+        ``/api/v1/subcontracts`` (R8, §4.19.10).
+
+        No destroy: a contract that has ended is closed, never removed.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - CLOSED
+        description: |-
+          * `ACTIVE` - Active
+          * `CLOSED` - Closed
+      - in: query
+        name: subcontractor
+        schema:
+          type: integer
+      tags:
+      - subcontracts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSubcontractList'
+          description: ''
+    post:
+      operationId: subcontracts_create
+      description: |-
+        ``/api/v1/subcontracts`` (R8, §4.19.10).
+
+        No destroy: a contract that has ended is closed, never removed.
+      tags:
+      - subcontracts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubcontractCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubcontractCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubcontractCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcontractDetail'
+          description: ''
+  /api/v1/subcontracts/{id}:
+    get:
+      operationId: subcontracts_retrieve
+      description: |-
+        ``/api/v1/subcontracts`` (R8, §4.19.10).
+
+        No destroy: a contract that has ended is closed, never removed.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontract.
+        required: true
+      tags:
+      - subcontracts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcontractDetail'
+          description: ''
+    patch:
+      operationId: subcontracts_partial_update
+      description: |-
+        ``/api/v1/subcontracts`` (R8, §4.19.10).
+
+        No destroy: a contract that has ended is closed, never removed.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this subcontract.
+        required: true
+      tags:
+      - subcontracts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcontractEditRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcontractEditRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcontractEditRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcontractDetail'
+          description: ''
   /api/v1/suppliers:
     get:
       operationId: suppliers_list
@@ -12331,7 +12700,7 @@ components:
           nullable: true
         status:
           allOf:
-          - $ref: '#/components/schemas/AssetStatusEnum'
+          - $ref: '#/components/schemas/SubcontractStatusEnum'
           readOnly: true
         closed_on:
           type: string
@@ -12563,14 +12932,6 @@ components:
       required:
       - name
       - type
-    AssetStatusEnum:
-      enum:
-      - ACTIVE
-      - CLOSED
-      type: string
-      description: |-
-        * `ACTIVE` - Active
-        * `CLOSED` - Closed
     AssetTypeEnum:
       enum:
       - VEHICLE
@@ -15893,6 +16254,16 @@ components:
         subcontractor_name:
           type: string
           readOnly: true
+        subcontract:
+          type: integer
+          nullable: true
+        subcontract_reference:
+          type: string
+          readOnly: true
+          default: ''
+        over_contract_reason:
+          type: string
+          maxLength: 500
         agreed_price:
           type: string
           format: decimal
@@ -15951,6 +16322,7 @@ components:
       - site_name
       - site_ref
       - status
+      - subcontract_reference
       - subcontractor_name
     JobCloseout:
       type: object
@@ -16268,6 +16640,12 @@ components:
         subcontractor:
           type: integer
           nullable: true
+        subcontract:
+          type: integer
+          nullable: true
+        over_contract_reason:
+          type: string
+          maxLength: 500
         agreed_price:
           type: string
           format: decimal
@@ -18130,6 +18508,44 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StockNode'
+    PaginatedSubcontractList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subcontract'
+    PaginatedSubcontractPaymentList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubcontractPayment'
     PaginatedSubcontractorList:
       type: object
       required:
@@ -18802,6 +19218,12 @@ components:
         subcontractor:
           type: integer
           nullable: true
+        subcontract:
+          type: integer
+          nullable: true
+        over_contract_reason:
+          type: string
+          maxLength: 500
         agreed_price:
           type: string
           format: decimal
@@ -19234,6 +19656,21 @@ components:
           nullable: true
         notes:
           type: string
+    PatchedSubcontractEditRequest:
+      type: object
+      properties:
+        sites:
+          type: array
+          items:
+            type: integer
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        payment_terms:
+          type: string
+        status:
+          $ref: '#/components/schemas/SubcontractStatusEnum'
     PatchedSubcontractorRequest:
       type: object
       properties:
@@ -19377,6 +19814,46 @@ components:
             additionalProperties: {}
       required:
       - groups
+    Position:
+      type: object
+      properties:
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        work_done:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        paid:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        awaiting_approval:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        owed:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        committed:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        paid_exceeds_work_done:
+          type: boolean
+        paid_exceeds_contract_value:
+          type: boolean
+      required:
+      - awaiting_approval
+      - committed
+      - contract_value
+      - owed
+      - paid
+      - paid_exceeds_contract_value
+      - paid_exceeds_work_done
+      - work_done
     Project:
       type: object
       description: |-
@@ -21147,6 +21624,337 @@ components:
       - items
       - name
       - site
+    Subcontract:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        project_reference:
+          type: string
+          readOnly: true
+        subcontractor:
+          type: integer
+          readOnly: true
+        subcontractor_name:
+          type: string
+          readOnly: true
+        sites:
+          type: array
+          items:
+            type: integer
+          readOnly: true
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Excluding VAT (D24).
+        payment_terms:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SubcontractStatusEnum'
+          readOnly: true
+        position:
+          allOf:
+          - $ref: '#/components/schemas/Position'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - contract_value
+      - created_at
+      - id
+      - payment_terms
+      - position
+      - project
+      - project_reference
+      - reference
+      - sites
+      - status
+      - subcontractor
+      - subcontractor_name
+    SubcontractCreateRequest:
+      type: object
+      properties:
+        project:
+          type: integer
+        subcontractor:
+          type: integer
+        sites:
+          type: array
+          items:
+            type: integer
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        payment_terms:
+          type: string
+          default: ''
+      required:
+      - contract_value
+      - project
+      - subcontractor
+    SubcontractDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        project_reference:
+          type: string
+          readOnly: true
+        subcontractor:
+          type: integer
+          readOnly: true
+        subcontractor_name:
+          type: string
+          readOnly: true
+        sites:
+          type: array
+          items:
+            type: integer
+          readOnly: true
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Excluding VAT (D24).
+        payment_terms:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SubcontractStatusEnum'
+          readOnly: true
+        position:
+          allOf:
+          - $ref: '#/components/schemas/Position'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubcontractJob'
+          readOnly: true
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubcontractPayment'
+          readOnly: true
+      required:
+      - contract_value
+      - created_at
+      - id
+      - jobs
+      - payment_terms
+      - payments
+      - position
+      - project
+      - project_reference
+      - reference
+      - sites
+      - status
+      - subcontractor
+      - subcontractor_name
+    SubcontractJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        reference:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        site:
+          type: integer
+        site_name:
+          type: string
+        agreed_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        over_contract_reason:
+          type: string
+      required:
+      - agreed_price
+      - description
+      - id
+      - over_contract_reason
+      - reference
+      - site
+      - site_name
+      - status
+    SubcontractPayment:
+      type: object
+      description: The payment as the PM's approval sheet and the contract's list
+        read it.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        subcontract:
+          type: integer
+          readOnly: true
+        subcontract_number:
+          type: string
+          readOnly: true
+        subcontractor_name:
+          type: string
+          readOnly: true
+        project_reference:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        paid_on:
+          type: string
+          format: date
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SubcontractPaymentStatusEnum'
+          readOnly: true
+        recorded_by:
+          type: integer
+          readOnly: true
+        recorded_by_name:
+          type: string
+          readOnly: true
+        decided_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        decision_reason:
+          type: string
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+        reverses:
+          type: integer
+          readOnly: true
+          nullable: true
+        client_uuid:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        position:
+          allOf:
+          - $ref: '#/components/schemas/Position'
+          nullable: true
+          readOnly: true
+        would_exceed_work_done:
+          type: boolean
+          nullable: true
+          readOnly: true
+        would_exceed_contract_value:
+          type: boolean
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - client_uuid
+      - created_at
+      - decided_at
+      - decided_by
+      - decision_reason
+      - id
+      - paid_on
+      - position
+      - project_reference
+      - recorded_by
+      - recorded_by_name
+      - reference
+      - rejection_reason
+      - reverses
+      - status
+      - subcontract
+      - subcontract_number
+      - subcontractor_name
+      - would_exceed_contract_value
+      - would_exceed_work_done
+    SubcontractPaymentCreateRequest:
+      type: object
+      properties:
+        subcontract:
+          type: integer
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        paid_on:
+          type: string
+          format: date
+        reference:
+          type: string
+          default: ''
+          maxLength: 100
+        client_uuid:
+          type: string
+          format: uuid
+      required:
+      - amount
+      - paid_on
+      - subcontract
+    SubcontractPaymentStatusEnum:
+      enum:
+      - PENDING_PM
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `PENDING_PM` - Waiting on the project manager
+        * `APPROVED` - Approved — counts against the project
+        * `REJECTED` - Rejected
+    SubcontractStatusEnum:
+      enum:
+      - ACTIVE
+      - CLOSED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `CLOSED` - Closed
     Subcontractor:
       type: object
       properties:

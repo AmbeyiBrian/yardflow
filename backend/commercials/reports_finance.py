@@ -173,6 +173,7 @@ class SubcontractorSpendReport(Report):
     filters = (
         Filter("subcontractor", "Subcontractor", kind="reference", resource="subcontractors"),
         PROJECT_FILTER,
+        Filter("subcontract", "Subcontract", kind="reference", resource="subcontracts"),
         Filter(
             "register",
             "Register",
@@ -189,24 +190,31 @@ class SubcontractorSpendReport(Report):
         integer("jobs_closed", "Delivered"),
         money("delivered", "Delivered (counted)"),
         money("committed", "Open (committed)"),
+        money("paid", "Paid"),
+        money("owed", "Owed"),
         flag("is_active", "Active", wide_only=True),
     )
 
     def rows(self, params: dict):
-        from django.db.models import Count, Q, Sum
+        from django.db.models import Case, Count, F, Q, Sum, When
 
+        from commercials.models import ExpenseStatus, SubcontractPayment
         from jobs.models import DeliveryMode, JobStatus
         from network.models import Subcontractor
 
         contractors = Subcontractor.objects.all()
         if params.get("subcontractor"):
             contractors = contractors.filter(pk=params["subcontractor"])
+        if params.get("subcontract"):
+            contractors = contractors.filter(subcontracts=params["subcontract"])
         if params.get("register", "active") == "active":
             contractors = contractors.filter(is_active=True)
 
         awarded = Q(jobs__delivery_mode=DeliveryMode.SUBCONTRACTED)
         if params.get("project"):
             awarded &= Q(jobs__project_id=params["project"])
+        if params.get("subcontract"):
+            awarded &= Q(jobs__subcontract_id=params["subcontract"])
         # Delivered follows the costing rule: closed jobs only (O11, O3).
         delivered = awarded & Q(jobs__status=JobStatus.CLOSED)
         still_open = awarded & ~Q(jobs__status__in=(JobStatus.CLOSED, JobStatus.CANCELLED))
@@ -219,8 +227,35 @@ class SubcontractorSpendReport(Report):
             committed=Sum("jobs__agreed_price", filter=still_open),
         ).order_by("-delivered", "name")
 
+        # Paid is one more grouped sum, kept apart from the job joins above so
+        # neither multiplies the other (§4.19.4). Reversals count negatively,
+        # and pending or rejected payments are not paid yet.
+        payments = SubcontractPayment.objects.filter(status=ExpenseStatus.APPROVED)
+        if params.get("project"):
+            payments = payments.filter(subcontract__project_id=params["project"])
+        if params.get("subcontract"):
+            payments = payments.filter(subcontract_id=params["subcontract"])
+        paid_by = {
+            row["subcontract__subcontractor"]: row["total"]
+            for row in payments.order_by()
+            .values("subcontract__subcontractor")
+            .annotate(
+                total=Sum(
+                    Case(
+                        When(reverses__isnull=False, then=-F("amount")),
+                        default=F("amount"),
+                    )
+                )
+            )
+        }
+
         for contractor in contractors:
+            delivered_total = contractor.delivered or ZERO
+            paid_total = paid_by.get(contractor.pk) or ZERO
             yield {
+                "paid": paid_total,
+                # Delivered work with no contract still counts, so it reads as owed.
+                "owed": delivered_total - paid_total,
                 "name": contractor.name,
                 "code": contractor.code,
                 "projects": contractor.projects,
@@ -237,6 +272,8 @@ class SubcontractorSpendReport(Report):
             "jobs_closed": sum(row["jobs_closed"] for row in rows),
             "delivered": sum((row["delivered"] for row in rows), ZERO),
             "committed": sum((row["committed"] for row in rows), ZERO),
+            "paid": sum((row["paid"] for row in rows), ZERO),
+            "owed": sum((row["owed"] for row in rows), ZERO),
         }
 
 
