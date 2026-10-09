@@ -28,6 +28,7 @@ class TestTheScheduleIsReal:
         """Otherwise the failure is a log line at 5:30am that nobody reads."""
         from celery import current_app
 
+        import attendance.sweeps  # noqa: F401  — the hourly clock-in sweep (R13)
         import core.sweeps  # noqa: F401  — registers the tasks
 
         registered = set(current_app.tasks.keys())

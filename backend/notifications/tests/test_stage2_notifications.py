@@ -125,6 +125,20 @@ def purchase(tenant, project, by, **fields):
         "number": "SP-0001",
     }
     values.update(fields)
+    if "supplier" not in values:
+        # R15: paying needs an approved supplier, so the helper's is one.
+        from network.models import Supplier, SupplierStatus
+
+        values["supplier"], _ = Supplier.objects.get_or_create(
+            organization=tenant,
+            name="Ruiru Hardware",
+            defaults={
+                "status": SupplierStatus.APPROVED,
+                "is_active": True,
+                "registered_by": by,
+                "kra_pin": "P051234567X",
+            },
+        )
     item = SitePurchase.objects.create(**values)
     finance._route(item, by)
     return item
