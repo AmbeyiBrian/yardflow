@@ -182,7 +182,10 @@ class TestMigration:
 
     def test_existing_links_survive_and_are_backfilled(self, organization, other_organization):
         executor = MigrationExecutor(connection)
-        latest = executor.loader.graph.leaf_nodes("network")
+        # Every app, not only network: rolling network back also unapplies the
+        # migrations that depend on it (the supplier on a purchase), and they
+        # must come back for the rest of this worker's tests.
+        latest = executor.loader.graph.leaf_nodes()
         executor.migrate([("network", "0012_supplier_rls")])
         old_apps = executor.loader.project_state(
             [("network", "0012_supplier_rls")]

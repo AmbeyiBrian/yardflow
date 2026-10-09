@@ -701,8 +701,12 @@ class WorkSessionViewSet(TenantScopedViewSet):
         open_session = mine.filter(clock_out_at__isnull=True).first()
         if open_session is not None:
             payload.update(WorkSessionSerializer(open_session, context=context).data)
+        # The open session is always part of "today", even when it began before
+        # midnight: a night shift is still running and belongs on the card.
         payload["sessions_today"] = WorkSessionSerializer(
-            mine.filter(local_date=today), many=True, context=context
+            mine.filter(Q(local_date=today) | Q(clock_out_at__isnull=True)),
+            many=True,
+            context=context,
         ).data
         payload["accuracy_cap_m"] = settings_object.clock_accuracy_cap_m
         payload["auto_close_hour"] = settings_object.clock_auto_close_hour
