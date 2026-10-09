@@ -24,7 +24,7 @@ import { ResubmitButton, StatusPill } from './MoneyHomePage';
 import { TYPE_LABELS } from './RequestAllowancePage';
 import type { AllowanceRequest, ProjectExpense } from './types';
 
-function Rows({ rows }: { rows: [string, ReactNode][] }) {
+export function Rows({ rows }: { rows: [string, ReactNode][] }) {
   return (
     <dl className="flex flex-col gap-2">
       {rows
@@ -39,7 +39,7 @@ function Rows({ rows }: { rows: [string, ReactNode][] }) {
   );
 }
 
-function Photos({ targetType, targetId }: { targetType: string; targetId: number }) {
+export function Photos({ targetType, targetId }: { targetType: string; targetId: number }) {
   const query = useResource<Attachment[] | { results: Attachment[] }>('attachments', {
     target_type: targetType,
     target_id: String(targetId),
@@ -144,7 +144,7 @@ function Decision({
   );
 }
 
-function Loading<T>({
+export function Loading<T>({
   query,
   children,
 }: {

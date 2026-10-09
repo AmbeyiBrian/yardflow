@@ -26,15 +26,17 @@ import {
   useResubmitAllowance,
   useResubmitExpense,
 } from './api';
+import { useResubmitSitePurchase, useSitePurchases } from './purchasesApi';
 import { TYPE_LABELS } from './RequestAllowancePage';
 import { useQueuedMoney, type QueuedCard } from './queued';
 import { statusLabel } from './rules';
 import type { ExpenseStatus } from './types';
 
-type Tab = 'expenses' | 'requests' | 'casuals';
+type Tab = 'expenses' | 'purchases' | 'requests' | 'casuals';
 
 const TABS: readonly TabItem<Tab>[] = [
   { key: 'expenses', label: 'My expenses' },
+  { key: 'purchases', label: 'Purchases' },
   { key: 'requests', label: 'Requests and floats' },
   { key: 'casuals', label: 'Casuals' },
 ];
@@ -207,6 +209,60 @@ function ExpensesTab() {
   );
 }
 
+/** R7: my site purchases (T18.16). */
+function PurchasesTab() {
+  const query = useSitePurchases({ mine: true, page_size: 50 });
+  const resubmit = useResubmitSitePurchase();
+  const rows = query.data?.results ?? [];
+  return (
+    <ListState query={query}>
+      {rows.length === 0 ? (
+        <EmptyState
+          title="No purchases yet."
+          hint="Record one when you buy goods for a site."
+          action={
+            <Link to="/money/purchases/new" className="text-sm font-medium underline">
+              Record a purchase
+            </Link>
+          }
+        />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {rows.map((row) => (
+            <EntryCard
+              key={row.id}
+              to={`/money/purchases/${row.id}`}
+              title={`${row.number} · ${row.supplier_name ?? 'Supplier'}`}
+              meta={[
+                row.purchase_date,
+                row.site_name,
+                row.destination === 'INTO_YARD' ? 'into the yard' : 'used at site',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              amount={row.amount}
+              status={row.status}
+              reason={row.decision_reason}
+            >
+              {row.status === 'REJECTED' ? (
+                <div className="mt-2">
+                  <Button
+                    variant="secondary"
+                    loading={resubmit.isPending}
+                    onClick={() => resubmit.mutate({ id: row.id })}
+                  >
+                    Resubmit
+                  </Button>
+                </div>
+              ) : null}
+            </EntryCard>
+          ))}
+        </ul>
+      )}
+    </ListState>
+  );
+}
+
 function RequestsTab() {
   const query = useAllowanceRequests({ mine: true, page_size: 50 });
   const queued = useQueuedMoney().requests;
@@ -346,6 +402,12 @@ export default function MoneyHomePage() {
           Record expense
         </Link>
         <Link
+          to="/money/purchases/new"
+          className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-4 text-base font-medium text-slate-900"
+        >
+          Record purchase
+        </Link>
+        <Link
           to="/money/requests/new"
           className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-4 text-base font-medium text-slate-900"
         >
@@ -374,7 +436,15 @@ export default function MoneyHomePage() {
         aria-label="Money sections"
       />
 
-      {tab === 'expenses' ? <ExpensesTab /> : tab === 'requests' ? <RequestsTab /> : <CasualsTab />}
+      {tab === 'expenses' ? (
+        <ExpensesTab />
+      ) : tab === 'purchases' ? (
+        <PurchasesTab />
+      ) : tab === 'requests' ? (
+        <RequestsTab />
+      ) : (
+        <CasualsTab />
+      )}
     </div>
   );
 }

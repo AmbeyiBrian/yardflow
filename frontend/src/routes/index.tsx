@@ -90,6 +90,8 @@ const ProjectDetailPage = lazyRoute(() =>
   import('../features/projects/ProjectsPage').then((m) => ({ default: m.ProjectDetailPage })),
 );
 const RecordExpensePage = lazyRoute(() => import('../features/money/RecordExpensePage'));
+const RecordPurchasePage = lazyRoute(() => import('../features/money/RecordPurchasePage'));
+const PurchaseDetailPage = lazyRoute(() => import('../features/money/PurchaseDetailPage'));
 const MoneyHomePage = lazyRoute(() => import('../features/money/MoneyHomePage'));
 const RequestAllowancePage = lazyRoute(() => import('../features/money/RequestAllowancePage'));
 const AddCasualPage = lazyRoute(() => import('../features/money/CasualPages'));
@@ -295,6 +297,8 @@ export function AppRoutes() {
             <Route path="money" element={<MoneyHomePage />} />
             <Route path="money/expenses/new" element={<RecordExpensePage />} />
             <Route path="money/expenses/:id" element={<ExpenseDetailPage />} />
+            <Route path="money/purchases/new" element={<RecordPurchasePage />} />
+            <Route path="money/purchases/:id" element={<PurchaseDetailPage />} />
             <Route path="money/requests/new" element={<RequestAllowancePage />} />
             <Route path="money/requests/:id" element={<RequestDetailPage />} />
             <Route path="money/casuals/new" element={<AddCasualPage />} />
