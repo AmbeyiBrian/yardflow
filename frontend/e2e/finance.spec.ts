@@ -119,7 +119,8 @@ test.describe('Money, stage 1, on a phone', () => {
 
     const site = await request.post(`${api}/api/v1/sites`, {
       headers: owner,
-      data: { client, internal_ref: siteRef, name: siteName },
+      // R13: a site needs coordinates now.
+      data: { client, internal_ref: siteRef, name: siteName, latitude: '-1.286389', longitude: '36.817223' },
     });
     expect(site.ok(), await site.text()).toBeTruthy();
     siteId = (await site.json()).id;

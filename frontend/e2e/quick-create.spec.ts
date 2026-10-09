@@ -113,6 +113,9 @@ test.describe('Add new … from inside a form', () => {
     // The site's own reference is required.
     await siteSheet.getByLabel(/our reference/i).fill(`E2E-${Date.now().toString().slice(-6)}`);
     await chooseFirst(siteSheet.getByLabel(/client/i));
+    // R13: a site is saved with its coordinates, so clock-in can check the area.
+    await siteSheet.getByLabel('Latitude').fill('-1.286389');
+    await siteSheet.getByLabel('Longitude').fill('36.817223');
     await siteSheet.getByRole('button', { name: /create|save|add/i }).first().click();
 
     // Back on the job form: the new site is selected, and nothing was lost.
