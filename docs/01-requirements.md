@@ -1238,7 +1238,8 @@ shilling spent on a job reaches the project. *(Elias 1.)*
   labour**; each stays tenant-editable.
 - Fields: date, category, amount (KES), **site** (and from it the project), **scope of work** (free
   text), description, and one or more **photos** (receipt, fuel pump, work done).
-  - Fuel also needs the **vehicle registration**, and may carry the litres.
+  - Fuel also needs the **vehicle**: picked from the asset register once stage 4 is in (R14),
+    a typed registration until then. It may carry the litres.
   - Casual labour needs **which casuals** (R3) and the days each worked.
 - No photo is allowed, but it is flagged to both approvers as "no evidence", as O16 does now.
 - The person picks a **site** and the project is filled in from it. If the site belongs to more than
@@ -1294,39 +1295,161 @@ that a bad signal at a site does not stop the work. *(Elias 12.)*
 - The R5 rules are checked when the entry reaches the server. A refused entry stays on the phone
   with the reason, for the person to correct.
 
-#### Stage 2 — POs, budgets and sites *(detailed before stage 2 is built)*
+#### Stage 2 — POs, budgets and sites *(approved 2026-10-09)*
 
-**R7.** Site purchases: materials bought from a supplier for a site, recorded with the supplier,
-items, amount and receipt, approved as R4, and optionally received into the yard. *(Elias 4.)*
+Built on what exists: a project already carries its client, PO number, contract value, cost budget,
+variations and sites (O1, O2); subcontracted jobs carry an agreed price (O3, O9); expenses and
+requests carry a site and project (R1, R2); gate-in records deliveries (Epic D); attachments hold
+documents (§4.13). Nothing here makes a second project, budget or document store.
 
-**R8.** Contracted work per site: contractor, site ID and name, and the amount, adding a contract value
-per subcontractor on a project alongside today's per-job price. *(Elias 5.)*
+**R7.** As a supervisor, I want to record materials bought from a supplier for a site, so that the
+purchase is approved, paid and costed like any other spend. *(Elias 4.)*
+- A **site purchase** names the supplier (from the register, R15), the site (and so the project),
+  the date, a receipt photo, and lines: item (from the catalogue, or free text for one-off goods),
+  quantity, unit price. The total is the sum of the lines.
+- Each purchase says where the goods go (decided 2026-10-09):
+  - **Used at site:** the total is project cost once approved, like an expense.
+  - **Into the yard:** approval also creates a **draft delivery (gate-in)** for those lines from that
+    supplier, which the storekeeper receives as usual; the stock then costs the project when it is
+    issued, as all yard stock does. The purchase is not costed twice.
+- Approved as R4 (PM, then Finance) and marked paid as R2. Recorded offline as R6.
+- A supplier that is not yet approved (R15) cannot be paid.
 
-**R9.** Every expense, request, purchase and payment is linked to its site, client and PO. A project
-shows budget against spend, and an entry that takes it over budget needs a reason. *(Elias 6.)*
+**R8.** As a PM, I want a contract with each subcontractor on my project, and what we have paid them,
+so that I know what we still owe. *(Elias 5.)*
+- A **subcontract** on a project: subcontractor (O4 register), the sites it covers, the agreed
+  contract value, payment terms (free text), and the signed contract (document).
+- The project's subcontracted jobs (O3) name their subcontract; their agreed prices add up against the
+  contract value, and going over it needs a reason the PM records.
+- **Payments to the subcontractor** (decided 2026-10-09): amount, date, reference (e.g. M-Pesa or
+  bank), and an optional invoice document. Entered by Finance; approved by the PM (one level — the
+  contract is the control).
+- The subcontract shows **contract value, work done** (sum of closed jobs' agreed prices), **paid**
+  and **owed** (work done minus paid). The existing subcontractor spend report gains paid and owed.
 
-**R10.** Site dates: mobilisation, material collection and dispatch (from the yard's own gate-outs),
-the acceptance date and the acceptance certificate. *(Elias 7.)*
+**R9.** As an owner, I want every shilling linked to its site, client and PO, and to see budget
+against spend, so that overspending is seen before it happens. *(Elias 6.)*
+- Expenses, requests, site purchases and subcontract payments already carry the site and project;
+  the client and PO come from the project. Reports and the project screen show all four.
+- The project screen gains **budget against committed and spent**: committed = approved but unpaid
+  requests and purchases, plus subcontract value not yet paid; spent = project cost (O11) plus paid
+  entries. It shows the remaining budget.
+- **Over budget needs a reason:** recording an expense, request or purchase that would take the
+  project's committed plus spent past its budget asks the recorder for a reason. Approvers see the
+  overrun and the reason. It warns; it does not block.
+- A project with no PO yet has no budget (R12); its entries need no reason.
 
-**R11.** PO milestones and payments: payment terms, the PO as a PDF, and milestones M1 deposit, M2
-conditional acceptance and M3 final acceptance, each with its amount, its condition and when it was
-paid. *(Elias 8.)*
+**R10.** As a PM, I want each site's key dates on the project, so that progress and payment
+conditions can be checked. *(Elias 7.)*
+- Per site on a project: **mobilisation date**, **acceptance date**, and the **acceptance
+  certificate** (document). Entered by the PM.
+- **Material collection** and **dispatch dates** are not typed: they come from the yard's own
+  gate-outs to that site (the first and the latest release), and the earmarks report (Q5).
+- A site is **accepted** when its acceptance date and certificate are both present. Milestones that
+  depend on acceptance (R11) read this.
 
-**R12.** Work without a PO: a project can run before its PO arrives, and records the PO number and
-issue date when it does. *(Elias 9.)*
+**R11.** As Finance, I want each PO's payment milestones and what the client has paid, so that we
+invoice on time and chase what is late. *(Elias 8.)*
+- The project carries the **PO document** (PDF), the **PO issue date** and the **payment terms**.
+- **Milestones**, by default M1 deposit, M2 conditional acceptance, M3 final acceptance (editable per
+  project): a name, a share of the PO value (% or amount), and its **condition** (none, all sites
+  accepted, or a date).
+- For each milestone Finance records **invoiced** (date, invoice number, amount, the invoice
+  document) and **received** (date, amount, reference); partial receipts are allowed (decided
+  2026-10-09).
+- A milestone shows **due** when its condition is met and it is not yet invoiced, and **overdue** when
+  invoiced and unpaid past the payment terms' days. Finance is notified of both.
+- The project screen and a new "PO payments" report show, per PO: value, invoiced, received,
+  outstanding.
 
-#### Stage 3 — Clock-in *(detailed before stage 3 is built)*
+**R12.** As a PM, I want to start work before the client's PO arrives, so that we are not idle while
+paperwork catches up. *(Elias 9.)*
+- A project can be opened without a PO (the existing work-order project, O1). It has no budget and no
+  milestones until the PO arrives.
+- When the PO arrives, the PM records the **PO number, issue date, value and budget** on the same
+  project; everything already recorded on it stays, and from then on R9's budget rules apply.
+- A list of **projects working without a PO**, with how long, shows on the owner's dashboard.
 
-**R13.** Each team member clocks in and out on their phone; the location is recorded at both moments,
-and the PM or Director approves the day. *(Elias 2.)*
+#### Stage 3 — Clock-in *(approved 2026-10-09; built before stage 2 at the owner's request)*
 
-#### Stage 4 — Assets and suppliers *(detailed before stage 4 is built)*
+**R13.** As a team member, I want to clock in and out on my phone with my location, so that the
+company knows who worked where and for how long, and pays for days actually worked. *(Elias 2.)*
+- **Clock in:** the person picks where they are working — a **site**, or the yard or office — and
+  taps Clock in. The phone records the time and its location (latitude, longitude, accuracy) at that
+  moment only. **Clock out** records the time and location again. Nothing is tracked in between.
+- A day may have several sessions (site A in the morning, site B after lunch). Only one session is
+  open at a time: clocking in elsewhere first closes the open one.
+- **Inside the area, or no clock-in** (decided 2026-10-09). Every site, and every yard or office
+  location people clock in at, has **coordinates and a radius** (200 m by default, editable per
+  place). Clock-in is accepted only when the phone's position is within the radius, allowing for the
+  phone's reported accuracy up to a cap (so a 2 km "fix" cannot pass). Outside it, the screen says how
+  far away they are and refuses.
+- **No location** (refused, switched off, or no fix): clock-in is refused, and the screen says to turn
+  location on.
+- **Clock-out** records the position and its distance from the place, but is never refused: someone
+  leaving the site must still be able to stop the clock. A clock-out outside the area is flagged for
+  the approver.
+- **Coordinates are required.** A site or location cannot be saved without them, wherever it is
+  created (Settings, the quick "Add new site" on gate-out and expenses). Existing sites without
+  coordinates keep working everywhere else, but nobody can clock in at them until someone edits them
+  and adds coordinates; the site list shows which ones are missing.
+- **Forgot to clock out:** an open session is closed automatically at the company's **auto-close
+  hour** (Settings; 18:00 by default), marked "closed automatically" (decided 2026-10-09). A session
+  opened after that hour closes at midnight. The person may not edit times; the approver sees the
+  flag and can reject the day with a reason.
+- **Offline:** clock-in and clock-out work with no network. The phone keeps the time and location and
+  sends them when the network returns, through the existing offline queue (R6). The phone checks the
+  area itself from the coordinates it already holds, and the server checks again on arrival. The
+  phone's time is the recorded time; the time it reached the server is kept beside it.
+- **Approval of the day:** at the end of a day, each person's sessions form one **day record** for
+  approval. It is approved by the **PM of the project on the site** worked at, or by the
+  **Director** when a session has no project (the yard, the office, or a site with no open
+  project). A day spanning two PMs' sites needs each of them for their own sessions. Uses the existing approval engine and Approvals screen; nobody approves their own day.
+  Rejection needs a reason.
+- **What approvers see:** for each session, the place, times, hours, the distance from the place at
+  clock-in and clock-out, and the flags ("clocked out outside the area", "closed automatically",
+  "sent late" when it reached the server more than an hour after it happened).
+- **My time:** each person sees their own days, hours and status. A PM sees their projects' team; the
+  Director and Finance see everyone.
+- **A rejected day can be corrected** (decided 2026-10-09): the person adds the missing or wrong
+  time with a reason, and the day goes back to the same approver, who sees the original and the
+  correction.
+- **Offline, the phone's check stands** (decided 2026-10-09): if a place's area changes between an
+  offline clock-in and its sync, the clock-in is accepted when it was inside the area the phone
+  knew, and flagged for the approver. No hours are lost to an edit made later.
+- **Edge cases:** clocking in twice without clocking out closes the first session at the second
+  clock-in. A clock-out with no open session is refused. Casuals do not clock in (they are not
+  users; their days are on the casual-labour expense, R3).
 
-**R14.** An investment register: company vehicles and assets, with photos, purchase terms and
-contracts. *(Elias 13.)*
+#### Stage 4 — Assets and suppliers *(approved 2026-10-09)*
 
-**R15.** Supplier onboarding: supplier details, contacts, payment details and documents. It replaces
-the free-text supplier on gate-in (section 7). *(Elias 14.)*
+**R14.** As an owner, I want a register of the company's vehicles and other assets, so that we know
+what we own, what it cost, and who has it. *(Elias 13.)*
+- An **asset**: type (vehicle, generator, tool, equipment, other), name, tag or registration number,
+  purchase date, supplier (R15), cost, purchase terms (free text), photos, and documents (contract,
+  logbook, insurance, warranty). Vehicles also carry make, model, and insurance and inspection expiry
+  dates.
+- **Who has it** (decided 2026-10-09): each asset is assigned to a person, or held in the yard, and
+  each handover is recorded with the date and who handed it over, so its history shows every holder.
+  Tools already tracked as stock with custody (Epic I) stay there; this register is for
+  company-owned assets, not stock.
+- **Fuel by vehicle** (decided 2026-10-09): a fuel expense (R1) picks the vehicle from the register
+  instead of typing its registration, and each vehicle shows its fuel spend and litres.
+- Expiry dates (insurance, inspection) notify the owner 30 days ahead.
+- An asset sold or written off is closed with the date and reason, never deleted.
+
+**R15.** As anyone buying for the company, I want suppliers on a register, approved by Finance, so
+that we pay real, checked businesses. *(Elias 14.)*
+- A **supplier**: name, KRA PIN, contact person, phone, email, physical address, payment details
+  (bank and account, or M-Pesa paybill or till), and documents (KRA certificate, certificate of
+  incorporation, others).
+- Anyone may add one; **Finance approves** it before it can be paid or used on a purchase (decided
+  2026-10-09). An unapproved supplier can still be named on a gate-in.
+- A supplier can be deactivated, never deleted once used.
+- **Gate-in suppliers** (free text today, section 7): a delivery picks the supplier from the
+  register, with "Add new supplier" for one not yet listed. Existing free-text names are matched to
+  register entries where they are the same; the rest stay as text on old deliveries.
+- A duplicate KRA PIN is refused, naming the existing supplier.
 
 ---
 
