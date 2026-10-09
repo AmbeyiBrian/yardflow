@@ -10,7 +10,8 @@
  * above it would put two boxes on the phone's first screen that both say
  * "type here". The scanner reports each keystroke through `onDraft` (which
  * drives the list) and an Enter or a camera read through `onScan`; a read that
- * arrives while text is typed is an Enter.
+ * arrives while text is typed is an Enter. `keepTyped` leaves the text in place
+ * after Enter, so the list beneath still says what it is the answer to.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -41,7 +42,6 @@ export function FindStock() {
   const [message, setMessage] = useState<string | null>(null);
   const draftRef = useRef('');
   const countRef = useRef(0);
-  const enteredRef = useRef(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(draft.trim()), DEBOUNCE_MS);
@@ -63,7 +63,6 @@ export function FindStock() {
   async function onScan(value: string) {
     // Typed text still present means this was Enter and not the camera.
     const via: FindVia = draftRef.current.trim() ? 'enter' : 'scan';
-    enteredRef.current = via === 'enter';
     if (!navigator.onLine) {
       setMessage('Searching needs a connection.');
       return;
@@ -92,15 +91,11 @@ export function FindStock() {
     <Card className="flex flex-col gap-2">
       <BarcodeScanner
         label="Find stock"
+        placeholder="Item name, code or serial"
+        submitLabel="Find"
+        keepTyped
         onScan={(value) => void onScan(value)}
         onDraft={(value) => {
-          // The scanner empties its field right after an Enter. The list stays,
-          // so an Enter that found no unit still shows the items.
-          if (value === '' && enteredRef.current) {
-            enteredRef.current = false;
-            draftRef.current = '';
-            return;
-          }
           draftRef.current = value;
           setDraft(value);
           setMessage(null);

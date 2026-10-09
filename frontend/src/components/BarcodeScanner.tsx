@@ -59,6 +59,9 @@ export function BarcodeScanner({
   autoStart = false,
   continuous = false,
   scannedCount,
+  placeholder = 'Serial, asset tag or drum number',
+  submitLabel = 'Add',
+  keepTyped = false,
 }: {
   /**
    * One string, as ever: the single serial a label holds, else the trimmed raw
@@ -97,6 +100,14 @@ export function BarcodeScanner({
   continuous?: boolean;
   /** How many have been accepted so far, shown on the viewfinder. */
   scannedCount?: number;
+  placeholder?: string;
+  submitLabel?: string;
+  /**
+   * Leave the typed text in the field after Enter. For a search (E8), where a
+   * name that is not a serial still answers from the list beneath it, and an
+   * emptied field would hide what that list is the answer to.
+   */
+  keepTyped?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -393,6 +404,7 @@ export function BarcodeScanner({
           // A scanner gun types into this form and presses Enter, so it is
           // read like a camera result (P3); only the repeat check is skipped.
           deliver(typed, false);
+          if (keepTyped) return;
           setManual('');
           onDraft?.('');
         }}
@@ -406,7 +418,7 @@ export function BarcodeScanner({
               // Not `type="number"`: serials contain letters, and a numeric
               // keypad on an alphanumeric code is a trap.
               inputMode="text"
-              placeholder="Serial, asset tag or drum number"
+              placeholder={placeholder}
               onChange={(event) => {
                 setManual(event.target.value);
                 onDraft?.(event.target.value);
@@ -415,7 +427,7 @@ export function BarcodeScanner({
           </Field>
         </div>
         <Button type="submit" disabled={!manual.trim()}>
-          Add
+          {submitLabel}
         </Button>
       </form>
     </div>
