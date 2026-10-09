@@ -30,6 +30,8 @@ const PANES: { to: string; label: string; anyOf: Permission[] }[] = [
   { to: 'rules', label: 'Rules', anyOf: [PERM.SETTINGS_MANAGE] },
   // M6: what each document type is called and what the next one will be.
   { to: 'numbering', label: 'Numbering', anyOf: [PERM.SETTINGS_MANAGE] },
+  // Epic R: allowance limits, the Director role, expense categories.
+  { to: 'finance', label: 'Finance', anyOf: [PERM.FINANCE_APPROVE, PERM.SETTINGS_MANAGE] },
   // Readable by any member — a notification nobody expected reads as spam, so
   // seeing what you will be told is open. Editing is gated in the pane itself.
   { to: 'notifications', label: 'Notifications', anyOf: [] },

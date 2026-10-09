@@ -39,6 +39,9 @@ const SettingsPage = lazyRoute(() => import('../features/settings/SettingsPage')
 const OrganizationPage = lazyRoute(() => import('../features/settings/OrganizationPage'));
 const ApprovalRulesPage = lazyRoute(() => import('../features/settings/ApprovalRulesPage'));
 const NumberSeriesPage = lazyRoute(() => import('../features/settings/NumberSeriesPage'));
+// Epic R (T15.9): Settings → Finance and the To pay queue.
+const FinancePage = lazyRoute(() => import('../features/settings/FinancePage'));
+const ToPayPage = lazyRoute(() => import('../features/money/ToPayPage'));
 // T8.10: everyone's own pane — enrolling the phone in their hand (B5).
 const SecurityPage = lazyRoute(() => import('../features/settings/SecurityPage'));
 // L2: who hears what. Readable by everyone, editable behind `settings.manage`.
@@ -522,6 +525,15 @@ export function AppRoutes() {
                 </RequirePermission>
               }
             />
+            {/* T15.9: Finance only; registered with the Money routes (T15.8). */}
+            <Route
+              path="money/to-pay"
+              element={
+                <RequirePermission anyOf={[PERM.FINANCE_APPROVE]}>
+                  <ToPayPage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="settings"
               // No permission gate on the section itself: the security pane is
@@ -571,6 +583,14 @@ export function AppRoutes() {
                 element={
                   <RequirePermission anyOf={[PERM.SETTINGS_MANAGE]}>
                     <NumberSeriesPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="finance"
+                element={
+                  <RequirePermission anyOf={[PERM.FINANCE_APPROVE, PERM.SETTINGS_MANAGE]}>
+                    <FinancePage />
                   </RequirePermission>
                 }
               />

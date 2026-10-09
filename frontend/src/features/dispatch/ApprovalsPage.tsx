@@ -25,7 +25,8 @@ import { useCrumb } from '../../components/ui/breadcrumbs';
 import { TabStrip } from '../../components/ui/TabStrip';
 import { SwipePane } from '../../components/ui/SwipePane';
 import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
-import { CloseoutQueue, ExpenseQueue } from '../projects/ProjectQueuesPage';
+import { CloseoutQueue } from '../projects/ProjectQueuesPage';
+import { FinanceExpenseQueue, FinanceRequestQueue } from './FinanceApprovals';
 import { biometricsAvailable, signApproval } from '../../auth/webauthn';
 import { useSession } from '../../auth/session';
 import {
@@ -68,7 +69,7 @@ function decisionLine(action: {
   return `${verb} by ${who}${action.reason ? ` — ${action.reason}` : ''}`;
 }
 
-type Tab = 'material' | 'expenses' | 'closeouts';
+type Tab = 'material' | 'expenses' | 'requests' | 'closeouts';
 
 /**
  * Every decision waiting on one person, in one place.
@@ -88,11 +89,15 @@ export default function ApprovalsPage() {
     ...(has(PERM.GATE_OUT_APPROVE) || has(PERM.DISPOSAL_APPROVE)
       ? [{ key: 'material' as Tab, label: 'Material' }]
       : []),
-    ...(has(PERM.PROJECT_VIEW_COST)
+    // Epic R: PMs and Finance decide expenses and requests at their own level.
+    ...(has(PERM.PROJECT_VIEW_COST) || has(PERM.FINANCE_APPROVE)
       ? [
           { key: 'expenses' as Tab, label: 'Expenses' },
-          { key: 'closeouts' as Tab, label: 'Closeout costs' },
+          { key: 'requests' as Tab, label: 'Requests' },
         ]
+      : []),
+    ...(has(PERM.PROJECT_VIEW_COST)
+      ? [{ key: 'closeouts' as Tab, label: 'Closeout costs' }]
       : []),
   ];
 
@@ -118,7 +123,8 @@ export default function ApprovalsPage() {
       ) : null}
 
       <SwipePane {...swipe.pane} className="flex-1">
-        {tab === 'expenses' ? <ExpenseQueue /> : null}
+        {tab === 'expenses' ? <FinanceExpenseQueue /> : null}
+        {tab === 'requests' ? <FinanceRequestQueue /> : null}
         {tab === 'closeouts' ? <CloseoutQueue /> : null}
         {tab === 'material' ? <MaterialQueue /> : null}
       </SwipePane>

@@ -10,7 +10,9 @@ import { useAction, useDetail, useList, useResource, type QueryParams } from '..
 import type {
   AllowanceRequest,
   Casual,
+  CategoryKind,
   ExpenseCasualLine,
+  ExpenseCategory,
   FinanceSettings,
   ProjectExpense,
 } from './types';
@@ -19,7 +21,9 @@ const EXPENSES = 'project-expenses';
 const REQUESTS = 'allowance-requests';
 const CASUALS = 'casuals';
 const SETTINGS = 'finance/settings';
-const BOTH = [EXPENSES, REQUESTS];
+const CATEGORIES = 'expense-categories';
+const PENDING = [`${EXPENSES}/pending`, `${REQUESTS}/pending`];
+const BOTH = [EXPENSES, REQUESTS, ...PENDING];
 
 export interface ExpenseParams extends QueryParams {
   /** My own entries. */
@@ -27,6 +31,14 @@ export interface ExpenseParams extends QueryParams {
   /** To-pay queue: APPROVED, no float, unpaid (`finance.approve`). */
   payable?: boolean;
   project?: number;
+  status?: string;
+}
+
+export interface AllowanceParams extends QueryParams {
+  mine?: boolean;
+  /** To-pay queue: APPROVED and unpaid (`finance.approve`). */
+  payable?: boolean;
+  type?: string;
   status?: string;
 }
 
@@ -110,9 +122,17 @@ export const useMarkExpensePaid = () =>
   useAction<MarkPaidBody, ProjectExpense>({
     resource: EXPENSES,
     path: (b) => `${b.id}/mark-paid`,
+    invalidates: BOTH,
   });
 
-export const useAllowanceRequests = (params?: QueryParams) =>
+/** Waiting on the caller at their level (PM or Finance), decided server-side (§4.17.6). */
+export const usePendingExpenses = (params?: QueryParams) =>
+  useList<ProjectExpense>(`${EXPENSES}/pending`, params);
+
+export const usePendingAllowances = (params?: QueryParams) =>
+  useList<AllowanceRequest>(`${REQUESTS}/pending`, params);
+
+export const useAllowanceRequests = (params?: AllowanceParams) =>
   useList<AllowanceRequest>(REQUESTS, params);
 
 export const useAllowanceRequest = (id: string | number | undefined) =>
@@ -139,6 +159,7 @@ export const useMarkAllowancePaid = () =>
   useAction<MarkPaidBody, AllowanceRequest>({
     resource: REQUESTS,
     path: (b) => `${b.id}/mark-paid`,
+    invalidates: BOTH,
   });
 
 export const useCloseFloat = () =>
@@ -158,4 +179,25 @@ export const useUpdateFinanceSettings = () =>
   useAction<Partial<FinanceSettings>, FinanceSettings>({
     resource: SETTINGS,
     method: 'patch',
+  });
+
+export const useExpenseCategories = (params?: QueryParams) =>
+  useList<ExpenseCategory>(CATEGORIES, { page_size: 100, ...params });
+
+export interface CategoryInput {
+  id?: number;
+  name: string;
+  code: string;
+  kind: CategoryKind;
+  is_active?: boolean;
+}
+
+export const useCreateExpenseCategory = () =>
+  useAction<CategoryInput, ExpenseCategory>({ resource: CATEGORIES });
+
+export const useUpdateExpenseCategory = () =>
+  useAction<CategoryInput, ExpenseCategory>({
+    resource: CATEGORIES,
+    method: 'patch',
+    path: (b) => String(b.id),
   });
