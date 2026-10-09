@@ -5,14 +5,14 @@ replayed from a phone (R6) are judged by the same code. This module translates:
 HTTP in, a service call, a read payload out. The flags on a session are derived
 here, on read, from what was recorded; none is stored.
 
-Decide, correct and the Director's add are later tasks; ``WorkDayViewSet`` keeps
-the slice and visibility helpers they will use.
+Deciding a day, correcting a session and the Director's add are actions on the
+viewsets below; each is one call into ``attendance.routing`` or
+``attendance.corrections``, so the rules live in one place.
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -34,14 +34,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.api_permissions import HasPermission
+from accounts.models import User
 from accounts.permissions_registry import PERM
 from accounts.services import resolve_permissions
 from approvals.addressing import open_requests_addressed_to
 from approvals.models import ApprovalRequest, ApprovalRequestStatus
-from attendance import services
+from attendance import corrections, routing, services
 from attendance.models import (
     ClosedBy,
-    CorrectionKind,
     WorkDay,
     WorkDayStatus,
     WorkSession,
@@ -57,8 +57,6 @@ from network.models import Project, Site
 #: A clock-in or clock-out that reached the server this long after it happened
 #: is flagged ``SENT_LATE`` (the frontend's wording says "more than an hour").
 LATE_AFTER = timedelta(hours=1)
-#: A rejected slice may be corrected for this long (§4.18.6).
-CORRECTION_WINDOW = timedelta(days=30)
 
 DAY_DOCUMENT_TYPE = WorkDay._meta.label
 
@@ -112,29 +110,6 @@ def _visible_days(queryset: QuerySet, user) -> QuerySet:  # type: ignore[no-unty
 # --------------------------------------------------------------------------
 
 
-def _hours(start: datetime, end: datetime | None) -> Decimal | None:
-    if end is None:
-        return None
-    seconds = Decimal(str((end - start).total_seconds()))
-    return (seconds / Decimal(3600)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-
-def _latest_edit(session: WorkSession) -> WorkSessionCorrection | None:
-    edits = [c for c in session.corrections.all() if c.kind == CorrectionKind.EDIT]
-    return edits[-1] if edits else None
-
-
-def _counted_times(session: WorkSession) -> tuple[datetime, datetime | None]:
-    """The times that count: a correction's where there is one (§4.18.6)."""
-    edit = _latest_edit(session)
-    if edit is None:
-        return session.clock_in_at, session.clock_out_at
-    return (
-        edit.corrected_in_at or session.clock_in_at,
-        edit.corrected_out_at or session.clock_out_at,
-    )
-
-
 def _place_of(session: WorkSession):  # type: ignore[no-untyped-def]
     return session.site if session.site_id is not None else session.location
 
@@ -171,7 +146,7 @@ def _flags(session: WorkSession) -> list[str]:
         flags.append("SENT_LATE")
     if session.area_changed:
         flags.append("AREA_CHANGED")
-    if session.corrections.all():
+    if corrections.is_corrected(session):
         flags.append("CORRECTED")
     if session.added_by_id is not None:
         flags.append("ADDED_BY_DIRECTOR")
@@ -257,8 +232,9 @@ class WorkSessionSerializer(serializers.ModelSerializer):
         return _flags(session)
 
     def get_hours(self, session: WorkSession) -> str | None:
-        hours = _hours(*_counted_times(session))
-        return None if hours is None else str(hours)
+        if corrections.effective_times(session)[1] is None:
+            return None
+        return str(corrections.hours_of([session]))
 
     def get_slice_status(self, session: WorkSession) -> str | None:
         request = session.approval_request
@@ -272,12 +248,12 @@ class WorkSessionSerializer(serializers.ModelSerializer):
             return False
         if session.person_id != user.pk:
             return False
-        decided = request.resolved_at or request.updated_at
-        return timezone.now() - decided <= CORRECTION_WINDOW
+        decided = corrections.rejected_at(request)
+        return decided is not None and timezone.now() - decided <= corrections.CORRECTION_WINDOW
 
 
 class SliceSerializer(serializers.Serializer):
-    """One approver's part of a day (§4.18.5). Empty until routing lands (T16.6)."""
+    """One approver's part of a day (§4.18.5)."""
 
     id = serializers.IntegerField()
     approver = serializers.IntegerField(allow_null=True)
@@ -371,12 +347,7 @@ class WorkDaySerializer(serializers.ModelSerializer):
         return str(day.person)
 
     def get_hours(self, day: WorkDay) -> str:
-        total = Decimal("0.00")
-        for session in day.sessions.all():
-            hours = _hours(*_counted_times(session))
-            if hours is not None:
-                total += hours
-        return str(total)
+        return str(corrections.hours_of(day.sessions.all()))
 
     def get_rejection_reason(self, day: WorkDay) -> str:
         rejected = [s["reason"] for s in self._slices_of(day) if s["status"] == "REJECTED"]
@@ -388,6 +359,54 @@ class WorkDaySerializer(serializers.ModelSerializer):
     @extend_schema_field(SliceSerializer(many=True))
     def get_slices(self, day: WorkDay) -> list[dict[str, Any]]:
         return self._slices_of(day)
+
+
+class WorkDayDecideSerializer(serializers.Serializer):
+    approved = serializers.BooleanField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class _PlaceSerializer(serializers.Serializer):
+    site = serializers.PrimaryKeyRelatedField(
+        queryset=Site.objects, required=False, allow_null=True
+    )
+    location = serializers.PrimaryKeyRelatedField(
+        queryset=Location.objects, required=False, allow_null=True
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if (attrs.get("site") is None) == (attrs.get("location") is None):
+            raise serializers.ValidationError("Give either a site or a location.")
+        return attrs
+
+
+class CorrectionSessionSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=["EDIT", "ADD"])
+    corrected_in_at = serializers.DateTimeField(required=False, allow_null=True)
+    corrected_out_at = serializers.DateTimeField(required=False, allow_null=True)
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+    place = _PlaceSerializer(required=False, allow_null=True)
+    project = serializers.PrimaryKeyRelatedField(
+        queryset=Project.objects, required=False, allow_null=True
+    )
+
+
+class AddDaySerializer(serializers.Serializer):
+    person = serializers.PrimaryKeyRelatedField(queryset=User.objects)
+    date = serializers.DateField()
+    place = _PlaceSerializer()
+    project = serializers.PrimaryKeyRelatedField(
+        queryset=Project.objects, required=False, allow_null=True
+    )
+    start = serializers.DateTimeField()
+    end = serializers.DateTimeField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+def _place_from(data: dict[str, Any] | None):  # type: ignore[no-untyped-def]
+    if not data:
+        return None
+    return data.get("site") or data.get("location")
 
 
 class WorkDayCursorPagination(CursorPagination):
@@ -448,17 +467,29 @@ def _session_queryset() -> QuerySet:
     )
 
 
-class WorkDayViewSet(TenantScopedViewSet):
-    """``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+def _day_payload(day: WorkDay, request) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+    """``day`` as ``GET /work-days/{id}`` reads it, after a write."""
+    fresh = (
+        WorkDay.objects.select_related("person")
+        .prefetch_related(Prefetch("sessions", queryset=_session_queryset()))
+        .get(pk=day.pk)
+    )
+    context = {"request": request, "slice_index": _slice_rows([fresh], request.user)}
+    return WorkDaySerializer(fresh, context=context).data
 
-    Decide, add and the correction flow arrive with the approval task; they
-    will be ``@action`` routes here, on the same visibility.
+
+class WorkDayViewSet(TenantScopedViewSet):
+    """``/api/v1/work-days`` (R13, §4.18.7).
+
+    Read, plus ``decide`` (a manager or the Director answers the slices
+    addressed to them) and ``add`` (the Director adds a day for someone),
+    on the same visibility as the reads.
     """
 
     serializer_class = WorkDaySerializer
     model = WorkDay
     pagination_class = WorkDayCursorPagination
-    http_method_names = ["get", "head", "options"]
+    http_method_names = ["get", "post", "head", "options"]
     _slice_index: dict[int, list[dict[str, Any]]] | None = None
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
@@ -534,6 +565,44 @@ class WorkDayViewSet(TenantScopedViewSet):
         day = self.get_object()
         self._slice_index = _slice_rows([day], request.user)
         return Response(self.get_serializer(day).data)
+
+    def create(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise PermissionDenied("Add a day with POST /work-days/add.")
+
+    def _read_day(self, day: WorkDay) -> dict[str, Any]:
+        return _day_payload(day, self.request)
+
+    @extend_schema(request=WorkDayDecideSerializer, responses={200: WorkDaySerializer})
+    @action(detail=True, methods=["post"], url_path="decide")
+    def decide(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """Approve or reject the open slices addressed to me (§4.18.5)."""
+        day = self.get_object()
+        serializer = WorkDayDecideSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        routing.decide(day, request.user, data["approved"], data["reason"], request=request)
+        return Response(self._read_day(day))
+
+    @extend_schema(request=AddDaySerializer, responses={201: WorkDaySerializer})
+    @action(detail=False, methods=["post"], url_path="add")
+    def add(self, request):  # type: ignore[no-untyped-def]
+        """The Director adds a session for someone who could not clock in (§4.18.6a)."""
+        serializer = AddDaySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        session = corrections.add_day(
+            actor=request.user,
+            person=data["person"],
+            date=data["date"],
+            place=_place_from(data["place"]),
+            start=data["start"],
+            end=data["end"],
+            reason=data["reason"],
+            project=data.get("project"),
+            request=request,
+        )
+        day = WorkDay.objects.get(pk=session.work_day_id)
+        return Response(self._read_day(day), status=201)
 
     @extend_schema(
         parameters=[SCOPE, AWAITING_ME, DATE_FROM, DATE_TO, STATUS, PERSON, PROJECT, SITE],
@@ -638,6 +707,34 @@ class WorkSessionViewSet(TenantScopedViewSet):
         payload["accuracy_cap_m"] = settings_object.clock_accuracy_cap_m
         payload["auto_close_hour"] = settings_object.clock_auto_close_hour
         return Response(payload)
+
+    @extend_schema(request=CorrectionSessionSerializer, responses={200: WorkDaySerializer})
+    @action(detail=True, methods=["post"], url_path="correct")
+    def correct(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """Correct a session of my rejected slice and send it back (§4.18.6).
+
+        Returns the day, whose slice is open again. An ``ADD`` with no ``place``
+        is at this session's place.
+        """
+        session = self.get_object()
+        serializer = CorrectionSessionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        place = _place_from(data.get("place"))
+        if place is None and data["kind"] == "ADD":
+            place = _place_of(session)
+        corrections.correct_session(
+            actor=request.user,
+            session=session,
+            kind=data["kind"],
+            reason=data["reason"],
+            corrected_in_at=data.get("corrected_in_at"),
+            corrected_out_at=data.get("corrected_out_at"),
+            place=place,
+            project=data.get("project"),
+            request=request,
+        )
+        return Response(_day_payload(session.work_day, request))
 
     @extend_schema(request=ClockInSerializer, responses={201: WorkSessionSerializer})
     @action(detail=False, methods=["post"], url_path="clock-in")

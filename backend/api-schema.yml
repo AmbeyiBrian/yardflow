@@ -12312,10 +12312,11 @@ paths:
     get:
       operationId: work_days_list
       description: |-
-        ``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+        ``/api/v1/work-days`` (R13, §4.18.7).
 
-        Decide, add and the correction flow arrive with the approval task; they
-        will be ``@action`` routes here, on the same visibility.
+        Read, plus ``decide`` (a manager or the Director answers the slices
+        addressed to them) and ``add`` (the Director adds a day for someone),
+        on the same visibility as the reads.
       parameters:
       - in: query
         name: awaiting_me
@@ -12399,14 +12400,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedWorkDayList'
           description: ''
+    post:
+      operationId: work_days_create
+      description: |-
+        ``/api/v1/work-days`` (R13, §4.18.7).
+
+        Read, plus ``decide`` (a manager or the Director answers the slices
+        addressed to them) and ``add`` (the Director adds a day for someone),
+        on the same visibility as the reads.
+      tags:
+      - work-days
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkDay'
+          description: ''
   /api/v1/work-days/{id}:
     get:
       operationId: work_days_retrieve
       description: |-
-        ``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+        ``/api/v1/work-days`` (R13, §4.18.7).
 
-        Decide, add and the correction flow arrive with the approval task; they
-        will be ``@action`` routes here, on the same visibility.
+        Read, plus ``decide`` (a manager or the Director answers the slices
+        addressed to them) and ``add`` (the Director adds a day for someone),
+        on the same visibility as the reads.
       parameters:
       - in: path
         name: id
@@ -12420,6 +12441,68 @@ paths:
       - jwtAuth: []
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkDay'
+          description: ''
+  /api/v1/work-days/{id}/decide:
+    post:
+      operationId: work_days_decide_create
+      description: Approve or reject the open slices addressed to me (§4.18.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this work day.
+        required: true
+      tags:
+      - work-days
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkDayDecideRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WorkDayDecideRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WorkDayDecideRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkDay'
+          description: ''
+  /api/v1/work-days/add:
+    post:
+      operationId: work_days_add_create
+      description: The Director adds a session for someone who could not clock in
+        (§4.18.6a).
+      tags:
+      - work-days
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddDayRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddDayRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddDayRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
           content:
             application/json:
               schema:
@@ -12513,6 +12596,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkSession'
           description: ''
+  /api/v1/work-sessions/{id}/correct:
+    post:
+      operationId: work_sessions_correct_create
+      description: |-
+        Correct a session of my rejected slice and send it back (§4.18.6).
+
+        Returns the day, whose slice is open again. An ``ADD`` with no ``place``
+        is at this session's place.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this work session.
+        required: true
+      tags:
+      - work-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectionSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CorrectionSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CorrectionSessionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkDay'
+          description: ''
   /api/v1/work-sessions/clock-in:
     post:
       operationId: work_sessions_clock_in_create
@@ -12603,6 +12724,34 @@ components:
           maxLength: 500
       required:
       - accepted
+    AddDayRequest:
+      type: object
+      properties:
+        person:
+          type: integer
+        date:
+          type: string
+          format: date
+        place:
+          $ref: '#/components/schemas/_PlaceRequest'
+        project:
+          type: integer
+          nullable: true
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          default: ''
+      required:
+      - date
+      - end
+      - person
+      - place
+      - start
     AllowanceRequest:
       type: object
       properties:
@@ -14213,6 +14362,39 @@ components:
       description: |-
         * `EDIT` - Edit an existing session
         * `ADD` - Add a missing session
+    CorrectionSessionKindEnum:
+      enum:
+      - EDIT
+      - ADD
+      type: string
+      description: |-
+        * `EDIT` - EDIT
+        * `ADD` - ADD
+    CorrectionSessionRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/CorrectionSessionKindEnum'
+        corrected_in_at:
+          type: string
+          format: date-time
+          nullable: true
+        corrected_out_at:
+          type: string
+          format: date-time
+          nullable: true
+        reason:
+          type: string
+          default: ''
+        place:
+          allOf:
+          - $ref: '#/components/schemas/_PlaceRequest'
+          nullable: true
+        project:
+          type: integer
+          nullable: true
+      required:
+      - kind
     CostAcceptanceEnum:
       enum:
       - NOT_REQUIRED
@@ -21933,8 +22115,7 @@ components:
         * `OTHER` - Other
     Slice:
       type: object
-      description: One approver's part of a day (§4.18.5). Empty until routing lands
-        (T16.6).
+      description: One approver's part of a day (§4.18.5).
       properties:
         id:
           type: integer
@@ -23510,6 +23691,16 @@ components:
       - sessions
       - slices
       - status
+    WorkDayDecideRequest:
+      type: object
+      properties:
+        approved:
+          type: boolean
+        reason:
+          type: string
+          default: ''
+      required:
+      - approved
     WorkDayStatusEnum:
       enum:
       - OPEN
@@ -23649,6 +23840,15 @@ components:
       - lat
       - lng
       - radius_m
+    _PlaceRequest:
+      type: object
+      properties:
+        site:
+          type: integer
+          nullable: true
+        location:
+          type: integer
+          nullable: true
   securitySchemes:
     jwtAuth:
       type: http
