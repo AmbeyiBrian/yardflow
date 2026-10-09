@@ -38,6 +38,9 @@ RESOURCE_ROUTES = {
     # R4, §4.17.9: money out.
     "commercials.ProjectExpense": "/money/expenses/{id}",
     "commercials.AllowanceRequest": "/money/requests/{id}",
+    # R14, R15 (§4.20.9): the register screens.
+    "network.Supplier": "/settings/network?tab=suppliers",
+    "assets.Asset": "/assets/{id}",
 }
 
 #: Events whose link is not the document's own page. An approver goes to the

@@ -537,6 +537,8 @@ def render_body(event: NotificationEvent) -> str:
     if event.event_key == Event.REPORT_EXPORT_READY:
         report = payload.get("report") or "Your report"
         return f"{report} is ready to download."
+    if event.event_key == Event.ASSET_EXPIRY_DUE:
+        return _asset_expiry_body(payload)
     if event.event_key == Event.CLIENT_RETURN_UNACKNOWLEDGED:
         days = payload.get("days_outstanding")
         outstanding = f" {days} days ago" if days else ""
@@ -549,6 +551,20 @@ def render_body(event: NotificationEvent) -> str:
     return f"{spec.label if spec else event.event_key}: {number}".strip(": ")
 
 
+def _asset_expiry_body(payload: dict) -> str:
+    """R14, §4.20.9: "Insurance for Hilux (KDA 123A) expires on 2026-11-01 (in 12 days)."."""
+    asset = payload.get("asset", "A vehicle")
+    if payload.get("tag"):
+        asset = f"{asset} ({payload['tag']})"
+    document = payload.get("document", "Document")
+    on = payload.get("expires_on", "")
+    days = payload.get("days_left")
+    if payload.get("expired"):
+        return f"{document} for {asset} expired on {on}. Renew it and update the register."
+    when = "today" if days == 0 else f"in {days} day{'' if days == 1 else 's'}"
+    return f"{document} for {asset} expires on {on} ({when}). Renew it and update the register."
+
+
 # --------------------------------------------------------------------------
 # money out wording (R4, §4.17.9)
 # --------------------------------------------------------------------------
@@ -558,6 +574,18 @@ _FINANCE_VERBS = {
     Event.FINANCE_APPROVED: "approved",
     Event.FINANCE_REJECTED: "rejected",
     Event.FINANCE_PAID: "paid",
+    # R15, §4.20.2: only ever a supplier.
+    Event.SUPPLIER_DETAILS_CHANGED: "payment details changed",
+}
+
+#: How the sensitive supplier fields read to a person (§4.20.2).
+_SUPPLIER_FIELD_LABELS = {
+    "kra_pin": "KRA PIN",
+    "bank_name": "bank name",
+    "account_number": "account number",
+    "mpesa_type": "M-Pesa type",
+    "mpesa_number": "M-Pesa number",
+    "mpesa_account": "M-Pesa account",
 }
 
 
@@ -572,7 +600,12 @@ def _finance_headline(event: NotificationEvent) -> str:
         return ""
     payload = event.payload or {}
     if payload.get("kind") == "supplier":
-        return f"Supplier {verb}: {payload.get('label', '')}".strip()
+        headline = f"Supplier {verb}: {payload.get('label', '')}".strip()
+        if event.event_key == Event.FINANCE_AWAITING_APPROVAL and payload.get("recorded_by"):
+            headline += f" added by {payload['recorded_by']}"
+        elif event.event_key == Event.SUPPLIER_DETAILS_CHANGED and payload.get("changed_by"):
+            headline += f" by {payload['changed_by']}"
+        return headline
     if payload.get("kind") == "request":
         noun = f"Allowance request {payload['number']}" if payload.get("number") else "Request"
     else:
@@ -585,9 +618,29 @@ def _finance_headline(event: NotificationEvent) -> str:
     return headline
 
 
+def _supplier_body(event: NotificationEvent, parts: list[str]) -> str:
+    payload = event.payload or {}
+    if event.event_key == Event.FINANCE_AWAITING_APPROVAL:
+        parts.append("Open Approvals to check the KRA PIN and payment details, then decide.")
+    elif event.event_key == Event.FINANCE_APPROVED:
+        parts.append("They can now be paid.")
+    elif event.event_key == Event.FINANCE_REJECTED:
+        if payload.get("reason"):
+            parts.append(f"Reason: {payload['reason']}")
+        parts.append("You can correct it and send it again.")
+    elif event.event_key == Event.SUPPLIER_DETAILS_CHANGED:
+        changed = [_SUPPLIER_FIELD_LABELS.get(f, f) for f in payload.get("changed") or []]
+        if changed:
+            parts.append(f"Changed: {', '.join(changed)}.")
+        parts.append("They stay approved, so check the change was meant before paying them.")
+    return " ".join(parts)
+
+
 def _finance_body(event: NotificationEvent, headline: str) -> str:
     payload = event.payload or {}
     parts = [f"{headline}."]
+    if payload.get("kind") == "supplier":
+        return _supplier_body(event, parts)
     if event.event_key == Event.FINANCE_AWAITING_APPROVAL:
         evidence = payload.get("evidence_state")
         if evidence == "NONE":

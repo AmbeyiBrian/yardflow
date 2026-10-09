@@ -75,6 +75,9 @@ class Event:
     FINANCE_PAID = "finance.paid"
     # R15, §4.20.2: a PIN or payment detail of an approved supplier changed.
     SUPPLIER_DETAILS_CHANGED = "supplier.details_changed"
+    # R14, §4.20.9: a vehicle's insurance or inspection is within 30 days of
+    # expiring, or already has. In-app and email; SMS off (D30).
+    ASSET_EXPIRY_DUE = "asset.expiry_due"
 
 
 @dataclass(frozen=True)
@@ -256,6 +259,12 @@ DEFAULT_MATRIX: tuple[EventSpec, ...] = (
         (Recipient.FINANCE_APPROVERS,),
         (Channel.IN_APP, Channel.EMAIL),
         carries_a_control=True,
+    ),
+    EventSpec(
+        Event.ASSET_EXPIRY_DUE,
+        "Vehicle insurance or inspection expiring",
+        (Recipient.OWNER,),
+        (Channel.IN_APP, Channel.EMAIL),
     ),
     EventSpec(
         Event.GATE_OUT_EXPIRED,

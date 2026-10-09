@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 #: short enough that the material is still findable if it went astray.
 RETURN_ACKNOWLEDGEMENT_GRACE_DAYS = 7
 
+#: How far ahead a vehicle's insurance or inspection expiry is flagged (R14).
+ASSET_EXPIRY_LEAD_DAYS = 30
+
 
 @shared_task(base=TenantTask, requires_organization=False)
 def dispatch_sweeps() -> dict:
@@ -148,6 +151,7 @@ def sweep_tenant(self, organization_id) -> dict:  # type: ignore[no-untyped-def]
         ("approval_escalations", _sweep_approval_escalations),
         ("expired_gate_passes", _sweep_expired_gate_passes),
         ("unacknowledged_returns", _sweep_unacknowledged_returns),
+        ("asset_expiries", _sweep_asset_expiries),
     ):
         try:
             results[name] = run(organization_id)
@@ -219,4 +223,56 @@ def _sweep_unacknowledged_returns(organization_id) -> int:
             },
         )
         count += 1
+    return count
+
+
+def _sweep_asset_expiries(organization_id) -> int:
+    """R14, §4.20.4: tell the owner a vehicle's insurance or inspection is due.
+
+    Compares with the stored ``*_alerted_for`` date rather than "exactly 30 days
+    out": a missed run catches up, a renewal (a new date) re-arms by itself, and
+    a daily run cannot nag. An already-lapsed date alerts once, worded "expired".
+    """
+    from datetime import timedelta
+
+    from django.db import transaction
+    from django.utils import timezone
+
+    from assets.models import Asset, AssetStatus, AssetType
+    from notifications.events import emit
+    from notifications.matrix import Event
+
+    today = timezone.localdate()
+    horizon = today + timedelta(days=ASSET_EXPIRY_LEAD_DAYS)
+    count = 0
+    for asset in Asset.objects.filter(status=AssetStatus.ACTIVE, type=AssetType.VEHICLE):
+        for document, field in (("Insurance", "insurance"), ("Inspection", "inspection")):
+            expires_on = getattr(asset, f"{field}_expires_on")
+            if expires_on is None or expires_on > horizon:
+                continue
+            with transaction.atomic():
+                # Only the run that flips the marker emits, so two overlapping
+                # runs cannot both alert.
+                claimed = (
+                    Asset.objects.filter(pk=asset.pk)
+                    .exclude(**{f"{field}_alerted_for": expires_on})
+                    .update(**{f"{field}_alerted_for": expires_on})
+                )
+                if not claimed:
+                    continue
+                days_left = (expires_on - today).days
+                emit(
+                    Event.ASSET_EXPIRY_DUE,
+                    asset,
+                    payload={
+                        "label": str(asset),
+                        "asset": asset.name,
+                        "tag": asset.tag,
+                        "document": document,
+                        "expires_on": expires_on.isoformat(),
+                        "days_left": max(days_left, 0),
+                        "expired": days_left < 0,
+                    },
+                )
+                count += 1
     return count

@@ -43,6 +43,8 @@ class SyncOperation(models.TextChoices):
     EXPENSE = "EXPENSE", "Record an expense"
     ALLOWANCE_REQUEST = "ALLOWANCE_REQUEST", "Request an allowance or float"
     CASUAL = "CASUAL", "Register a casual"
+    # R15, §4.20.8: a supplier added at the gate; Finance still approves it online.
+    SUPPLIER = "SUPPLIER", "Add a supplier"
 
 
 class SubmissionStatus(models.TextChoices):

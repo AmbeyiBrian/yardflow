@@ -72,6 +72,13 @@ class OfflineApprovalAttempt(SyncRefused):
     )
 
 
+class SupplierNotUsableOnGateIn(SyncRefused):
+    """§4.20.5: a REJECTED or deactivated supplier on a new delivery."""
+
+    code = "SUPPLIER_NOT_USABLE_ON_GATE_IN"
+    status_code = 409
+
+
 def apply_submission(
     *,
     organization,
@@ -182,13 +189,54 @@ def _apply_gate_in(payload: dict, *, submitted_by=None, request=None):
     from receiving.services import post_gate_in
     from receiving.views import GateInSerializer
 
+    # R15, §4.20.8: the supplier is named by id, or by the uuid of one queued
+    # earlier in this batch (it applied first, in capture order). Resolved here,
+    # not in the serializer, so a refused supplier is a clear exception rather
+    # than a gate-in silently saved with free text.
+    payload = dict(payload)
+    supplier = _gate_in_supplier(payload)
     serializer = GateInSerializer(data=payload)
     _validate(serializer)
-    gate_in = serializer.save(created_by=submitted_by)
+    extra: dict[str, Any] = {}
+    if supplier is not None:
+        extra = {"supplier": supplier, "supplier_name": supplier.name}
+    gate_in = serializer.save(created_by=submitted_by, **extra)
 
     # Captured means received: the storekeeper stood there and counted it. The
     # document posts immediately, exactly as it would have online.
     return post_gate_in(gate_in, posted_by=submitted_by, request=request)
+
+
+def _gate_in_supplier(payload: dict):
+    """The register entry a queued gate-in names, or ``None`` (§4.20.5, §4.20.8).
+
+    Pops both keys so the serializer never sees them. A REJECTED or deactivated
+    supplier is refused on a new gate-in; PENDING is fine (R15).
+    """
+    from network.models import Supplier, SupplierStatus
+
+    raw_id = payload.pop("supplier", None)
+    raw_uuid = payload.pop("supplier_client_uuid", None)
+    if raw_id in (None, "") and raw_uuid in (None, ""):
+        return None
+    if raw_id not in (None, ""):
+        supplier = Supplier.objects.filter(pk=_int_id(raw_id, "supplier")).first()
+    else:
+        supplier = Supplier.objects.filter(
+            client_uuid=_uuid({"supplier_client_uuid": raw_uuid}, "supplier_client_uuid")
+        ).first()
+    if supplier is None:
+        raise SyncRefused(
+            "The supplier on this delivery is not on the register. If it was added "
+            "offline, that entry may have been refused; fix it first.",
+            details={"field_errors": {"supplier": "Supplier not found."}},
+        )
+    if not supplier.is_active or supplier.status == SupplierStatus.REJECTED:
+        raise SupplierNotUsableOnGateIn(
+            f"{supplier.name} cannot be used on a new delivery.",
+            details={"field_errors": {"supplier": "Not usable."}},
+        )
+    return supplier
 
 
 def _apply_gate_out_request(payload: dict, *, submitted_by=None, request=None):
@@ -414,6 +462,29 @@ def _apply_casual(payload: dict, *, submitted_by=None, request=None):
     )
 
 
+def _apply_supplier(payload: dict, *, submitted_by=None, request=None):
+    """A supplier added at the gate with no signal (R15, R6, §4.20.8).
+
+    Through ``add_supplier``, so the duplicate PIN and name checks run on replay
+    and a refusal is an exception carrying their code. It is PENDING and goes to
+    Finance exactly as the online one does; nothing is approved offline (§8.3).
+    """
+    from network.suppliers import EDITABLE_FIELDS, add_supplier
+
+    details = {
+        field: str(payload[field])
+        for field in EDITABLE_FIELDS
+        if field != "name" and payload.get(field) not in (None, "")
+    }
+    return add_supplier(
+        actor=submitted_by,
+        name=str(payload.get("name") or ""),
+        client_uuid=_uuid(payload, "client_uuid"),
+        request=request,
+        **details,
+    )
+
+
 def _resolve_superseded(submission, payload: dict, resolved_by, request) -> None:
     """"Fix and resend" (R6): the corrected entry landing closes the old refusal.
 
@@ -470,6 +541,7 @@ _HANDLERS: dict[str, Any] = {
     str(SyncOperation.EXPENSE): _apply_expense,
     str(SyncOperation.ALLOWANCE_REQUEST): _apply_allowance_request,
     str(SyncOperation.CASUAL): _apply_casual,
+    str(SyncOperation.SUPPLIER): _apply_supplier,
 }
 
 

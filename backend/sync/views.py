@@ -319,6 +319,8 @@ class OfflineBundleView(APIView):
                     "casuals": serializers.ListField(child=serializers.DictField()),
                     "my_floats": serializers.ListField(child=serializers.DictField()),
                     "finance_limits": serializers.DictField(),
+                    "suppliers": serializers.ListField(child=serializers.DictField()),
+                    "vehicles": serializers.ListField(child=serializers.DictField()),
                 },
             )
         }
@@ -516,6 +518,33 @@ class OfflineBundleView(APIView):
             "casuals": casuals,
             "my_floats": my_floats,
             "finance_limits": user.organization.settings.allowance_limits or {},
+            **OfflineBundleView._registers(),
+        }
+
+    @staticmethod
+    def _registers() -> dict:
+        """Suppliers and vehicles for the gate-in and fuel forms (R14, R15, §4.20.8).
+
+        Names and ids only: no PIN, no payment details, no cost. A phone can be
+        lost, and the forms need to choose a row, not to read it.
+        """
+        from assets.models import Asset, AssetStatus, AssetType
+        from network.models import Supplier, SupplierStatus
+
+        return {
+            "suppliers": [
+                {"id": row.pk, "name": row.name, "status": row.status}
+                for row in Supplier.objects.filter(is_active=True)
+                .exclude(status=SupplierStatus.REJECTED)
+                .order_by("name")
+            ],
+            "vehicles": [
+                {"id": row.pk, "name": row.name, "tag": row.tag, "type": row.type}
+                for row in Asset.objects.filter(
+                    status=AssetStatus.ACTIVE,
+                    type__in=(AssetType.VEHICLE, AssetType.GENERATOR),
+                ).order_by("name")
+            ],
         }
 
 
