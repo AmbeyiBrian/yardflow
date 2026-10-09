@@ -224,6 +224,12 @@ export async function chooseSupplier(page: Page, name: string): Promise<void> {
   const sheet = page.getByRole('dialog').last();
   await sheet.getByLabel('Name', { exact: true }).fill(name);
   await sheet.getByRole('button', { name: 'Add supplier' }).click();
+  // The list can still have been loading while we looked, so a name another run
+  // added a moment ago is offered as a duplicate: take the register entry then.
+  const useExisting = sheet.getByRole('button', { name: /^Use .* instead$/ });
+  if (await useExisting.waitFor({ state: 'visible', timeout: 3_000 }).then(() => true, () => false)) {
+    await useExisting.click();
+  }
   await expect(select.locator('option:checked')).toHaveText(new RegExp(name), {
     timeout: 20_000,
   });

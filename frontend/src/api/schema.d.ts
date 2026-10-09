@@ -365,6 +365,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The register. Never deleted: close it instead (§4.20.2). */
+        get: operations["assets_list"];
+        put?: never;
+        /** @description The register. Never deleted: close it instead (§4.20.2). */
+        post: operations["assets_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The register. Never deleted: close it instead (§4.20.2). */
+        get: operations["assets_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description The register. Never deleted: close it instead (§4.20.2). */
+        patch: operations["assets_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/assets/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Sold or written off; frozen afterwards (§4.20.4). */
+        post: operations["assets_close_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{id}/fuel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Litres, spend, fills and spend per litre; pending apart (§4.20.4). */
+        get: operations["assets_fuel_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{id}/handover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Give it on, or back to the yard (``to_holder: null``). */
+        post: operations["assets_handover_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{id}/handovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every holder, newest first (R14). */
+        get: operations["assets_handovers_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/fuel-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Vehicles ranked by fuel spend, for the owner (§4.20.6). */
+        get: operations["assets_fuel_summary_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/attachment-targets": {
         parameters: {
             query?: never;
@@ -472,6 +593,34 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/attendance/settings`` (R13, §4.18.7).
+         *
+         *     Read by any member (the phone keeps the cap to refuse early offline);
+         *     written with ``settings.manage``.
+         */
+        get: operations["attendance_settings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description ``/api/v1/attendance/settings`` (R13, §4.18.7).
+         *
+         *     Read by any member (the phone keeps the cap to refuse early offline);
+         *     written with ``settings.manage``.
+         */
+        patch: operations["attendance_settings_partial_update"];
         trace?: never;
     };
     "/api/v1/auth/login": {
@@ -2189,6 +2338,179 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/milestone-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/milestone-invoices``; a mistake is voided, never edited. */
+        get: operations["milestone_invoices_list"];
+        put?: never;
+        /** @description ``/api/v1/milestone-invoices``; a mistake is voided, never edited. */
+        post: operations["milestone_invoices_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestone-invoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/milestone-invoices``; a mistake is voided, never edited. */
+        get: operations["milestone_invoices_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestone-invoices/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ``/api/v1/milestone-invoices``; a mistake is voided, never edited. */
+        post: operations["milestone_invoices_void_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestone-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/milestone-receipts``. */
+        get: operations["milestone_receipts_list"];
+        put?: never;
+        /** @description ``/api/v1/milestone-receipts``. */
+        post: operations["milestone_receipts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestone-receipts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/milestone-receipts``. */
+        get: operations["milestone_receipts_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestone-receipts/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ``/api/v1/milestone-receipts``. */
+        post: operations["milestone_receipts_void_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/milestones`` and ``POST /milestones/{id}/invoices`` · ``/receipts``. */
+        get: operations["milestones_list"];
+        put?: never;
+        /** @description ``/api/v1/milestones`` and ``POST /milestones/{id}/invoices`` · ``/receipts``. */
+        post: operations["milestones_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestones/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/milestones`` and ``POST /milestones/{id}/invoices`` · ``/receipts``. */
+        get: operations["milestones_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestones/{id}/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ``/api/v1/milestones`` and ``POST /milestones/{id}/invoices`` · ``/receipts``. */
+        post: operations["milestones_invoices_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/milestones/{id}/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ``/api/v1/milestones`` and ``POST /milestones/{id}/invoices`` · ``/receipts``. */
+        post: operations["milestones_receipts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/movements": {
         parameters: {
             query?: never;
@@ -2623,6 +2945,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/project-sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/project-sites`` — a project's sites with their dates (R10, §4.19.6).
+         *
+         *     Read for any member; the two dates are typed by the project's manager or
+         *     someone holding ``catalogue.manage``. Linking and unlinking sites stays on
+         *     the project (``sites``), so this offers no create or delete.
+         */
+        get: operations["project_sites_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-sites/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/project-sites`` — a project's sites with their dates (R10, §4.19.6).
+         *
+         *     Read for any member; the two dates are typed by the project's manager or
+         *     someone holding ``catalogue.manage``. Linking and unlinking sites stays on
+         *     the project (``sites``), so this offers no create or delete.
+         */
+        get: operations["project_sites_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description ``/api/v1/project-sites`` — a project's sites with their dates (R10, §4.19.6).
+         *
+         *     Read for any member; the two dates are typed by the project's manager or
+         *     someone holding ``catalogue.manage``. Linking and unlinking sites stays on
+         *     the project (``sites``), so this offers no create or delete.
+         */
+        patch: operations["project_sites_partial_update"];
+        trace?: never;
+    };
     "/api/v1/project-variations": {
         parameters: {
             query?: never;
@@ -2769,6 +3144,62 @@ export interface paths {
         patch: operations["projects_partial_update"];
         trace?: never;
     };
+    "/api/v1/projects/{id}/attach-po": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Add the PO to a project working without one, on the same row. */
+        post: operations["projects_attach_po_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description R9: committed, spent and remaining (§4.19.5). Cost viewers only. */
+        get: operations["projects_budget_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/budget-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description R9's early warning: ``{amount}`` gives ``{over, over_by?}``.
+         *
+         *     Anyone who can see the project may ask; the overrun itself is only
+         *     named to those who may see its cost.
+         */
+        post: operations["projects_budget_check_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/close": {
         parameters: {
             query?: never;
@@ -2788,6 +3219,59 @@ export interface paths {
          *     them under the people who signed them off.
          */
         post: operations["projects_close_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``GET`` the project's milestones with their states; ``POST`` adds one. */
+        get: operations["projects_milestones_list"];
+        put?: never;
+        /** @description ``GET`` the project's milestones with their states; ``POST`` adds one. */
+        post: operations["projects_milestones_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/milestones/{milestone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description ``/api/v1/projects`` (C7, D14 — optional throughout). */
+        delete: operations["projects_milestones_destroy"];
+        options?: never;
+        head?: never;
+        /** @description ``/api/v1/projects`` (C7, D14 — optional throughout). */
+        patch: operations["projects_milestones_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/milestones/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Finance's "Add default milestones" (M1 Deposit, M2, M3). */
+        post: operations["projects_milestones_defaults_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3202,6 +3686,167 @@ export interface paths {
          *     could not read its own switches would have to guess.
          */
         patch: operations["settings_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/site-purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+         *
+         *     Anyone may record one. PM then Finance decide it; paying is Finance's and is
+         *     refused while the supplier is not approved.
+         */
+        get: operations["site_purchases_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+         *
+         *     Anyone may record one. PM then Finance decide it; paying is Finance's and is
+         *     refused while the supplier is not approved.
+         */
+        post: operations["site_purchases_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/site-purchases/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+         *
+         *     Anyone may record one. PM then Finance decide it; paying is Finance's and is
+         *     refused while the supplier is not approved.
+         */
+        get: operations["site_purchases_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Only the recorder, and only until the PM has answered (§4.19.10). */
+        patch: operations["site_purchases_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/site-purchases/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+         *
+         *     Anyone may record one. PM then Finance decide it; paying is Finance's and is
+         *     refused while the supplier is not approved.
+         */
+        post: operations["site_purchases_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/site-purchases/{id}/mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+         *
+         *     Anyone may record one. PM then Finance decide it; paying is Finance's and is
+         *     refused while the supplier is not approved.
+         */
+        post: operations["site_purchases_mark_paid_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/site-purchases/{id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+         *
+         *     Anyone may record one. PM then Finance decide it; paying is Finance's and is
+         *     refused while the supplier is not approved.
+         */
+        post: operations["site_purchases_resubmit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/site-purchases/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+         *
+         *     Anyone may record one. PM then Finance decide it; paying is Finance's and is
+         *     refused while the supplier is not approved.
+         */
+        post: operations["site_purchases_reverse_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/site-purchases/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+         *
+         *     Anyone may record one. PM then Finance decide it; paying is Finance's and is
+         *     refused while the supplier is not approved.
+         */
+        get: operations["site_purchases_pending_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/site-references": {
@@ -3770,6 +4415,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subcontract-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/subcontract-payments`` (R8, §4.19.4).
+         *
+         *     Finance records; the project's PM decides. No PATCH: a wrong payment is
+         *     rejected and sent again, or reversed once approved (O16).
+         */
+        get: operations["subcontract_payments_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/subcontract-payments`` (R8, §4.19.4).
+         *
+         *     Finance records; the project's PM decides. No PATCH: a wrong payment is
+         *     rejected and sent again, or reversed once approved (O16).
+         */
+        post: operations["subcontract_payments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subcontract-payments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/subcontract-payments`` (R8, §4.19.4).
+         *
+         *     Finance records; the project's PM decides. No PATCH: a wrong payment is
+         *     rejected and sent again, or reversed once approved (O16).
+         */
+        get: operations["subcontract_payments_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subcontract-payments/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The project's PM, and only the PM (§4.19.4). */
+        post: operations["subcontract_payments_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subcontract-payments/{id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/subcontract-payments`` (R8, §4.19.4).
+         *
+         *     Finance records; the project's PM decides. No PATCH: a wrong payment is
+         *     rejected and sent again, or reversed once approved (O16).
+         */
+        post: operations["subcontract_payments_resubmit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subcontract-payments/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description O16: corrected by its opposite, never by an edit. */
+        post: operations["subcontract_payments_reverse_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subcontractors": {
         parameters: {
             query?: never;
@@ -3848,6 +4599,224 @@ export interface paths {
          *     Deactivating is how one leaves the list.
          */
         patch: operations["subcontractors_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/subcontracts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/subcontracts`` (R8, §4.19.10).
+         *
+         *     No destroy: a contract that has ended is closed, never removed.
+         */
+        get: operations["subcontracts_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/subcontracts`` (R8, §4.19.10).
+         *
+         *     No destroy: a contract that has ended is closed, never removed.
+         */
+        post: operations["subcontracts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subcontracts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/subcontracts`` (R8, §4.19.10).
+         *
+         *     No destroy: a contract that has ended is closed, never removed.
+         */
+        get: operations["subcontracts_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description ``/api/v1/subcontracts`` (R8, §4.19.10).
+         *
+         *     No destroy: a contract that has ended is closed, never removed.
+         */
+        patch: operations["subcontracts_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        get: operations["suppliers_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        post: operations["suppliers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        get: operations["suppliers_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        patch: operations["suppliers_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        post: operations["suppliers_deactivate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        post: operations["suppliers_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/link-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        post: operations["suppliers_link_history_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        post: operations["suppliers_reactivate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+         *
+         *     Every write goes through :mod:`network.suppliers`. Never deleted:
+         *     deactivating is how one leaves the pickers.
+         */
+        post: operations["suppliers_resubmit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/sync-exceptions": {
@@ -4208,6 +5177,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/work-days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+         *
+         *     Decide, add and the correction flow arrive with the approval task; they
+         *     will be ``@action`` routes here, on the same visibility.
+         */
+        get: operations["work_days_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-days/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+         *
+         *     Decide, add and the correction flow arrive with the approval task; they
+         *     will be ``@action`` routes here, on the same visibility.
+         */
+        get: operations["work_days_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/work-sessions`` (R13, §4.18.7).
+         *
+         *     Reading is scoped like the days; clocking in and out is open to every
+         *     member and acts on the caller only.
+         */
+        get: operations["work_sessions_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/work-sessions`` (R13, §4.18.7).
+         *
+         *     Reading is scoped like the days; clocking in and out is open to every
+         *     member and acts on the caller only.
+         */
+        post: operations["work_sessions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/work-sessions`` (R13, §4.18.7).
+         *
+         *     Reading is scoped like the days; clocking in and out is open to every
+         *     member and acts on the caller only.
+         */
+        get: operations["work_sessions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-sessions/clock-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/work-sessions`` (R13, §4.18.7).
+         *
+         *     Reading is scoped like the days; clocking in and out is open to every
+         *     member and acts on the caller only.
+         */
+        post: operations["work_sessions_clock_in_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-sessions/clock-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/work-sessions`` (R13, §4.18.7).
+         *
+         *     Reading is scoped like the days; clocking in and out is open to every
+         *     member and acts on the caller only.
+         */
+        post: operations["work_sessions_clock_out_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-sessions/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description My open session (its fields at the top level) or none, my sessions
+         *     today, and the limits the phone checks against (§4.18.7).
+         */
+        get: operations["work_sessions_open_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4266,6 +5393,10 @@ export interface components {
             readonly pm_level_skipped: boolean;
             readonly spent: string;
             readonly balance: string;
+            readonly is_over_budget: boolean;
+            /** Format: decimal */
+            readonly over_budget_by: string | null;
+            over_budget_reason?: string;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -4286,6 +5417,7 @@ export interface components {
             reason?: string;
             /** Format: uuid */
             client_uuid?: string | null;
+            over_budget_reason?: string;
         };
         /**
          * @description * `FLOAT` - Float
@@ -4386,6 +5518,153 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
+        Asset: {
+            readonly id: number;
+            type: components["schemas"]["AssetTypeEnum"];
+            name: string;
+            tag?: string;
+            /** Format: date */
+            purchase_date?: string | null;
+            supplier?: number | null;
+            /** @default  */
+            readonly supplier_name: string;
+            /** Format: decimal */
+            cost?: string | null;
+            purchase_terms?: string;
+            make?: string;
+            model?: string;
+            /** Format: date */
+            insurance_expires_on?: string | null;
+            /** Format: date */
+            inspection_expires_on?: string | null;
+            holder?: number | null;
+            readonly holder_name: string | null;
+            readonly status: components["schemas"]["SubcontractStatusEnum"];
+            /** Format: date */
+            readonly closed_on: string | null;
+            readonly closed_reason: components["schemas"]["ClosedReasonEnum"];
+            readonly closed_note: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /** @description ``{closed_on, closed_reason, closed_note?}``. */
+        AssetCloseInputRequest: {
+            /** Format: date */
+            closed_on: string;
+            closed_reason: components["schemas"]["ClosedReasonEnum"];
+            closed_note?: string;
+        };
+        /** @description ``GET /assets/{id}/fuel`` (§4.20.4). */
+        AssetFuel: {
+            /** Format: decimal */
+            litres: string | null;
+            /** Format: decimal */
+            spend: string;
+            fill_count: number;
+            /** Format: decimal */
+            spend_per_litre: string | null;
+            /** Format: decimal */
+            pending_spend: string;
+        };
+        /** @description One ranked row of ``GET /assets/fuel-summary``. */
+        AssetFuelSummary: {
+            /** Format: decimal */
+            litres: string | null;
+            /** Format: decimal */
+            spend: string;
+            fill_count: number;
+            /** Format: decimal */
+            spend_per_litre: string | null;
+            /** Format: decimal */
+            pending_spend: string;
+            id: number;
+            name: string;
+            tag: string;
+            type: string;
+        };
+        /** @description ``{to_holder|null, note?, handed_over_on?}``. */
+        AssetHandOverInputRequest: {
+            to_holder: number | null;
+            note?: string;
+            /** Format: date */
+            handed_over_on?: string;
+        };
+        AssetHandover: {
+            readonly id: number;
+            readonly from_holder: number | null;
+            readonly from_holder_name: string | null;
+            readonly to_holder: number | null;
+            readonly to_holder_name: string | null;
+            readonly handed_over_by: number;
+            readonly handed_over_by_name: string;
+            /** Format: date */
+            readonly handed_over_on: string;
+            readonly note: string;
+        };
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
+        AssetRequest: {
+            type: components["schemas"]["AssetTypeEnum"];
+            name: string;
+            tag?: string;
+            /** Format: date */
+            purchase_date?: string | null;
+            supplier?: number | null;
+            /** Format: decimal */
+            cost?: string | null;
+            purchase_terms?: string;
+            make?: string;
+            model?: string;
+            /** Format: date */
+            insurance_expires_on?: string | null;
+            /** Format: date */
+            inspection_expires_on?: string | null;
+            holder?: number | null;
+        };
+        /**
+         * @description * `VEHICLE` - Vehicle
+         *     * `GENERATOR` - Generator
+         *     * `TOOL` - Tool
+         *     * `EQUIPMENT` - Equipment
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        AssetTypeEnum: "VEHICLE" | "GENERATOR" | "TOOL" | "EQUIPMENT" | "OTHER";
+        /** @description ``POST /projects/{id}/attach-po`` (R12, §4.19.8). */
+        AttachPoRequest: {
+            po_number: string;
+            /** Format: date */
+            po_issue_date: string;
+            /** Format: decimal */
+            contract_value: string;
+            /** Format: decimal */
+            cost_budget: string;
+            payment_terms?: string;
+            payment_terms_days?: number | null;
+            manager?: number | null;
+        };
         /** @description What a client reads back. The file itself is never inlined (N-7). */
         Attachment: {
             readonly id: number;
@@ -4433,6 +5712,10 @@ export interface components {
         AttachmentUrl: {
             url: string;
             expires_in: number;
+        };
+        AttendanceSettings: {
+            clock_auto_close_hour: number;
+            clock_accuracy_cap_m: number;
         };
         /**
          * @description * `PASSWORD` - Password
@@ -4631,6 +5914,26 @@ export interface components {
             acknowledged_by_name?: string;
             notes?: string;
         };
+        ClockInRequest: {
+            site?: number | null;
+            location?: number | null;
+            project?: number | null;
+            /** Format: date-time */
+            at?: string | null;
+            fix?: unknown;
+            place_area?: components["schemas"]["_AreaRequest"] | null;
+            /** Format: uuid */
+            client_uuid?: string | null;
+        };
+        ClockOutRequest: {
+            /** Format: date-time */
+            at?: string | null;
+            fix?: unknown;
+            session_client_uuid?: string | null;
+            /** Format: uuid */
+            client_uuid?: string | null;
+            place_area?: components["schemas"]["_AreaRequest"] | null;
+        };
         CloseFloatRequest: {
             /** Format: decimal */
             returned_amount: string;
@@ -4640,6 +5943,12 @@ export interface components {
             reason?: string;
         };
         /**
+         * @description * `SOLD` - Sold
+         *     * `WRITTEN_OFF` - Written off
+         * @enum {string}
+         */
+        ClosedReasonEnum: "SOLD" | "WRITTEN_OFF";
+        /**
          * @description * `NEW` - New
          *     * `USED_SERVICEABLE` - Used — serviceable
          *     * `FAULTY` - Faulty
@@ -4648,6 +5957,28 @@ export interface components {
          * @enum {string}
          */
         ConditionEnum: "NEW" | "USED_SERVICEABLE" | "FAULTY" | "DAMAGED" | "SCRAP";
+        Correction: {
+            readonly id: number;
+            readonly kind: components["schemas"]["CorrectionKindEnum"];
+            /** Format: date-time */
+            readonly original_in_at: string | null;
+            /** Format: date-time */
+            readonly original_out_at: string | null;
+            /** Format: date-time */
+            readonly corrected_in_at: string | null;
+            /** Format: date-time */
+            readonly corrected_out_at: string | null;
+            readonly reason: string;
+            readonly made_by_name: string;
+            /** Format: date-time */
+            readonly made_at: string;
+        };
+        /**
+         * @description * `EDIT` - Edit an existing session
+         *     * `ADD` - Add a missing session
+         * @enum {string}
+         */
+        CorrectionKindEnum: "EDIT" | "ADD";
         /**
          * @description * `NOT_REQUIRED` - No project manager to accept it
          *     * `PENDING` - Waiting on the project manager
@@ -4817,6 +6148,12 @@ export interface components {
          * @enum {string}
          */
         DeliveryModeEnum: "IN_HOUSE" | "SUBCONTRACTED";
+        /**
+         * @description * `USED_AT_SITE` - Used at the site
+         *     * `INTO_YARD` - Brought into the yard
+         * @enum {string}
+         */
+        DestinationEnum: "USED_AT_SITE" | "INTO_YARD";
         Disposal: {
             readonly id: number;
             readonly number: string;
@@ -5184,7 +6521,11 @@ export interface components {
             readonly number: string;
             readonly status: components["schemas"]["GateInStatusEnum"];
             source_type: components["schemas"]["SourceTypeEnum"];
+            supplier?: number | null;
+            /** @default  */
+            readonly supplier_status: string;
             supplier_name?: string;
+            readonly source_purchase_number: string;
             client?: number | null;
             /** @default  */
             readonly client_name: string;
@@ -5307,6 +6648,7 @@ export interface components {
         };
         GateInRequest: {
             source_type: components["schemas"]["SourceTypeEnum"];
+            supplier?: number | null;
             supplier_name?: string;
             client?: number | null;
             /** @description Who is handing the material back (required for a return from site). */
@@ -5493,6 +6835,14 @@ export interface components {
          * @enum {string}
          */
         GateOutStatusEnum: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "PARTIALLY_RELEASED" | "RELEASED" | "CLOSED" | "CANCELLED" | "EXPIRED";
+        InvoiceInputRequest: {
+            milestone?: number;
+            invoice_number: string;
+            /** Format: date */
+            invoice_date: string;
+            /** Format: decimal */
+            amount: string;
+        };
         ItemCategory: {
             readonly id: number;
             parent?: number | null;
@@ -5582,6 +6932,10 @@ export interface components {
             delivery_mode?: components["schemas"]["DeliveryModeEnum"];
             subcontractor?: number | null;
             readonly subcontractor_name: string;
+            subcontract?: number | null;
+            /** @default  */
+            readonly subcontract_reference: string;
+            over_contract_reason?: string;
             /**
              * Format: decimal
              * @description What was agreed with the contractor for this job, excluding VAT.
@@ -5738,6 +7092,8 @@ export interface components {
             project?: number | null;
             delivery_mode?: components["schemas"]["DeliveryModeEnum"];
             subcontractor?: number | null;
+            subcontract?: number | null;
+            over_contract_reason?: string;
             /**
              * Format: decimal
              * @description What was agreed with the contractor for this job, excluding VAT.
@@ -5755,6 +7111,14 @@ export interface components {
          * @enum {string}
          */
         JobStatusEnum: "OPEN" | "IN_PROGRESS" | "AWAITING_CLOSEOUT" | "CLOSED" | "CANCELLED";
+        /**
+         * @description Validation for a serializer that carries ``latitude`` and ``longitude``.
+         *
+         *     Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+         *     ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+         *     the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+         *     Not yet wired into the site and location serializers.
+         */
         Location: {
             readonly id: number;
             parent?: number | null;
@@ -5764,12 +7128,27 @@ export interface components {
             vehicle_reg?: string;
             is_active?: boolean;
             readonly is_system: boolean;
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
+            radius_m?: number;
+            readonly area_history: unknown;
+            readonly has_coordinates: boolean;
             readonly children: {
                 [key: string]: unknown;
             }[];
             /** @description The stock node for this location, which movements reference (§3.1). */
             readonly node_id: number | null;
         };
+        /**
+         * @description Validation for a serializer that carries ``latitude`` and ``longitude``.
+         *
+         *     Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+         *     ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+         *     the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+         *     Not yet wired into the site and location serializers.
+         */
         LocationRequest: {
             parent?: number | null;
             name: string;
@@ -5777,15 +7156,21 @@ export interface components {
             type: components["schemas"]["LocationTypeEnum"];
             vehicle_reg?: string;
             is_active?: boolean;
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
+            radius_m?: number;
         };
         /**
          * @description * `YARD` - Yard
          *     * `STORE` - Store within a yard
          *     * `VEHICLE` - Vehicle
          *     * `QUARANTINE` - Quarantine
+         *     * `OFFICE` - Office
          * @enum {string}
          */
-        LocationTypeEnum: "YARD" | "STORE" | "VEHICLE" | "QUARANTINE";
+        LocationTypeEnum: "YARD" | "STORE" | "VEHICLE" | "QUARANTINE" | "OFFICE";
         /**
          * @description Log in with an email address or a phone number (B1).
          *
@@ -5856,6 +7241,67 @@ export interface components {
          * @enum {string}
          */
         MethodEnum: "SCRAP_DEALER" | "LICENSED_HANDLER" | "DESTROYED_ON_SITE" | "RETURNED_TO_SUPPLIER" | "OTHER";
+        /** @description A milestone as the screen reads it: share, condition and the server's verdict. */
+        Milestone: {
+            readonly id: number;
+            readonly project: number;
+            readonly sequence: number;
+            readonly name: string;
+            readonly share_type: components["schemas"]["ShareTypeEnum"];
+            /** Format: decimal */
+            readonly share_value: string | null;
+            readonly condition: components["schemas"]["MilestoneConditionEnum"];
+            /** Format: date */
+            readonly condition_date: string | null;
+            /** Format: decimal */
+            readonly amount: string | null;
+            readonly state: string;
+            /** Format: date */
+            readonly met_on: string | null;
+            /** Format: decimal */
+            readonly invoiced: string;
+            /** Format: decimal */
+            readonly received: string;
+            readonly invoices: {
+                [key: string]: unknown;
+            }[];
+            readonly receipts: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * @description * `NONE` - Due at once
+         *     * `ALL_SITES_ACCEPTED` - Due when every site is accepted
+         *     * `DATE` - Due on a date
+         * @enum {string}
+         */
+        MilestoneConditionEnum: "NONE" | "ALL_SITES_ACCEPTED" | "DATE";
+        MilestoneInvoice: {
+            readonly id: number;
+            readonly milestone: number;
+            readonly invoice_number: string;
+            /** Format: date */
+            readonly invoice_date: string;
+            /** Format: decimal */
+            readonly amount: string;
+            readonly recorded_by: number;
+            /** Format: date-time */
+            readonly voided_at: string | null;
+            readonly void_reason: string;
+        };
+        MilestoneReceipt: {
+            readonly id: number;
+            readonly milestone: number;
+            /** Format: date */
+            readonly received_on: string;
+            /** Format: decimal */
+            readonly amount: string;
+            readonly reference: string;
+            readonly recorded_by: number;
+            /** Format: date-time */
+            readonly voided_at: string | null;
+            readonly void_reason: string;
+        };
         Movement: {
             readonly id: number;
             /** Format: date-time */
@@ -5913,6 +7359,12 @@ export interface components {
          * @enum {string}
          */
         MovementTypeEnum: "RECEIPT" | "ISSUE" | "TRANSFER" | "INSTALL" | "CONSUME" | "RETURN" | "QUARANTINE" | "RESTORE" | "DISPOSE" | "ADJUST" | "REVERSAL";
+        /**
+         * @description * `PAYBILL` - Paybill
+         *     * `TILL` - Till
+         * @enum {string}
+         */
+        MpesaTypeEnum: "PAYBILL" | "TILL";
         Notification: {
             readonly id: number;
             readonly event_key: string;
@@ -5978,6 +7430,24 @@ export interface components {
             finance_limits: {
                 [key: string]: unknown;
             };
+            suppliers: {
+                [key: string]: unknown;
+            }[];
+            vehicles: {
+                [key: string]: unknown;
+            }[];
+            offices: {
+                [key: string]: unknown;
+            }[];
+            attendance: {
+                [key: string]: unknown;
+            };
+        };
+        OpenWorkSession: {
+            id?: number;
+            sessions_today: components["schemas"]["WorkSession"][];
+            accuracy_cap_m: number;
+            auto_close_hour: number;
         };
         /**
          * @description * `GATE_IN` - Receive a delivery
@@ -5986,9 +7456,13 @@ export interface components {
          *     * `EXPENSE` - Record an expense
          *     * `ALLOWANCE_REQUEST` - Request an allowance or float
          *     * `CASUAL` - Register a casual
+         *     * `SUPPLIER` - Add a supplier
+         *     * `CLOCK_IN` - Clock in
+         *     * `CLOCK_OUT` - Clock out
+         *     * `SITE_PURCHASE` - Record a site purchase
          * @enum {string}
          */
-        OperationEnum: "GATE_IN" | "GATE_OUT_REQUEST" | "GATE_OUT_RELEASE" | "EXPENSE" | "ALLOWANCE_REQUEST" | "CASUAL";
+        OperationEnum: "GATE_IN" | "GATE_OUT_REQUEST" | "GATE_OUT_RELEASE" | "EXPENSE" | "ALLOWANCE_REQUEST" | "CASUAL" | "SUPPLIER" | "CLOCK_IN" | "CLOCK_OUT" | "SITE_PURCHASE";
         /** @description A tenant as the console sees it. */
         Organization: {
             /** Format: uuid */
@@ -6046,6 +7520,8 @@ export interface components {
             retention_months?: number;
             timezone?: string;
             currency?: string;
+            clock_auto_close_hour?: number;
+            clock_accuracy_cap_m?: number;
             notification_channels?: unknown;
             notification_matrix?: unknown;
         };
@@ -6108,6 +7584,45 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["ApprovalRule"][];
+        };
+        PaginatedAssetFuelSummaryList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["AssetFuelSummary"][];
+        };
+        PaginatedAssetHandoverList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["AssetHandover"][];
+        };
+        PaginatedAssetList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Asset"][];
         };
         PaginatedAttachmentList: {
             /**
@@ -6369,6 +7884,45 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Location"][];
         };
+        PaginatedMilestoneInvoiceList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["MilestoneInvoice"][];
+        };
+        PaginatedMilestoneList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Milestone"][];
+        };
+        PaginatedMilestoneReceiptList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["MilestoneReceipt"][];
+        };
         PaginatedMovementList: {
             /**
              * Format: uri
@@ -6433,6 +7987,19 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Project"][];
+        };
+        PaginatedProjectSiteList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["ProjectSite"][];
         };
         PaginatedProjectVariationList: {
             /**
@@ -6512,6 +8079,19 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Site"][];
         };
+        PaginatedSitePurchaseList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["SitePurchase"][];
+        };
         PaginatedSiteReferenceList: {
             /**
              * Format: uri
@@ -6551,6 +8131,32 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["StockNode"][];
         };
+        PaginatedSubcontractList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Subcontract"][];
+        };
+        PaginatedSubcontractPaymentList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["SubcontractPayment"][];
+        };
         PaginatedSubcontractorList: {
             /**
              * Format: uri
@@ -6563,6 +8169,19 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Subcontractor"][];
+        };
+        PaginatedSupplierList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Supplier"][];
         };
         PaginatedSyncExceptionList: {
             /**
@@ -6616,6 +8235,32 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Variance"][];
         };
+        PaginatedWorkDayList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["WorkDay"][];
+        };
+        PaginatedWorkSessionList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["WorkSession"][];
+        };
         /** @description Set a new password from a reset or invitation token. */
         PasswordResetConfirmRequest: {
             uid: string;
@@ -6635,6 +8280,40 @@ export interface components {
             conditions?: unknown;
             is_active?: boolean;
             description?: string;
+        };
+        /**
+         * @description Drop fields the requesting user is not permitted to see.
+         *
+         *     Subclasses set ``permission_gated_fields`` — a mapping of permission
+         *     codename to the field names it unlocks.
+         *
+         *     With no request in context (a management command, a test building a
+         *     serializer directly, an export running in Celery) **nothing is dropped**.
+         *     Those callers have already passed whatever check applies to them, and
+         *     silently emptying their output would be a bug that only shows up in a
+         *     report somebody trusted.
+         */
+        PatchedAssetRequest: {
+            type?: components["schemas"]["AssetTypeEnum"];
+            name?: string;
+            tag?: string;
+            /** Format: date */
+            purchase_date?: string | null;
+            supplier?: number | null;
+            /** Format: decimal */
+            cost?: string | null;
+            purchase_terms?: string;
+            make?: string;
+            model?: string;
+            /** Format: date */
+            insurance_expires_on?: string | null;
+            /** Format: date */
+            inspection_expires_on?: string | null;
+            holder?: number | null;
+        };
+        PatchedAttendanceSettingsRequest: {
+            clock_auto_close_hour?: number;
+            clock_accuracy_cap_m?: number;
         };
         PatchedCasualRequest: {
             name?: string;
@@ -6737,6 +8416,7 @@ export interface components {
         };
         PatchedGateInRequest: {
             source_type?: components["schemas"]["SourceTypeEnum"];
+            supplier?: number | null;
             supplier_name?: string;
             client?: number | null;
             /** @description Who is handing the material back (required for a return from site). */
@@ -6821,6 +8501,8 @@ export interface components {
             project?: number | null;
             delivery_mode?: components["schemas"]["DeliveryModeEnum"];
             subcontractor?: number | null;
+            subcontract?: number | null;
+            over_contract_reason?: string;
             /**
              * Format: decimal
              * @description What was agreed with the contractor for this job, excluding VAT.
@@ -6829,6 +8511,14 @@ export interface components {
             assignee?: number;
             description?: string;
         };
+        /**
+         * @description Validation for a serializer that carries ``latitude`` and ``longitude``.
+         *
+         *     Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+         *     ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+         *     the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+         *     Not yet wired into the site and location serializers.
+         */
         PatchedLocationRequest: {
             parent?: number | null;
             name?: string;
@@ -6836,6 +8526,20 @@ export interface components {
             type?: components["schemas"]["LocationTypeEnum"];
             vehicle_reg?: string;
             is_active?: boolean;
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
+            radius_m?: number;
+        };
+        PatchedMilestoneInputRequest: {
+            name?: string;
+            share_type?: components["schemas"]["ShareTypeEnum"];
+            /** Format: decimal */
+            share_value?: string | null;
+            condition?: components["schemas"]["MilestoneConditionEnum"];
+            /** Format: date */
+            condition_date?: string | null;
         };
         PatchedNumberSeriesRequest: {
             prefix?: string;
@@ -6881,6 +8585,8 @@ export interface components {
             retention_months?: number;
             timezone?: string;
             currency?: string;
+            clock_auto_close_hour?: number;
+            clock_accuracy_cap_m?: number;
             notification_channels?: unknown;
             notification_matrix?: unknown;
         };
@@ -6900,6 +8606,10 @@ export interface components {
             client?: number;
             /** @description The client's purchase order number. One PO is one project (D21). */
             po_number?: string;
+            /** Format: date */
+            po_issue_date?: string | null;
+            payment_terms?: string;
+            payment_terms_days?: number | null;
             title?: string;
             description?: string;
             /** @description The project manager. Approves material leaving for this project, and is the only approver on it (O6). */
@@ -6920,6 +8630,18 @@ export interface components {
             target_completion_on?: string | null;
             sites?: number[];
             close_reason?: string;
+        };
+        /**
+         * @description A project's site with its dates and what the yard did for it (R10, §4.19.6).
+         *
+         *     ``is_accepted``, ``first_collection_at`` and ``last_dispatch_at`` are
+         *     derived and read-only; only the two typed dates can be written.
+         */
+        PatchedProjectSiteRequest: {
+            /** Format: date */
+            mobilised_on?: string | null;
+            /** Format: date */
+            accepted_on?: string | null;
         };
         PatchedProjectVariationRequest: {
             project?: number;
@@ -6963,12 +8685,24 @@ export interface components {
              */
             day_rate?: string | null;
         };
+        /** @description What may still change on a pending purchase: the photo count. */
+        PatchedSitePurchaseEditRequest: {
+            photos_expected?: number;
+        };
         PatchedSiteReferenceRequest: {
             site?: number;
             /** @description e.g. "Safaricom site ID", "Towerco ref". */
             label?: string;
             value?: string;
         };
+        /**
+         * @description Validation for a serializer that carries ``latitude`` and ``longitude``.
+         *
+         *     Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+         *     ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+         *     the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+         *     Not yet wired into the site and location serializers.
+         */
         PatchedSiteRequest: {
             client?: number;
             /** @description This company's own reference for the site. */
@@ -6980,6 +8714,7 @@ export interface components {
             latitude?: string | null;
             /** Format: decimal */
             longitude?: string | null;
+            radius_m?: number;
             site_type?: components["schemas"]["SiteTypeEnum"];
             status?: components["schemas"]["SiteStatusEnum"];
             cell_id?: string;
@@ -6993,6 +8728,13 @@ export interface components {
             counted_by?: number | null;
             notes?: string;
         };
+        PatchedSubcontractEditRequest: {
+            sites?: number[];
+            /** Format: decimal */
+            contract_value?: string;
+            payment_terms?: string;
+            status?: components["schemas"]["SubcontractStatusEnum"];
+        };
         PatchedSubcontractorRequest: {
             name?: string;
             code?: string;
@@ -7001,6 +8743,25 @@ export interface components {
             contact_phone?: string;
             notes?: string;
             is_active?: boolean;
+        };
+        /**
+         * @description Everyone sees name, contact and status; the PIN and payment details are
+         *     omitted (absent, not blank) unless the reader is Finance or the registrar.
+         */
+        PatchedSupplierRequest: {
+            name?: string;
+            kra_pin?: string;
+            contact_name?: string;
+            phone?: string;
+            email?: string;
+            address?: string;
+            bank_name?: string;
+            account_number?: string;
+            mpesa_type?: components["schemas"]["MpesaTypeEnum"] | components["schemas"]["BlankEnum"];
+            mpesa_number?: string;
+            mpesa_account?: string;
+            /** Format: uuid */
+            client_uuid?: string | null;
         };
         /**
          * @description Drop fields the requesting user is not permitted to see.
@@ -7038,6 +8799,22 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        Position: {
+            /** Format: decimal */
+            contract_value: string;
+            /** Format: decimal */
+            work_done: string;
+            /** Format: decimal */
+            paid: string;
+            /** Format: decimal */
+            awaiting_approval: string;
+            /** Format: decimal */
+            owed: string;
+            /** Format: decimal */
+            committed: string;
+            paid_exceeds_work_done: boolean;
+            paid_exceeds_contract_value: boolean;
+        };
         /**
          * @description Drop fields the requesting user is not permitted to see.
          *
@@ -7057,6 +8834,12 @@ export interface components {
             readonly reference: string;
             /** @description The client's purchase order number. One PO is one project (D21). */
             po_number?: string;
+            /** Format: date */
+            po_issue_date?: string | null;
+            payment_terms?: string;
+            payment_terms_days?: number | null;
+            /** Format: date-time */
+            readonly po_recorded_at: string | null;
             title?: string;
             description?: string;
             /** @description The project manager. Approves material leaving for this project, and is the only approver on it (O6). */
@@ -7090,6 +8873,7 @@ export interface components {
             /** @description Closed while material remained unreconciled, with a reason. */
             readonly closed_with_unreconciled: boolean;
             close_reason?: string;
+            readonly days_without_po: number | null;
         };
         ProjectExpense: {
             readonly id: number;
@@ -7112,6 +8896,9 @@ export interface components {
             description?: string;
             scope_of_work?: string;
             vehicle_reg?: string;
+            vehicle?: number | null;
+            /** @default  */
+            readonly vehicle_name: string;
             /** Format: decimal */
             litres?: string | null;
             float_request?: number | null;
@@ -7135,6 +8922,10 @@ export interface components {
             readonly is_evidenced: boolean;
             readonly evidence_state: string;
             readonly pm_level_skipped: boolean;
+            readonly is_over_budget: boolean;
+            /** Format: decimal */
+            readonly over_budget_by: string | null;
+            over_budget_reason?: string;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -7153,6 +8944,7 @@ export interface components {
             description?: string;
             scope_of_work?: string;
             vehicle_reg?: string;
+            vehicle?: number | null;
             /** Format: decimal */
             litres?: string | null;
             float_request?: number | null;
@@ -7160,6 +8952,7 @@ export interface components {
             /** Format: uuid */
             client_uuid?: string | null;
             casual_lines?: components["schemas"]["ExpenseCasualLineRequest"][];
+            over_budget_reason?: string;
         };
         /**
          * @description Drop fields the requesting user is not permitted to see.
@@ -7177,6 +8970,10 @@ export interface components {
             client: number;
             /** @description The client's purchase order number. One PO is one project (D21). */
             po_number?: string;
+            /** Format: date */
+            po_issue_date?: string | null;
+            payment_terms?: string;
+            payment_terms_days?: number | null;
             title?: string;
             description?: string;
             /** @description The project manager. Approves material leaving for this project, and is the only approver on it (O6). */
@@ -7197,6 +8994,28 @@ export interface components {
             target_completion_on?: string | null;
             sites?: number[];
             close_reason?: string;
+        };
+        /**
+         * @description A project's site with its dates and what the yard did for it (R10, §4.19.6).
+         *
+         *     ``is_accepted``, ``first_collection_at`` and ``last_dispatch_at`` are
+         *     derived and read-only; only the two typed dates can be written.
+         */
+        ProjectSite: {
+            readonly id: number;
+            readonly project: number;
+            readonly site: number;
+            readonly site_ref: string;
+            readonly site_name: string;
+            /** Format: date */
+            mobilised_on?: string | null;
+            /** Format: date */
+            accepted_on?: string | null;
+            readonly is_accepted: boolean;
+            /** Format: date-time */
+            readonly first_collection_at: string | null;
+            /** Format: date-time */
+            readonly last_dispatch_at: string | null;
         };
         /**
          * @description * `OPEN` - Open
@@ -7292,6 +9111,15 @@ export interface components {
         RateSourceEnum: "USER" | "ROLE" | "NONE";
         ReasonRequest: {
             reason?: string;
+        };
+        ReceiptInputRequest: {
+            milestone?: number;
+            /** Format: date */
+            received_on: string;
+            /** Format: decimal */
+            amount: string;
+            /** @default  */
+            reference: string;
         };
         Reconciliation: {
             scope: string;
@@ -7505,6 +9333,20 @@ export interface components {
          * @enum {string}
          */
         SerialUnitStatusEnum: "IN_STOCK" | "IN_CUSTODY" | "INSTALLED" | "QUARANTINED" | "RETURNED_TO_CLIENT" | "SCRAPPED";
+        /**
+         * @description * `PERCENT` - Percent of the contract value
+         *     * `AMOUNT` - Fixed amount
+         * @enum {string}
+         */
+        ShareTypeEnum: "PERCENT" | "AMOUNT";
+        /**
+         * @description Validation for a serializer that carries ``latitude`` and ``longitude``.
+         *
+         *     Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+         *     ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+         *     the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+         *     Not yet wired into the site and location serializers.
+         */
         Site: {
             readonly id: number;
             client: number;
@@ -7518,12 +9360,100 @@ export interface components {
             latitude?: string | null;
             /** Format: decimal */
             longitude?: string | null;
+            radius_m?: number;
+            readonly area_history: unknown;
+            readonly has_coordinates: boolean;
             site_type?: components["schemas"]["SiteTypeEnum"];
             status?: components["schemas"]["SiteStatusEnum"];
             cell_id?: string;
             enodeb_id?: string;
             notes?: string;
             readonly references: components["schemas"]["SiteReference"][];
+        };
+        SitePurchase: {
+            readonly id: number;
+            readonly number: string;
+            project?: number | null;
+            readonly project_reference: string;
+            site: number;
+            /** @default  */
+            readonly site_name: string;
+            supplier: number;
+            /** @default  */
+            readonly supplier_name: string;
+            /** @default  */
+            readonly supplier_status: string;
+            /** Format: date */
+            purchase_date: string;
+            destination?: components["schemas"]["DestinationEnum"];
+            receive_into?: number | null;
+            /** @default  */
+            readonly receive_into_name: string;
+            lines: components["schemas"]["SitePurchaseLine"][];
+            /**
+             * Format: decimal
+             * @description The sum of the lines, excluding VAT (D24). Set by the service.
+             */
+            readonly amount: string;
+            readonly status: components["schemas"]["ExpenseStatusEnum"];
+            readonly recorded_by: number;
+            readonly recorded_by_name: string;
+            readonly decided_by: number | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            readonly decision_reason: string;
+            /** Format: date-time */
+            readonly paid_at: string | null;
+            readonly paid_by: number | null;
+            readonly payment_reference: string;
+            readonly reverses: number | null;
+            readonly is_reversal: boolean;
+            readonly gate_in: number | null;
+            readonly pm_level_skipped: boolean;
+            readonly is_over_budget: boolean;
+            /** Format: decimal */
+            readonly over_budget_by: string | null;
+            over_budget_reason?: string;
+            photos_expected?: number;
+            /** Format: uuid */
+            client_uuid?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        SitePurchaseLine: {
+            readonly id: number;
+            item_type?: number | null;
+            /** @default  */
+            readonly item_type_name: string;
+            description?: string;
+            /** Format: decimal */
+            quantity: string;
+            readonly uom: string;
+            /** Format: decimal */
+            unit_price: string;
+            readonly line_total: string;
+        };
+        SitePurchaseLineRequest: {
+            item_type?: number | null;
+            description?: string;
+            /** Format: decimal */
+            quantity: string;
+            /** Format: decimal */
+            unit_price: string;
+        };
+        SitePurchaseRequest: {
+            project?: number | null;
+            site: number;
+            supplier: number;
+            /** Format: date */
+            purchase_date: string;
+            destination?: components["schemas"]["DestinationEnum"];
+            receive_into?: number | null;
+            lines: components["schemas"]["SitePurchaseLineRequest"][];
+            over_budget_reason?: string;
+            photos_expected?: number;
+            /** Format: uuid */
+            client_uuid?: string | null;
         };
         SiteReference: {
             readonly id: number;
@@ -7538,6 +9468,14 @@ export interface components {
             label: string;
             value: string;
         };
+        /**
+         * @description Validation for a serializer that carries ``latitude`` and ``longitude``.
+         *
+         *     Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+         *     ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+         *     the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+         *     Not yet wired into the site and location serializers.
+         */
         SiteRequest: {
             client: number;
             /** @description This company's own reference for the site. */
@@ -7549,6 +9487,7 @@ export interface components {
             latitude?: string | null;
             /** Format: decimal */
             longitude?: string | null;
+            radius_m?: number;
             site_type?: components["schemas"]["SiteTypeEnum"];
             status?: components["schemas"]["SiteStatusEnum"];
             cell_id?: string;
@@ -7569,6 +9508,19 @@ export interface components {
          * @enum {string}
          */
         SiteTypeEnum: "GREENFIELD" | "ROOFTOP" | "INDOOR" | "OTHER";
+        /** @description One approver's part of a day (§4.18.5). Empty until routing lands (T16.6). */
+        Slice: {
+            id: number;
+            approver: number | null;
+            approver_name: string;
+            project: number | null;
+            project_name: string | null;
+            status: string;
+            is_mine: boolean;
+            reason: string;
+            /** Format: date-time */
+            decided_at: string | null;
+        };
         /**
          * @description * `MANUFACTURER` - Manufacturer serial
          *     * `INTERNAL` - Internally generated asset tag
@@ -7712,6 +9664,119 @@ export interface components {
             name: string;
             items: number;
         };
+        Subcontract: {
+            readonly id: number;
+            readonly reference: string;
+            readonly project: number;
+            readonly project_reference: string;
+            readonly subcontractor: number;
+            readonly subcontractor_name: string;
+            readonly sites: number[];
+            /**
+             * Format: decimal
+             * @description Excluding VAT (D24).
+             */
+            readonly contract_value: string;
+            readonly payment_terms: string;
+            readonly status: components["schemas"]["SubcontractStatusEnum"];
+            readonly position: components["schemas"]["Position"];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        SubcontractCreateRequest: {
+            project: number;
+            subcontractor: number;
+            sites?: number[];
+            /** Format: decimal */
+            contract_value: string;
+            /** @default  */
+            payment_terms: string;
+        };
+        SubcontractDetail: {
+            readonly id: number;
+            readonly reference: string;
+            readonly project: number;
+            readonly project_reference: string;
+            readonly subcontractor: number;
+            readonly subcontractor_name: string;
+            readonly sites: number[];
+            /**
+             * Format: decimal
+             * @description Excluding VAT (D24).
+             */
+            readonly contract_value: string;
+            readonly payment_terms: string;
+            readonly status: components["schemas"]["SubcontractStatusEnum"];
+            readonly position: components["schemas"]["Position"];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly jobs: components["schemas"]["SubcontractJob"][];
+            readonly payments: components["schemas"]["SubcontractPayment"][];
+        };
+        SubcontractJob: {
+            id: number;
+            reference: string;
+            description: string;
+            status: string;
+            site: number;
+            site_name: string;
+            /** Format: decimal */
+            agreed_price: string | null;
+            over_contract_reason: string;
+        };
+        /** @description The payment as the PM's approval sheet and the contract's list read it. */
+        SubcontractPayment: {
+            readonly id: number;
+            readonly subcontract: number;
+            readonly subcontract_number: string;
+            readonly subcontractor_name: string;
+            readonly project_reference: string;
+            /** Format: decimal */
+            readonly amount: string;
+            /** Format: date */
+            readonly paid_on: string;
+            readonly reference: string;
+            readonly status: components["schemas"]["SubcontractPaymentStatusEnum"];
+            readonly recorded_by: number;
+            readonly recorded_by_name: string;
+            readonly decided_by: number | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            readonly decision_reason: string;
+            readonly rejection_reason: string;
+            readonly reverses: number | null;
+            /** Format: uuid */
+            readonly client_uuid: string | null;
+            readonly position: components["schemas"]["Position"] | null;
+            readonly would_exceed_work_done: boolean | null;
+            readonly would_exceed_contract_value: boolean | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        SubcontractPaymentCreateRequest: {
+            subcontract: number;
+            /** Format: decimal */
+            amount: string;
+            /** Format: date */
+            paid_on: string;
+            /** @default  */
+            reference: string;
+            /** Format: uuid */
+            client_uuid?: string;
+        };
+        /**
+         * @description * `PENDING_PM` - Waiting on the project manager
+         *     * `APPROVED` - Approved — counts against the project
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        SubcontractPaymentStatusEnum: "PENDING_PM" | "APPROVED" | "REJECTED";
+        /**
+         * @description * `ACTIVE` - Active
+         *     * `CLOSED` - Closed
+         * @enum {string}
+         */
+        SubcontractStatusEnum: "ACTIVE" | "CLOSED";
         Subcontractor: {
             readonly id: number;
             name: string;
@@ -7745,6 +9810,57 @@ export interface components {
             /** Format: date-time */
             captured_at?: string;
         };
+        /**
+         * @description Everyone sees name, contact and status; the PIN and payment details are
+         *     omitted (absent, not blank) unless the reader is Finance or the registrar.
+         */
+        Supplier: {
+            readonly id: number;
+            name: string;
+            kra_pin?: string;
+            contact_name?: string;
+            phone?: string;
+            email?: string;
+            address?: string;
+            bank_name?: string;
+            account_number?: string;
+            mpesa_type?: components["schemas"]["MpesaTypeEnum"] | components["schemas"]["BlankEnum"];
+            mpesa_number?: string;
+            mpesa_account?: string;
+            readonly status: components["schemas"]["SupplierStatusEnum"];
+            readonly is_active: boolean;
+            readonly registered_by: number;
+            readonly registered_by_name: string;
+            readonly decision_reason: string;
+            /** Format: uuid */
+            client_uuid?: string | null;
+        };
+        /**
+         * @description Everyone sees name, contact and status; the PIN and payment details are
+         *     omitted (absent, not blank) unless the reader is Finance or the registrar.
+         */
+        SupplierRequest: {
+            name: string;
+            kra_pin?: string;
+            contact_name?: string;
+            phone?: string;
+            email?: string;
+            address?: string;
+            bank_name?: string;
+            account_number?: string;
+            mpesa_type?: components["schemas"]["MpesaTypeEnum"] | components["schemas"]["BlankEnum"];
+            mpesa_number?: string;
+            mpesa_account?: string;
+            /** Format: uuid */
+            client_uuid?: string | null;
+        };
+        /**
+         * @description * `PENDING` - Pending
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        SupplierStatusEnum: "PENDING" | "APPROVED" | "REJECTED";
         SuspensionRequest: {
             reason?: string;
         };
@@ -7977,6 +10093,9 @@ export interface components {
         VoidReasonRequest: {
             reason: string;
         };
+        VoidRequest: {
+            reason: string;
+        };
         WebAuthnAssertBeginRequest: {
             approval_request: number;
         };
@@ -7993,6 +10112,65 @@ export interface components {
         };
         WebAuthnRevokeRequest: {
             credential: number;
+        };
+        WorkDay: {
+            readonly id: number;
+            readonly person: number;
+            readonly person_name: string;
+            /** Format: date */
+            readonly date: string;
+            readonly status: components["schemas"]["WorkDayStatusEnum"];
+            readonly hours: string;
+            readonly rejection_reason: string;
+            readonly session_count: number;
+            readonly sessions: components["schemas"]["WorkSession"][];
+            readonly slices: components["schemas"]["Slice"][];
+        };
+        /**
+         * @description * `OPEN` - Open
+         *     * `PENDING` - Waiting on approval
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        WorkDayStatusEnum: "OPEN" | "PENDING" | "APPROVED" | "REJECTED";
+        WorkSession: {
+            readonly id: number;
+            readonly site: number | null;
+            readonly location: number | null;
+            readonly place_name: string;
+            readonly project: number | null;
+            readonly project_name: string | null;
+            readonly work_day: number;
+            /** Format: date */
+            readonly local_date: string;
+            /** Format: date-time */
+            readonly clock_in_at: string;
+            /** Format: date-time */
+            readonly clock_out_at: string | null;
+            /** Format: double */
+            readonly in_distance_m: number | null;
+            /** Format: double */
+            readonly out_distance_m: number | null;
+            readonly radius_m: number | null;
+            readonly closed_by: string | null;
+            /** Format: uuid */
+            readonly in_client_uuid: string | null;
+            readonly flags: string[];
+            readonly hours: string | null;
+            readonly slice_status: string | null;
+            /** @description Mine, in a rejected slice, inside the 30 days (§4.18.6). */
+            readonly can_correct: boolean;
+            readonly added_reason: string;
+            readonly corrections: components["schemas"]["Correction"][];
+        };
+        _AreaRequest: {
+            /** Format: double */
+            lat: number;
+            /** Format: double */
+            lng: number;
+            /** Format: double */
+            radius_m: number;
         };
     };
     responses: never;
@@ -8701,6 +10879,300 @@ export interface operations {
             };
         };
     };
+    assets_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                holder?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `ACTIVE` - Active
+                 *     * `CLOSED` - Closed
+                 */
+                status?: "ACTIVE" | "CLOSED";
+                supplier?: number;
+                /**
+                 * @description * `VEHICLE` - Vehicle
+                 *     * `GENERATOR` - Generator
+                 *     * `TOOL` - Tool
+                 *     * `EQUIPMENT` - Equipment
+                 *     * `OTHER` - Other
+                 */
+                type?: "EQUIPMENT" | "GENERATOR" | "OTHER" | "TOOL" | "VEHICLE";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAssetList"];
+                };
+            };
+        };
+    };
+    assets_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssetRequest"];
+                "multipart/form-data": components["schemas"]["AssetRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+        };
+    };
+    assets_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+        };
+    };
+    assets_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedAssetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedAssetRequest"];
+                "multipart/form-data": components["schemas"]["PatchedAssetRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+        };
+    };
+    assets_close_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetCloseInputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssetCloseInputRequest"];
+                "multipart/form-data": components["schemas"]["AssetCloseInputRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+        };
+    };
+    assets_fuel_retrieve: {
+        parameters: {
+            query?: {
+                /** @description First day, YYYY-MM-DD. */
+                from?: string;
+                /** @description Last day, YYYY-MM-DD. */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetFuel"];
+                };
+            };
+        };
+    };
+    assets_handover_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetHandOverInputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssetHandOverInputRequest"];
+                "multipart/form-data": components["schemas"]["AssetHandOverInputRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetHandover"];
+                };
+            };
+        };
+    };
+    assets_handovers_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                holder?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `ACTIVE` - Active
+                 *     * `CLOSED` - Closed
+                 */
+                status?: "ACTIVE" | "CLOSED";
+                supplier?: number;
+                /**
+                 * @description * `VEHICLE` - Vehicle
+                 *     * `GENERATOR` - Generator
+                 *     * `TOOL` - Tool
+                 *     * `EQUIPMENT` - Equipment
+                 *     * `OTHER` - Other
+                 */
+                type?: "EQUIPMENT" | "GENERATOR" | "OTHER" | "TOOL" | "VEHICLE";
+            };
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAssetHandoverList"];
+                };
+            };
+        };
+    };
+    assets_fuel_summary_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description First day, YYYY-MM-DD. */
+                from?: string;
+                holder?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `ACTIVE` - Active
+                 *     * `CLOSED` - Closed
+                 */
+                status?: "ACTIVE" | "CLOSED";
+                supplier?: number;
+                /** @description Last day, YYYY-MM-DD. */
+                to?: string;
+                /**
+                 * @description * `VEHICLE` - Vehicle
+                 *     * `GENERATOR` - Generator
+                 *     * `TOOL` - Tool
+                 *     * `EQUIPMENT` - Equipment
+                 *     * `OTHER` - Other
+                 */
+                type?: "EQUIPMENT" | "GENERATOR" | "OTHER" | "TOOL" | "VEHICLE";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAssetFuelSummaryList"];
+                };
+            };
+        };
+    };
     attachment_targets_retrieve: {
         parameters: {
             query?: never;
@@ -8837,6 +11309,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttachmentUrl"];
+                };
+            };
+        };
+    };
+    attendance_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceSettings"];
+                };
+            };
+        };
+    };
+    attendance_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedAttendanceSettingsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedAttendanceSettingsRequest"];
+                "multipart/form-data": components["schemas"]["PatchedAttendanceSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceSettings"];
                 };
             };
         };
@@ -10949,6 +13465,7 @@ export interface operations {
                  *     * `VOID` - Void
                  */
                 status?: "DRAFT" | "POSTED" | "VOID";
+                supplier?: number;
                 to_location?: number;
             };
             header?: never;
@@ -12090,6 +14607,7 @@ export interface operations {
                  *     * `CANCELLED` - Cancelled
                  */
                 status?: "AWAITING_CLOSEOUT" | "CANCELLED" | "CLOSED" | "IN_PROGRESS" | "OPEN";
+                subcontract?: number;
             };
             header?: never;
             path?: never;
@@ -12250,8 +14768,9 @@ export interface operations {
                  *     * `STORE` - Store within a yard
                  *     * `VEHICLE` - Vehicle
                  *     * `QUARANTINE` - Quarantine
+                 *     * `OFFICE` - Office
                  */
-                type?: "QUARANTINE" | "STORE" | "VEHICLE" | "YARD";
+                type?: "OFFICE" | "QUARANTINE" | "STORE" | "VEHICLE" | "YARD";
             };
             header?: never;
             path?: never;
@@ -12436,6 +14955,328 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    milestone_invoices_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                milestone?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMilestoneInvoiceList"];
+                };
+            };
+        };
+    };
+    milestone_invoices_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneInvoice"];
+                };
+            };
+        };
+    };
+    milestone_invoices_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this milestone invoice. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneInvoice"];
+                };
+            };
+        };
+    };
+    milestone_invoices_void_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this milestone invoice. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VoidRequest"];
+                "multipart/form-data": components["schemas"]["VoidRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneInvoice"];
+                };
+            };
+        };
+    };
+    milestone_receipts_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                milestone?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMilestoneReceiptList"];
+                };
+            };
+        };
+    };
+    milestone_receipts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneReceipt"];
+                };
+            };
+        };
+    };
+    milestone_receipts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this milestone receipt. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneReceipt"];
+                };
+            };
+        };
+    };
+    milestone_receipts_void_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this milestone receipt. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VoidRequest"];
+                "multipart/form-data": components["schemas"]["VoidRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneReceipt"];
+                };
+            };
+        };
+    };
+    milestones_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMilestoneList"];
+                };
+            };
+        };
+    };
+    milestones_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Milestone"];
+                };
+            };
+        };
+    };
+    milestones_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project milestone. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Milestone"];
+                };
+            };
+        };
+    };
+    milestones_invoices_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project milestone. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceInputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["InvoiceInputRequest"];
+                "multipart/form-data": components["schemas"]["InvoiceInputRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneInvoice"];
+                };
+            };
+        };
+    };
+    milestones_receipts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project milestone. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptInputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReceiptInputRequest"];
+                "multipart/form-data": components["schemas"]["ReceiptInputRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneReceipt"];
                 };
             };
         };
@@ -12836,6 +15677,7 @@ export interface operations {
                  *     * `REJECTED` - Rejected
                  */
                 status?: "APPROVED" | "PAID" | "PENDING_FINANCE" | "PENDING_PM" | "REJECTED";
+                vehicle?: number;
             };
             header?: never;
             path?: never;
@@ -13059,6 +15901,7 @@ export interface operations {
                  *     * `REJECTED` - Rejected
                  */
                 status?: "APPROVED" | "PAID" | "PENDING_FINANCE" | "PENDING_PM" | "REJECTED";
+                vehicle?: number;
             };
             header?: never;
             path?: never;
@@ -13072,6 +15915,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedProjectExpenseList"];
+                };
+            };
+        };
+    };
+    project_sites_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                site?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProjectSiteList"];
+                };
+            };
+        };
+    };
+    project_sites_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project site. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSite"];
+                };
+            };
+        };
+    };
+    project_sites_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project site. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectSiteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectSiteRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectSiteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSite"];
                 };
             };
         };
@@ -13297,10 +16220,16 @@ export interface operations {
                 client?: number;
                 /** @description The pagination cursor value. */
                 cursor?: string;
+                has_po?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
                 page_size?: number;
+                /**
+                 * @description * `none` - No PO yet
+                 *     * `any` - Has a PO
+                 */
+                po?: "any" | "none";
                 /** @description A search term. */
                 search?: string;
                 site?: number;
@@ -13446,6 +16375,84 @@ export interface operations {
             };
         };
     };
+    projects_attach_po_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachPoRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AttachPoRequest"];
+                "multipart/form-data": components["schemas"]["AttachPoRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_budget_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_budget_check_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
     projects_close_create: {
         parameters: {
             query?: never;
@@ -13470,6 +16477,178 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_milestones_list: {
+        parameters: {
+            query?: {
+                client?: number;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                has_po?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `none` - No PO yet
+                 *     * `any` - Has a PO
+                 */
+                po?: "any" | "none";
+                /** @description A search term. */
+                search?: string;
+                site?: number;
+                status?: string;
+            };
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMilestoneList"];
+                };
+            };
+        };
+    };
+    projects_milestones_create: {
+        parameters: {
+            query?: {
+                client?: number;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                has_po?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `none` - No PO yet
+                 *     * `any` - Has a PO
+                 */
+                po?: "any" | "none";
+                /** @description A search term. */
+                search?: string;
+                site?: number;
+                status?: string;
+            };
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMilestoneList"];
+                };
+            };
+        };
+    };
+    projects_milestones_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Milestone"];
+                };
+            };
+        };
+    };
+    projects_milestones_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedMilestoneInputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedMilestoneInputRequest"];
+                "multipart/form-data": components["schemas"]["PatchedMilestoneInputRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Milestone"];
+                };
+            };
+        };
+    };
+    projects_milestones_defaults_create: {
+        parameters: {
+            query?: {
+                client?: number;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                has_po?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `none` - No PO yet
+                 *     * `any` - Has a PO
+                 */
+                po?: "any" | "none";
+                /** @description A search term. */
+                search?: string;
+                site?: number;
+                status?: string;
+            };
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMilestoneList"];
                 };
             };
         };
@@ -14106,6 +17285,281 @@ export interface operations {
             };
         };
     };
+    site_purchases_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /**
+                 * @description * `USED_AT_SITE` - Used at the site
+                 *     * `INTO_YARD` - Brought into the yard
+                 */
+                destination?: "INTO_YARD" | "USED_AT_SITE";
+                /** @description Only entries I recorded. */
+                mine?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Approved and unpaid (needs finance.approve). */
+                payable?: boolean;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                site?: number;
+                /**
+                 * @description * `PENDING_PM` - Waiting on the project manager
+                 *     * `PENDING_FINANCE` - Waiting on Finance
+                 *     * `APPROVED` - Approved — counts against the project
+                 *     * `PAID` - Paid
+                 *     * `REJECTED` - Rejected
+                 */
+                status?: "APPROVED" | "PAID" | "PENDING_FINANCE" | "PENDING_PM" | "REJECTED";
+                supplier?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSitePurchaseList"];
+                };
+            };
+        };
+    };
+    site_purchases_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SitePurchaseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SitePurchaseRequest"];
+                "multipart/form-data": components["schemas"]["SitePurchaseRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SitePurchase"];
+                };
+            };
+        };
+    };
+    site_purchases_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site purchase. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SitePurchase"];
+                };
+            };
+        };
+    };
+    site_purchases_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site purchase. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSitePurchaseEditRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSitePurchaseEditRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSitePurchaseEditRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SitePurchase"];
+                };
+            };
+        };
+    };
+    site_purchases_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site purchase. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DecideRequest"];
+                "multipart/form-data": components["schemas"]["DecideRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SitePurchase"];
+                };
+            };
+        };
+    };
+    site_purchases_mark_paid_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site purchase. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkPaidRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MarkPaidRequest"];
+                "multipart/form-data": components["schemas"]["MarkPaidRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SitePurchase"];
+                };
+            };
+        };
+    };
+    site_purchases_resubmit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site purchase. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SitePurchase"];
+                };
+            };
+        };
+    };
+    site_purchases_reverse_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this site purchase. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReverseRequest"];
+                "multipart/form-data": components["schemas"]["ReverseRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SitePurchase"];
+                };
+            };
+        };
+    };
+    site_purchases_pending_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /**
+                 * @description * `USED_AT_SITE` - Used at the site
+                 *     * `INTO_YARD` - Brought into the yard
+                 */
+                destination?: "INTO_YARD" | "USED_AT_SITE";
+                /** @description Only entries I recorded. */
+                mine?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                site?: number;
+                /**
+                 * @description * `PENDING_PM` - Waiting on the project manager
+                 *     * `PENDING_FINANCE` - Waiting on Finance
+                 *     * `APPROVED` - Approved — counts against the project
+                 *     * `PAID` - Paid
+                 *     * `REJECTED` - Rejected
+                 */
+                status?: "APPROVED" | "PAID" | "PENDING_FINANCE" | "PENDING_PM" | "REJECTED";
+                supplier?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSitePurchaseList"];
+                };
+            };
+        };
+    };
     site_references_list: {
         parameters: {
             query?: {
@@ -14266,6 +17720,7 @@ export interface operations {
                 client?: number;
                 /** @description The pagination cursor value. */
                 cursor?: string;
+                missing_coordinates?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
@@ -15021,6 +18476,168 @@ export interface operations {
             };
         };
     };
+    subcontract_payments_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Only payments waiting on the caller (the PM's list). */
+                pending?: boolean;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `PENDING_PM` - Waiting on the project manager
+                 *     * `APPROVED` - Approved — counts against the project
+                 *     * `REJECTED` - Rejected
+                 */
+                status?: "APPROVED" | "PENDING_PM" | "REJECTED";
+                subcontract?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSubcontractPaymentList"];
+                };
+            };
+        };
+    };
+    subcontract_payments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubcontractPaymentCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubcontractPaymentCreateRequest"];
+                "multipart/form-data": components["schemas"]["SubcontractPaymentCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubcontractPayment"];
+                };
+            };
+        };
+    };
+    subcontract_payments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontract payment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubcontractPayment"];
+                };
+            };
+        };
+    };
+    subcontract_payments_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontract payment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DecideRequest"];
+                "multipart/form-data": components["schemas"]["DecideRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubcontractPayment"];
+                };
+            };
+        };
+    };
+    subcontract_payments_resubmit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontract payment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubcontractPayment"];
+                };
+            };
+        };
+    };
+    subcontract_payments_reverse_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontract payment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReverseRequest"];
+                "multipart/form-data": components["schemas"]["ReverseRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubcontractPayment"];
+                };
+            };
+        };
+    };
     subcontractors_list: {
         parameters: {
             query?: {
@@ -15174,6 +18791,362 @@ export interface operations {
             };
         };
     };
+    subcontracts_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `ACTIVE` - Active
+                 *     * `CLOSED` - Closed
+                 */
+                status?: "ACTIVE" | "CLOSED";
+                subcontractor?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSubcontractList"];
+                };
+            };
+        };
+    };
+    subcontracts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubcontractCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubcontractCreateRequest"];
+                "multipart/form-data": components["schemas"]["SubcontractCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubcontractDetail"];
+                };
+            };
+        };
+    };
+    subcontracts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontract. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubcontractDetail"];
+                };
+            };
+        };
+    };
+    subcontracts_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this subcontract. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSubcontractEditRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSubcontractEditRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSubcontractEditRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubcontractDetail"];
+                };
+            };
+        };
+    };
+    suppliers_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                payable?: boolean;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSupplierList"];
+                };
+            };
+        };
+    };
+    suppliers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierRequest"];
+                "multipart/form-data": components["schemas"]["SupplierRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+        };
+    };
+    suppliers_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this supplier. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+        };
+    };
+    suppliers_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this supplier. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSupplierRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSupplierRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSupplierRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+        };
+    };
+    suppliers_deactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this supplier. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierRequest"];
+                "multipart/form-data": components["schemas"]["SupplierRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+        };
+    };
+    suppliers_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this supplier. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierRequest"];
+                "multipart/form-data": components["schemas"]["SupplierRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+        };
+    };
+    suppliers_link_history_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this supplier. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierRequest"];
+                "multipart/form-data": components["schemas"]["SupplierRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+        };
+    };
+    suppliers_reactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this supplier. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierRequest"];
+                "multipart/form-data": components["schemas"]["SupplierRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+        };
+    };
+    suppliers_resubmit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this supplier. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierRequest"];
+                "multipart/form-data": components["schemas"]["SupplierRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+        };
+    };
     sync_exceptions_list: {
         parameters: {
             query?: {
@@ -15290,8 +19263,12 @@ export interface operations {
                  *     * `EXPENSE` - Record an expense
                  *     * `ALLOWANCE_REQUEST` - Request an allowance or float
                  *     * `CASUAL` - Register a casual
+                 *     * `SUPPLIER` - Add a supplier
+                 *     * `CLOCK_IN` - Clock in
+                 *     * `CLOCK_OUT` - Clock out
+                 *     * `SITE_PURCHASE` - Record a site purchase
                  */
-                operation?: "ALLOWANCE_REQUEST" | "CASUAL" | "EXPENSE" | "GATE_IN" | "GATE_OUT_RELEASE" | "GATE_OUT_REQUEST";
+                operation?: "ALLOWANCE_REQUEST" | "CASUAL" | "CLOCK_IN" | "CLOCK_OUT" | "EXPENSE" | "GATE_IN" | "GATE_OUT_RELEASE" | "GATE_OUT_REQUEST" | "SITE_PURCHASE" | "SUPPLIER";
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
@@ -15678,6 +19655,208 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Variance"];
+                };
+            };
+        };
+    };
+    work_days_list: {
+        parameters: {
+            query?: {
+                /** @description Only days with a slice waiting on me. */
+                awaiting_me?: boolean;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description First day, YYYY-MM-DD (or `from`). */
+                date_from?: string;
+                /** @description Last day, YYYY-MM-DD (or `to`). */
+                date_to?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                person?: number;
+                /** @description Days with a session on this project. */
+                project?: number;
+                /** @description Whose days. Default mine. */
+                scope?: "all" | "mine" | "team";
+                /** @description A search term. */
+                search?: string;
+                /** @description Days with a session at this site. */
+                site?: number;
+                status?: "APPROVED" | "OPEN" | "PENDING" | "REJECTED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedWorkDayList"];
+                };
+            };
+        };
+    };
+    work_days_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this work day. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkDay"];
+                };
+            };
+        };
+    };
+    work_sessions_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedWorkSessionList"];
+                };
+            };
+        };
+    };
+    work_sessions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSession"];
+                };
+            };
+        };
+    };
+    work_sessions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this work session. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSession"];
+                };
+            };
+        };
+    };
+    work_sessions_clock_in_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ClockInRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ClockInRequest"];
+                "multipart/form-data": components["schemas"]["ClockInRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSession"];
+                };
+            };
+        };
+    };
+    work_sessions_clock_out_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ClockOutRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ClockOutRequest"];
+                "multipart/form-data": components["schemas"]["ClockOutRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkSession"];
+                };
+            };
+        };
+    };
+    work_sessions_open_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenWorkSession"];
                 };
             };
         };
