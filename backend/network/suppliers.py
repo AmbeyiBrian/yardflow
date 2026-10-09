@@ -303,6 +303,10 @@ def decide_supplier(
             request=request,
             note="Approved by Finance." if approved else f"Rejected: {reason}",
         )
+        # §4.20.5: once a supplier is real, past deliveries typed with its
+        # name join it, so its history starts complete rather than today.
+        if approved:
+            link_history(locked, actor=actor, request=request)
     return locked
 
 

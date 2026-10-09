@@ -89,6 +89,7 @@ from network.views import (
     SiteReferenceViewSet,
     SiteViewSet,
     SubcontractorViewSet,
+    SupplierViewSet,
 )
 from notifications.views import NotificationPreferencesView, NotificationViewSet
 from receiving.views import GateInViewSet
@@ -262,6 +263,7 @@ router.register(
     "project-variations", ProjectVariationViewSet, basename="project-variation"
 )
 router.register("subcontractors", SubcontractorViewSet, basename="subcontractor")
+router.register("suppliers", SupplierViewSet, basename="supplier")
 router.register(
     "expense-categories", ExpenseCategoryViewSet, basename="expense-category"
 )

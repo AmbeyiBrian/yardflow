@@ -9171,6 +9171,344 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/suppliers:
+    get:
+      operationId: suppliers_list
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: payable
+        schema:
+          type: boolean
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - suppliers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSupplierList'
+          description: ''
+    post:
+      operationId: suppliers_create
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
+  /api/v1/suppliers/{id}:
+    get:
+      operationId: suppliers_retrieve
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this supplier.
+        required: true
+      tags:
+      - suppliers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
+    patch:
+      operationId: suppliers_partial_update
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this supplier.
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSupplierRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSupplierRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSupplierRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
+  /api/v1/suppliers/{id}/deactivate:
+    post:
+      operationId: suppliers_deactivate_create
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this supplier.
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
+  /api/v1/suppliers/{id}/decide:
+    post:
+      operationId: suppliers_decide_create
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this supplier.
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
+  /api/v1/suppliers/{id}/link-history:
+    post:
+      operationId: suppliers_link_history_create
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this supplier.
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
+  /api/v1/suppliers/{id}/reactivate:
+    post:
+      operationId: suppliers_reactivate_create
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this supplier.
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
+  /api/v1/suppliers/{id}/resubmit:
+    post:
+      operationId: suppliers_resubmit_create
+      description: |-
+        ``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+        Every write goes through :mod:`network.suppliers`. Never deleted:
+        deactivating is how one leaves the pickers.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this supplier.
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
   /api/v1/sync-exceptions:
     get:
       operationId: sync_exceptions_list
@@ -14222,6 +14560,14 @@ components:
         * `DISPOSE` - Disposed of
         * `ADJUST` - Adjusted after a count
         * `REVERSAL` - Reversal of an earlier movement
+    MpesaTypeEnum:
+      enum:
+      - PAYBILL
+      - TILL
+      type: string
+      description: |-
+        * `PAYBILL` - Paybill
+        * `TILL` - Till
     Notification:
       type: object
       properties:
@@ -15316,6 +15662,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Subcontractor'
+    PaginatedSupplierList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Supplier'
     PaginatedSyncExceptionList:
       type: object
       required:
@@ -16241,6 +16606,54 @@ components:
           type: string
         is_active:
           type: boolean
+    PatchedSupplierRequest:
+      type: object
+      description: |-
+        Everyone sees name, contact and status; the PIN and payment details are
+        omitted (absent, not blank) unless the reader is Finance or the registrar.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        kra_pin:
+          type: string
+          maxLength: 20
+        contact_name:
+          type: string
+          maxLength: 200
+        phone:
+          type: string
+          maxLength: 30
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        address:
+          type: string
+        bank_name:
+          type: string
+          maxLength: 120
+        account_number:
+          type: string
+          maxLength: 60
+        mpesa_type:
+          oneOf:
+          - $ref: '#/components/schemas/MpesaTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        mpesa_number:
+          type: string
+          maxLength: 30
+        mpesa_account:
+          type: string
+          maxLength: 60
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
     PatchedUserRequest:
       type: object
       description: |-
@@ -17986,6 +18399,140 @@ components:
       - client_uuid
       - operation
       - payload
+    Supplier:
+      type: object
+      description: |-
+        Everyone sees name, contact and status; the PIN and payment details are
+        omitted (absent, not blank) unless the reader is Finance or the registrar.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        kra_pin:
+          type: string
+          maxLength: 20
+        contact_name:
+          type: string
+          maxLength: 200
+        phone:
+          type: string
+          maxLength: 30
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        address:
+          type: string
+        bank_name:
+          type: string
+          maxLength: 120
+        account_number:
+          type: string
+          maxLength: 60
+        mpesa_type:
+          oneOf:
+          - $ref: '#/components/schemas/MpesaTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        mpesa_number:
+          type: string
+          maxLength: 30
+        mpesa_account:
+          type: string
+          maxLength: 60
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SupplierStatusEnum'
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        registered_by:
+          type: integer
+          readOnly: true
+        registered_by_name:
+          type: string
+          readOnly: true
+        decision_reason:
+          type: string
+          readOnly: true
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - decision_reason
+      - id
+      - is_active
+      - name
+      - registered_by
+      - registered_by_name
+      - status
+    SupplierRequest:
+      type: object
+      description: |-
+        Everyone sees name, contact and status; the PIN and payment details are
+        omitted (absent, not blank) unless the reader is Finance or the registrar.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        kra_pin:
+          type: string
+          maxLength: 20
+        contact_name:
+          type: string
+          maxLength: 200
+        phone:
+          type: string
+          maxLength: 30
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        address:
+          type: string
+        bank_name:
+          type: string
+          maxLength: 120
+        account_number:
+          type: string
+          maxLength: 60
+        mpesa_type:
+          oneOf:
+          - $ref: '#/components/schemas/MpesaTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        mpesa_number:
+          type: string
+          maxLength: 30
+        mpesa_account:
+          type: string
+          maxLength: 60
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - name
+    SupplierStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
     SuspensionRequest:
       type: object
       properties:

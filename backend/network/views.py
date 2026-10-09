@@ -10,9 +10,11 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
+from accounts.services import resolve_permissions
 from commercials.visibility import may_see_project_cost
 from core.api import TenantScopedViewSet
 from core.field_permissions import PermissionGatedFieldsMixin
+from network import suppliers as supplier_services
 from network.models import (
     Client,
     Project,
@@ -21,6 +23,8 @@ from network.models import (
     Site,
     SiteReference,
     Subcontractor,
+    Supplier,
+    SupplierStatus,
     VariationStatus,
 )
 
@@ -579,3 +583,197 @@ class ProjectViewSet(TenantScopedViewSet):
             request=request,
         )
         return Response(self.get_serializer(project).data)
+
+
+# --------------------------------------------------------------------------
+# Suppliers (R15, §4.20.6, §4.20.7)
+# --------------------------------------------------------------------------
+
+#: Seen only by Finance and the person who registered the supplier (§4.20.7).
+SUPPLIER_PRIVATE_FIELDS = (
+    "kra_pin",
+    "email",
+    "address",
+    "bank_name",
+    "account_number",
+    "mpesa_type",
+    "mpesa_number",
+    "mpesa_account",
+    "decision_reason",
+)
+
+
+def _holds_finance(user) -> bool:  # type: ignore[no-untyped-def]
+    return resolve_permissions(user).has(PERM.FINANCE_APPROVE)
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    """Everyone sees name, contact and status; the PIN and payment details are
+    omitted (absent, not blank) unless the reader is Finance or the registrar."""
+
+    registered_by_name = serializers.CharField(source="registered_by.full_name", read_only=True)
+
+    class Meta:
+        model = Supplier
+        fields = (
+            "id",
+            "name",
+            "kra_pin",
+            "contact_name",
+            "phone",
+            "email",
+            "address",
+            "bank_name",
+            "account_number",
+            "mpesa_type",
+            "mpesa_number",
+            "mpesa_account",
+            "status",
+            "is_active",
+            "registered_by",
+            "registered_by_name",
+            "decision_reason",
+            "client_uuid",
+        )
+        read_only_fields = ("status", "is_active", "registered_by", "decision_reason")
+        # Duplicates are refused by the service, naming the existing row.
+        validators: list = []
+        extra_kwargs = {"client_uuid": {"required": False, "allow_null": True}}
+
+    def to_representation(self, instance):  # type: ignore[no-untyped-def]
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if request is None:
+            return data
+        cache = self.context.setdefault("_finance", {})
+        user = request.user
+        if user.pk not in cache:
+            cache[user.pk] = _holds_finance(user)
+        if not cache[user.pk] and instance.registered_by_id != user.pk:
+            for name in SUPPLIER_PRIVATE_FIELDS:
+                data.pop(name, None)
+        return data
+
+    def create(self, validated_data):  # type: ignore[no-untyped-def]
+        request = self.context["request"]
+        return supplier_services.add_supplier(
+            actor=request.user, request=request, **validated_data
+        )
+
+
+class SupplierDecideSerializer(serializers.Serializer):
+    approved = serializers.BooleanField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class SupplierFilter(filters.FilterSet):
+    # Declared, not derived: building a filter from a model field queries the
+    # tenant manager, which has no tenant at import time (as SiteFilter).
+    status = filters.CharFilter(field_name="status")
+    is_active = filters.BooleanFilter(field_name="is_active")
+    payable = filters.BooleanFilter(method="filter_payable")
+
+    class Meta:
+        model = Supplier
+        fields = ["status", "is_active"]
+
+    def filter_payable(self, queryset, name, value):  # type: ignore[no-untyped-def]
+        usable = Q(status=SupplierStatus.APPROVED, is_active=True)
+        return queryset.filter(usable) if value else queryset.exclude(usable)
+
+
+class SupplierViewSet(TenantScopedViewSet):
+    """``/api/v1/suppliers`` (R15, §4.20.6). Every member reads and adds.
+
+    Every write goes through :mod:`network.suppliers`. Never deleted:
+    deactivating is how one leaves the pickers.
+    """
+
+    serializer_class = SupplierSerializer
+    model = Supplier
+    select_related = ("registered_by",)
+    filterset_class = SupplierFilter
+    http_method_names = ["get", "post", "patch", "head", "options"]
+    required_permissions = {
+        "decide": PERM.FINANCE_APPROVE,
+        "deactivate": PERM.FINANCE_APPROVE,
+        "reactivate": PERM.FINANCE_APPROVE,
+        "link_history": PERM.FINANCE_APPROVE,
+    }
+    ordering_fields = ["name", "created_at"]
+
+    def perform_create(self, serializer):  # type: ignore[no-untyped-def]
+        # The service stamps the registrar; the base class's created_by is not a field.
+        serializer.save()
+
+    @property
+    def search_fields(self) -> list[str]:  # type: ignore[override]
+        """Searching the PIN is itself an answer, so only Finance may."""
+        request = getattr(self, "request", None)
+        if request is not None and _holds_finance(request.user):
+            return ["name", "contact_name", "phone", "kra_pin_key"]
+        return ["name", "contact_name", "phone"]
+
+    def partial_update(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        supplier = self.get_object()
+        registrar_may = supplier.registered_by_id == request.user.pk and supplier.status in (
+            SupplierStatus.PENDING,
+            SupplierStatus.REJECTED,
+        )
+        if not (registrar_may or _holds_finance(request.user)):
+            raise PermissionDenied(
+                "Only the person who added this can edit it while it waits or is "
+                "rejected; after that Finance edits it."
+            )
+        serializer = self.get_serializer(supplier, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        changes = {
+            k: v
+            for k, v in serializer.validated_data.items()
+            if k in supplier_services.EDITABLE_FIELDS
+        }
+        supplier = supplier_services.update_supplier(
+            supplier, actor=request.user, changes=changes, request=request
+        )
+        return Response(self.get_serializer(supplier).data)
+
+    @action(detail=True, methods=["post"])
+    def decide(self, request, pk=None):  # type: ignore[no-untyped-def]
+        body = SupplierDecideSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        supplier = supplier_services.decide_supplier(
+            self.get_object(),
+            actor=request.user,
+            approved=body.validated_data["approved"],
+            reason=body.validated_data["reason"],
+            request=request,
+        )
+        return Response(self.get_serializer(supplier).data)
+
+    @action(detail=True, methods=["post"])
+    def resubmit(self, request, pk=None):  # type: ignore[no-untyped-def]
+        supplier = supplier_services.resubmit(
+            self.get_object(), actor=request.user, request=request
+        )
+        return Response(self.get_serializer(supplier).data)
+
+    @action(detail=True, methods=["post"])
+    def deactivate(self, request, pk=None):  # type: ignore[no-untyped-def]
+        supplier = supplier_services.set_active(
+            self.get_object(), actor=request.user, active=False, request=request
+        )
+        return Response(self.get_serializer(supplier).data)
+
+    @action(detail=True, methods=["post"])
+    def reactivate(self, request, pk=None):  # type: ignore[no-untyped-def]
+        supplier = supplier_services.set_active(
+            self.get_object(), actor=request.user, active=True, request=request
+        )
+        return Response(self.get_serializer(supplier).data)
+
+    @action(detail=True, methods=["post"], url_path="link-history")
+    def link_history(self, request, pk=None):  # type: ignore[no-untyped-def]
+        linked = supplier_services.link_history(
+            self.get_object(), actor=request.user, request=request
+        )
+        return Response({"linked": linked})

@@ -79,12 +79,17 @@ ATTACHABLE_TARGETS: dict[str, tuple[str, ...]] = {
     "commercials.ProjectExpense": (),
     # R3: the casual's ID photo, taken by whoever registers them.
     "commercials.Casual": (),
+    # R15, §4.20.7: a supplier's documents (PIN certificate, bank letter). The
+    # registrar adds them while it is PENDING or REJECTED; Finance always.
+    "network.Supplier": (),
 }
 
 #: Targets where the **record's own owner** decides, not a permission (§4.17.7).
 #: Their entry in ``ATTACHABLE_TARGETS`` is empty on purpose: any member may
 #: attach, but only to what they recorded, and only while it can still change.
-OWNER_RULED_TARGETS = frozenset({"commercials.ProjectExpense", "commercials.Casual"})
+OWNER_RULED_TARGETS = frozenset(
+    {"commercials.ProjectExpense", "commercials.Casual", "network.Supplier"}
+)
 
 #: Expense statuses in which photos may still be added or removed. After final
 #: approval the evidence is fixed: it is what the approval was given on.
@@ -110,9 +115,19 @@ def _can_attach_to(held, target_type: str) -> bool:  # type: ignore[no-untyped-d
 
 def _owner_of(target) -> int | None:  # type: ignore[no-untyped-def]
     """Who recorded or registered an owner-ruled record."""
-    if target._meta.label == "commercials.Casual":
+    if target._meta.label in ("commercials.Casual", "network.Supplier"):
         return target.registered_by_id  # type: ignore[no-any-return]
     return target.recorded_by_id  # type: ignore[no-any-return]
+
+
+def _require_supplier_documents_open(target, user) -> None:  # type: ignore[no-untyped-def]
+    """A supplier's documents are fixed once APPROVED, except by Finance (§4.20.7)."""
+    if resolve_permissions(user).has(PERM.FINANCE_APPROVE):
+        return
+    if target.status not in ("PENDING", "REJECTED"):
+        raise AttachmentLocked(
+            "This supplier is approved, so its documents can only be changed by Finance."
+        )
 
 
 def _require_evidence_open(target) -> None:  # type: ignore[no-untyped-def]
@@ -271,13 +286,31 @@ class AttachmentViewSet(TenantScopedViewSet):
             .annotate(key=Cast("pk", output_field=CharField()))
             .values("key")
         )
+        from network.models import Supplier
+
+        added = (
+            Supplier.objects.filter(registered_by=self.request.user)
+            .annotate(key=Cast("pk", output_field=CharField()))
+            .values("key")
+        )
         return queryset.exclude(
             Q(target_type="commercials.Casual") & ~Q(target_id__in=registered)
-        )
+        ).exclude(Q(target_type="network.Supplier") & ~Q(target_id__in=added))
 
     def _require_owner(self, target) -> None:  # type: ignore[no-untyped-def]
         """The recorder (or registrar) only, and only while the entry can change."""
         if target._meta.label not in OWNER_RULED_TARGETS:
+            return
+        if target._meta.label == "network.Supplier":
+            if resolve_permissions(self.request.user).has(PERM.FINANCE_APPROVE):
+                return
+            if _owner_of(target) != self.request.user.pk:
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied(
+                    "Only the person who added this supplier, or Finance, can add documents."
+                )
+            _require_supplier_documents_open(target, self.request.user)
             return
         if _owner_of(target) != self.request.user.pk:
             from rest_framework.exceptions import PermissionDenied
@@ -426,6 +459,12 @@ class AttachmentViewSet(TenantScopedViewSet):
             expense = ProjectExpense.objects.filter(pk=instance.target_id).first()
             if expense is not None:
                 _require_evidence_open(expense)
+        if instance.target_type == "network.Supplier":
+            from network.models import Supplier
+
+            supplier = Supplier.objects.filter(pk=instance.target_id).first()
+            if supplier is not None:
+                _require_supplier_documents_open(supplier, self.request.user)
         record(
             AuditAction.ATTACHMENT_REMOVED,
             actor=self.request.user,
