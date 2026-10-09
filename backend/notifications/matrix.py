@@ -78,6 +78,11 @@ class Event:
     # R14, §4.20.9: a vehicle's insurance or inspection is within 30 days of
     # expiring, or already has. In-app and email; SMS off (D30).
     ASSET_EXPIRY_DUE = "asset.expiry_due"
+    # R13, §4.18.10: a day's slice needs its approver; a slice was rejected; a
+    # session nobody can approve. SMS off (D30).
+    ATTENDANCE_AWAITING_APPROVAL = "attendance.awaiting_approval"
+    ATTENDANCE_REJECTED = "attendance.rejected"
+    ATTENDANCE_UNROUTED = "attendance.unrouted"
 
 
 @dataclass(frozen=True)
@@ -265,6 +270,26 @@ DEFAULT_MATRIX: tuple[EventSpec, ...] = (
         "Vehicle insurance or inspection expiring",
         (Recipient.OWNER,),
         (Channel.IN_APP, Channel.EMAIL),
+    ),
+    EventSpec(
+        Event.ATTENDANCE_AWAITING_APPROVAL,
+        "Work day awaiting approval",
+        (Recipient.LEVEL_APPROVERS,),
+        (Channel.IN_APP, Channel.EMAIL),
+        carries_a_control=True,
+    ),
+    EventSpec(
+        Event.ATTENDANCE_REJECTED,
+        "Work day rejected",
+        (Recipient.REQUESTER,),
+        (Channel.IN_APP, Channel.EMAIL),
+    ),
+    EventSpec(
+        Event.ATTENDANCE_UNROUTED,
+        "Work day with nobody to approve it",
+        (Recipient.OWNER,),
+        (Channel.IN_APP,),
+        carries_a_control=True,
     ),
     EventSpec(
         Event.GATE_OUT_EXPIRED,

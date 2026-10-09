@@ -203,10 +203,14 @@ def _dispatch(event: NotificationEvent) -> int:
         return 0
 
     document = _load_target(event)
-    recipients = resolve_recipients(organization, groups, document)
+    recipients = resolve_recipients(organization, groups, document, event.payload)
 
     spec = MATRIX_BY_EVENT.get(event.event_key)
-    subject = _finance_headline(event) or (spec.label if spec else event.event_key)
+    subject = (
+        _finance_headline(event)
+        or _attendance_headline(event)
+        or (spec.label if spec else event.event_key)
+    )
     body = render_body(event)
 
     created = 0
@@ -357,7 +361,7 @@ def retry_pending(organization_id, *, limit: int = 200) -> int:
 # --------------------------------------------------------------------------
 
 
-def resolve_recipients(organization, groups, document) -> list:
+def resolve_recipients(organization, groups, document, payload: dict | None = None) -> list:
     """Turn recipient *groups* into people (L2).
 
     Groups rather than names, so the matrix survives someone leaving. Duplicates
@@ -368,24 +372,29 @@ def resolve_recipients(organization, groups, document) -> list:
     users: dict[int, User] = {}
 
     for group in groups:
-        for user in _resolve_group(organization, group, document):
+        for user in _resolve_group(organization, group, document, payload):
             if user is not None and user.is_active:
                 users[user.pk] = user
 
     return list(users.values())
 
 
-def _resolve_group(organization, group: str, document) -> list:
+def _resolve_group(organization, group: str, document, payload: dict | None = None) -> list:
     from accounts.permissions_registry import PERM
 
     if group == Recipient.REQUESTER:
         # Money entries name their requester `recorded_by` (R4).
+        # A work day names its person (R13).
         return [
-            getattr(document, "requested_by", None) or getattr(document, "recorded_by", None)
+            getattr(document, "requested_by", None)
+            or getattr(document, "recorded_by", None)
+            or getattr(document, "person", None)
         ]
 
     if group == Recipient.LEVEL_APPROVERS:
-        return _level_approvers(organization, document)
+        return _level_approvers(
+            organization, document, request_id=(payload or {}).get("approval_request_id")
+        )
 
     if group == Recipient.FINANCE_APPROVERS:
         return _users_with_permission(organization, PERM.FINANCE_APPROVE)
@@ -417,7 +426,7 @@ def _resolve_group(organization, group: str, document) -> list:
     return []
 
 
-def _level_approvers(organization, document) -> list:
+def _level_approvers(organization, document, request_id=None) -> list:
     """Who the lowest open level of a finance entry is addressed to (R4, §4.17.9).
 
     Mirrors ``can_approve``: a named user is that user's alone; a permission
@@ -444,6 +453,10 @@ def _level_approvers(organization, document) -> list:
     # two parallel level-1 slices, and both are told (R13, §4.18.5 change 5).
     # Every other document has one request per level, as before.
     current_requests = list(open_levels.filter(level=first.level))
+    if request_id is not None:
+        # One notification per work-day slice: only that slice's addressee is told,
+        # not the other manager of a two-manager day (R13, §4.18.10).
+        current_requests = [item for item in open_levels if item.pk == request_id]
 
     people: list = []
     seen: set[int] = set()
@@ -520,6 +533,8 @@ def render_body(event: NotificationEvent) -> str:
     headline = _finance_headline(event)
     if headline:
         return _finance_body(event, headline)
+    if event.event_key in _ATTENDANCE_EVENTS:
+        return _attendance_body(event)
 
     if event.event_key == Event.GATE_OUT_AWAITING_APPROVAL:
         destination = payload.get("destination")
@@ -671,4 +686,57 @@ def _finance_body(event: NotificationEvent, headline: str) -> str:
         parts.append("You can correct it and send it again.")
     elif event.event_key == Event.FINANCE_PAID and payload.get("reference"):
         parts.append(f"Payment reference: {payload['reference']}.")
+    return " ".join(parts)
+
+
+# --------------------------------------------------------------------------
+# work day wording (R13, §4.18.10)
+# --------------------------------------------------------------------------
+
+_ATTENDANCE_EVENTS = frozenset(
+    {Event.ATTENDANCE_AWAITING_APPROVAL, Event.ATTENDANCE_REJECTED, Event.ATTENDANCE_UNROUTED}
+)
+
+
+def _attendance_headline(event: NotificationEvent) -> str:
+    """"Work day waiting for your approval: Wanjiru Worker, Mon 2 Mar 2026, 8.5 h"."""
+    if event.event_key not in _ATTENDANCE_EVENTS:
+        return ""
+    payload = event.payload or {}
+    verb = {
+        Event.ATTENDANCE_AWAITING_APPROVAL: "waiting for your approval",
+        Event.ATTENDANCE_REJECTED: "rejected",
+        Event.ATTENDANCE_UNROUTED: "has nobody to approve it",
+    }[event.event_key]
+    what = ", ".join(
+        part
+        for part in (
+            payload.get("person"),
+            payload.get("date_display"),
+            payload.get("hours_display"),
+        )
+        if part
+    )
+    corrected = " (corrected)" if payload.get("corrected") else ""
+    return f"Work day {verb}{corrected}: {what}".strip()
+
+
+def _attendance_body(event: NotificationEvent) -> str:
+    payload = event.payload or {}
+    parts = [f"{_attendance_headline(event)}."]
+    flags = [flag for flag in payload.get("flags") or [] if flag != "corrected"]
+    if flags and event.event_key != Event.ATTENDANCE_REJECTED:
+        parts.append(f"Flags: {', '.join(flags)}.")
+    if event.event_key == Event.ATTENDANCE_AWAITING_APPROVAL:
+        parts.append("Open Approvals to decide.")
+    elif event.event_key == Event.ATTENDANCE_REJECTED:
+        if payload.get("approver"):
+            parts.append(f"Rejected by {payload['approver']}.")
+        if payload.get("reason"):
+            parts.append(f"Reason: {payload['reason']}")
+        parts.append("You can correct it in My time within 30 days.")
+    elif event.event_key == Event.ATTENDANCE_UNROUTED:
+        parts.append(
+            "No project manager or Director can approve it. Assign one so the day can be approved."
+        )
     return " ".join(parts)

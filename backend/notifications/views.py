@@ -41,6 +41,8 @@ RESOURCE_ROUTES = {
     # R14, R15 (§4.20.9): the register screens.
     "network.Supplier": "/settings/network?tab=suppliers",
     "assets.Asset": "/assets/{id}",
+    # R13, §4.18.10: a person's day.
+    "attendance.WorkDay": "/time",
 }
 
 #: Events whose link is not the document's own page. An approver goes to the

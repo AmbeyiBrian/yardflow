@@ -309,6 +309,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.sweeps.dispatch_sweeps",
         "schedule": crontab(hour="5", minute="30"),
     },
+    # R13, §4.18.5: close forgotten sessions at the tenant's hour and send each
+    # finished day to its approvers. Hourly, because the hour is the tenant's.
+    "attendance-sweep": {
+        "task": "attendance.sweeps.dispatch_attendance_sweep",
+        "schedule": crontab(minute="5"),
+    },
     # L3: deliveries that failed transiently are retried rather than lost. More
     # often than the sweeps, because a notification that arrives an hour late has
     # already missed the decision it was about.
