@@ -64,6 +64,24 @@ export interface WorkSession {
   corrections?: WorkSessionCorrection[];
 }
 
+/**
+ * One approver's part of a day (§4.18.5): sessions on a PM's project go to
+ * that PM, the rest to the Director role. Assumed read shape.
+ */
+export interface WorkDaySlice {
+  id: number;
+  approver: number | null;
+  approver_name?: string;
+  /** The project the slice covers; null for the Director-routed remainder. */
+  project: number | null;
+  project_name?: string | null;
+  status: DayStatus;
+  /** True when this slice is the caller's to decide. */
+  is_mine?: boolean;
+  reason?: string;
+  decided_at?: string | null;
+}
+
 export interface WorkDay {
   id: number;
   person: number;
@@ -74,6 +92,7 @@ export interface WorkDay {
   rejection_reason?: string;
   session_count?: number;
   sessions?: WorkSession[];
+  slices?: WorkDaySlice[];
 }
 
 export type PlaceKind = 'site' | 'location';
@@ -112,5 +131,22 @@ export interface CorrectionBody {
   kind: 'EDIT' | 'ADD';
   corrected_in_at?: string;
   corrected_out_at?: string;
+  reason: string;
+}
+
+export interface DecideDayBody {
+  id: number | string;
+  approved: boolean;
+  reason: string;
+}
+
+/** §4.18.6a: the Director adds a day for someone. */
+export interface AddDayBody {
+  person: number;
+  date: string;
+  place: { site: number } | { location: number };
+  project?: number;
+  start: string;
+  end: string;
   reason: string;
 }

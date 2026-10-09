@@ -42,6 +42,7 @@ export const PERM = {
   // Epic R. Everyone's clocked time.
   ATTENDANCE_VIEW_ALL: 'attendance.view_all',
 
+
   CATALOGUE_MANAGE: 'catalogue.manage',
   SETTINGS_MANAGE: 'settings.manage',
   USERS_MANAGE: 'users.manage',

@@ -9,10 +9,12 @@ import { useQuery } from '@tanstack/react-query';
 import { api, type ApiError } from '../../api/client';
 import { useAction, useDetail, useList, type QueryParams } from '../../api/hooks';
 import type {
+  AddDayBody,
   ClockInBody,
   ClockOutBody,
   CorrectionBody,
   DayStatus,
+  DecideDayBody,
   WorkDay,
   WorkSession,
 } from './types';
@@ -30,6 +32,8 @@ export interface WorkDayParams extends QueryParams {
   project?: number;
   from?: string;
   to?: string;
+  /** §4.18.7: days with a slice waiting on the caller. */
+  awaiting_me?: boolean;
 }
 
 /** The caller's open session, or null when clocked out. */
@@ -72,4 +76,20 @@ export const useCorrectSession = () =>
     resource: SESSIONS,
     path: (b) => `${b.id}/correct`,
     invalidates: BOTH,
+  });
+
+/** §4.18.5: the caller decides their own slice only; the server enforces it. */
+export const useDecideDay = () =>
+  useAction<DecideDayBody, WorkDay>({
+    resource: DAYS,
+    path: (b) => `${b.id}/decide`,
+    invalidates: [DAYS, 'approvals/pending'],
+  });
+
+/** §4.18.6a: Director-role holders add a day for someone else. */
+export const useAddDay = () =>
+  useAction<AddDayBody, WorkDay>({
+    resource: DAYS,
+    path: () => 'add',
+    invalidates: [DAYS, 'approvals/pending'],
   });

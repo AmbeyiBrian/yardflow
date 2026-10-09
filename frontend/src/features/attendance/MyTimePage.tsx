@@ -13,6 +13,10 @@ import { useState } from 'react';
 import { errorMessage } from '../../api/hooks';
 import { Banner, Button, Card, Field, Input, Spinner, Textarea } from '../../components/ui';
 import { EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
+import { TabStrip } from '../../components/ui/TabStrip';
+import { useDayAccess } from './access';
+import { AddDaySheet } from './AddDaySheet';
+import { timeScopes } from './approvals';
 import { useCorrectSession, useWorkDay, useWorkDays } from './api';
 import { ClockInCard } from './ClockInCard';
 import { formatDistance } from './nearby';
@@ -38,13 +42,36 @@ function toLocalInput(iso: string | null): string {
 }
 
 export default function MyTimePage() {
-  const days = useWorkDays({ scope: 'mine' });
+  // §4.18.11: Team for PMs, Everyone for view-all and the Director.
+  const access = useDayAccess();
+  const scopes = timeScopes(access);
+  const [picked, setScope] = useState<'mine' | 'team' | 'all'>('mine');
+  const scope = scopes.includes(picked) ? picked : 'mine';
+  const days = useWorkDays({ scope });
   const [openId, setOpenId] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="My time" subtitle="Your days, hours and whether they are approved." />
       <ClockInCard />
+
+      {scopes.length > 1 ? (
+        <TabStrip<'mine' | 'team' | 'all'>
+          tabs={scopes.map((key) => ({
+            key,
+            label: key === 'mine' ? 'Mine' : key === 'team' ? 'Team' : 'Everyone',
+          }))}
+          current={scope}
+          onSelect={setScope}
+          aria-label="Whose time"
+        />
+      ) : null}
+      {scope === 'all' && access.isDirector ? (
+        <Button variant="secondary" className="self-start" onClick={() => setAdding(true)}>
+          Add a day
+        </Button>
+      ) : null}
 
       <ListState query={days}>
         {(days.data?.results ?? []).length === 0 ? (
@@ -56,7 +83,7 @@ export default function MyTimePage() {
           <ul className="flex flex-col gap-2">
             {(days.data?.results ?? []).map((d) => (
               <li key={d.id}>
-                <DayRow day={d} onOpen={() => setOpenId(d.id)} />
+                <DayRow day={d} showPerson={scope !== 'mine'} onOpen={() => setOpenId(d.id)} />
               </li>
             ))}
           </ul>
@@ -64,11 +91,20 @@ export default function MyTimePage() {
       </ListState>
 
       <DaySheet id={openId} onClose={() => setOpenId(null)} />
+      {adding ? <AddDaySheet onClose={() => setAdding(false)} /> : null}
     </div>
   );
 }
 
-function DayRow({ day, onOpen }: { day: WorkDay; onOpen: () => void }) {
+function DayRow({
+  day,
+  onOpen,
+  showPerson,
+}: {
+  day: WorkDay;
+  onOpen: () => void;
+  showPerson?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -76,7 +112,10 @@ function DayRow({ day, onOpen }: { day: WorkDay; onOpen: () => void }) {
       className="flex min-h-[44px] w-full flex-col gap-1 rounded-xl border border-slate-200 bg-white p-4 text-left"
     >
       <span className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-slate-900">{dayLabel(day.date)}</span>
+        <span className="text-sm font-medium text-slate-900">
+          {showPerson && day.person_name ? `${day.person_name}, ` : ''}
+          {dayLabel(day.date)}
+        </span>
         <span className="flex items-center gap-2">
           <span className="text-sm text-slate-700">{hoursLabel(day.hours)}</span>
           <StatusBadge status={day.status} />

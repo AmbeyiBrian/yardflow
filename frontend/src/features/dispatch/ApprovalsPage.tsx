@@ -29,6 +29,9 @@ import { CloseoutQueue } from '../projects/ProjectQueuesPage';
 import { FinanceExpenseQueue, FinanceRequestQueue } from './FinanceApprovals';
 import { PurchaseApprovalQueue, SubcontractPaymentQueue } from '../money/PurchaseApprovals';
 import { SupplierApprovalQueue } from '../settings/SupplierApprovals';
+import { useDayAccess } from '../attendance/access';
+import { showDaysTab } from '../attendance/approvals';
+import { DayApprovalQueue } from '../attendance/DayApprovals';
 import { biometricsAvailable, signApproval } from '../../auth/webauthn';
 import { useSession } from '../../auth/session';
 import {
@@ -78,7 +81,8 @@ type Tab =
   | 'purchases'
   | 'subpayments'
   | 'closeouts'
-  | 'suppliers';
+  | 'suppliers'
+  | 'days';
 
 /**
  * Every decision waiting on one person, in one place.
@@ -90,6 +94,7 @@ type Tab =
  */
 export default function ApprovalsPage() {
   const { has } = useSession();
+  const { awaitingCount, managesProject } = useDayAccess();
 
   // Only the tabs this person can act on. A manager who approves expenses but
   // releases no material should not be shown an empty material queue and left
@@ -117,9 +122,13 @@ export default function ApprovalsPage() {
       : []),
     // R15 / §4.20.3: Finance checks new suppliers.
     ...(has(PERM.FINANCE_APPROVE) ? [{ key: 'suppliers' as Tab, label: 'Suppliers' }] : []),
+    // R13 / §4.18.11: an open request on me, or a project I manage.
+    ...(showDaysTab(awaitingCount, managesProject) ? [{ key: 'days' as Tab, label: 'Days' }] : []),
   ];
 
-  const [tab, setTab] = useState<Tab>(tabs[0]?.key ?? 'material');
+  const [picked, setTab] = useState<Tab>(tabs[0]?.key ?? 'material');
+  // Days appears once its queries load; fall back to the first tab until then.
+  const tab = tabs.some((entry) => entry.key === picked) ? picked : (tabs[0]?.key ?? picked);
   // On a phone, a thumb across the queue moves to the next one. The strip
   // still works; this is the gesture people already make.
   const swipe = useSwipeTabs<Tab>(
@@ -148,6 +157,7 @@ export default function ApprovalsPage() {
         {tab === 'closeouts' ? <CloseoutQueue /> : null}
         {tab === 'material' ? <MaterialQueue /> : null}
         {tab === 'suppliers' ? <SupplierApprovalQueue /> : null}
+        {tab === 'days' ? <DayApprovalQueue /> : null}
       </SwipePane>
     </div>
   );

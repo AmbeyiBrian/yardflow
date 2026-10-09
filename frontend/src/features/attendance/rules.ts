@@ -37,6 +37,10 @@ export const PLAIN: Record<string, string> = {
   CLOCK_SESSION_LOCKED: 'That session has been decided and cannot change.',
   CORRECTION_NOT_ALLOWED: 'Only a rejected day can be corrected, and only for 30 days.',
   CORRECTION_REASON_REQUIRED: 'Say why the time is being corrected.',
+  WORK_DAY_SELF_APPROVAL: 'You cannot approve your own day.',
+  WORK_DAY_NOT_DECIDABLE: 'That day is not waiting on you, or has already been decided.',
+  WORK_DAY_ADD_NOT_ALLOWED: 'Only the Director can add a day, and never for themselves.',
+  REJECTION_REASON_REQUIRED: 'Say why you are rejecting it.',
   PROJECT_AMBIGUOUS: 'This site is on more than one open project. Choose which one this is for.',
 };
 
