@@ -20,6 +20,13 @@ import { Banner, Button } from './ui';
 import { Breadcrumbs, CrumbProvider } from './ui/breadcrumbs';
 import { PERM, type Permission } from '../auth/permissions';
 import { useSession } from '../auth/session';
+import { useList } from '../api/hooks';
+
+const APPROVAL_PERMS: Permission[] = [
+  PERM.GATE_OUT_APPROVE,
+  PERM.DISPOSAL_APPROVE,
+  PERM.PROJECT_VIEW_COST,
+];
 
 interface NavItem {
   to: string;
@@ -30,7 +37,7 @@ interface NavItem {
 }
 
 // Kept in one list so the phone tab bar and the desktop sidebar can never drift
-// apart.
+// apart. Order matters: the first four visible items become the phone tabs (E7).
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Home', icon: <GlyphHome /> },
   {
@@ -45,16 +52,19 @@ const NAV_ITEMS: NavItem[] = [
     anyOf: [PERM.GATE_OUT_REQUEST, PERM.GATE_OUT_RELEASE],
     icon: <GlyphTruck />,
   },
+  // E7: Stock sits ahead of Approvals so the phone bar's four tabs are Home,
+  // Gate-in, Gate-out, Stock — the things touched all day. Approvals moves under
+  // More, where a count badge says when it needs a look.
+  { to: '/stock', label: 'Stock', icon: <GlyphBoxes /> },
   {
     // Everything waiting on one person: gate passes, disposals, and — since
     // O16 — project expenses and closeout costs. A manager who approves only
     // the last two still needs the entry, hence `project.view_cost` here.
     to: '/approvals',
     label: 'Approvals',
-    anyOf: [PERM.GATE_OUT_APPROVE, PERM.DISPOSAL_APPROVE, PERM.PROJECT_VIEW_COST],
+    anyOf: APPROVAL_PERMS,
     icon: <GlyphCheck />,
   },
-  { to: '/stock', label: 'Stock', icon: <GlyphBoxes /> },
   {
     // O12: a manager's standing question is "how is my PO doing", and it is
     // asked often enough to be top-level rather than buried under settings.
@@ -145,6 +155,18 @@ function AppShellInner() {
 
   const visible = NAV_ITEMS.filter((item) => !item.anyOf || hasAny(...item.anyOf));
 
+  // E7: how many approvals are waiting. Only asked of people who can act on
+  // them; `page_size: 1` because only `count` is wanted. The app turns window
+  // focus refetching off globally, but coming back to the tab is exactly when a
+  // count like this has gone stale, so it is switched on here.
+  const canApprove = hasAny(...APPROVAL_PERMS);
+  const pending = useList<{ id: number }>(
+    'approvals/pending',
+    { page_size: 1 },
+    { enabled: canApprove, refetchOnWindowFocus: true },
+  );
+  const pendingCount = canApprove ? (pending.data?.count ?? 0) : 0;
+
   return (
     <div className="flex min-h-full min-h-dvh flex-col bg-slate-50 md:flex-row">
 
@@ -165,7 +187,11 @@ function AppShellInner() {
             reason something is unreachable. */}
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2">
           {visible.map((item) => (
-            <SidebarLink key={item.to} item={item} />
+            <SidebarLink
+              key={item.to}
+              item={item}
+              badge={item.to === '/approvals' ? pendingCount : 0}
+            />
           ))}
         </nav>
         {/* Pinned to the bottom of the sidebar rather than to the end of a long
@@ -248,13 +274,29 @@ function AppShellInner() {
         </main>
 
         {/* Bottom tab bar on a phone — thumb-reachable. */}
-        <PhoneTabBar items={visible} />
+        <PhoneTabBar items={visible} approvalsWaiting={pendingCount} />
       </div>
     </div>
   );
 }
 
-function SidebarLink({ item }: { item: NavItem }) {
+/** A small count pill; nothing at zero. The label is what a screen reader hears. */
+function CountBadge({ count, className }: { count: number; className?: string }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      aria-label={`${count} waiting`}
+      className={cn(
+        'inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] leading-[18px] font-semibold text-white',
+        className,
+      )}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+function SidebarLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
   return (
     <NavLink
       to={item.to}
@@ -268,6 +310,7 @@ function SidebarLink({ item }: { item: NavItem }) {
     >
       <span aria-hidden="true">{item.icon}</span>
       {item.label}
+      <CountBadge count={badge} className="ml-auto" />
     </NavLink>
   );
 }
@@ -282,8 +325,11 @@ function SidebarLink({ item }: { item: NavItem }) {
  * this product is built around. The sidebar has them all, so it only showed up
  * for somebody working on a phone, which is everybody in a yard.
  *
- * So: four tabs, then More. The tabs are the four a storekeeper touches all day —
- * whatever order `NAV_ITEMS` puts first — and everything else is one tap away in
+ * So: four tabs, then More. The tabs are the first four `NAV_ITEMS` the person
+ * can see, which the list orders as Home, Gate-in, Gate-out, Stock (E7) — what a
+ * yard touches all day. Approvals is therefore under More for an owner, and a
+ * waiting-count badge on More (and on the row) keeps it from being forgotten.
+ * Everything else is one tap away in
  * a sheet, at full width and full height, which is easier to hit than a fifth
  * cramped tab was.
  *
@@ -292,7 +338,7 @@ function SidebarLink({ item }: { item: NavItem }) {
  */
 const PRIMARY_TABS = 4;
 
-function PhoneTabBar({ items }: { items: NavItem[] }) {
+function PhoneTabBar({ items, approvalsWaiting }: { items: NavItem[]; approvalsWaiting: number }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
@@ -315,6 +361,9 @@ function PhoneTabBar({ items }: { items: NavItem[] }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
+
+  // The badge goes where Approvals actually is: the sheet's button, or its tab.
+  const approvalsInRest = rest.some((item) => item.to === '/approvals');
 
   const restIsActive = rest.some(
     (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`),
@@ -359,6 +408,10 @@ function PhoneTabBar({ items }: { items: NavItem[] }) {
               >
                 <span aria-hidden="true">{item.icon}</span>
                 {item.label}
+                <CountBadge
+                  count={item.to === '/approvals' ? approvalsWaiting : 0}
+                  className="ml-auto"
+                />
               </NavLink>
             ))}
           </div>
@@ -375,7 +428,11 @@ function PhoneTabBar({ items }: { items: NavItem[] }) {
         )}
       >
         {primary.map((item) => (
-          <TabLink key={item.to} item={item} />
+          <TabLink
+            key={item.to}
+            item={item}
+            badge={item.to === '/approvals' ? approvalsWaiting : 0}
+          />
         ))}
         {overflows ? (
           <button
@@ -384,14 +441,18 @@ function PhoneTabBar({ items }: { items: NavItem[] }) {
             aria-controls="more-menu"
             onClick={() => setOpen((wasOpen) => !wasOpen)}
             className={cn(
-              'flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-xs',
+              'relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-xs',
               open || restIsActive ? 'text-slate-900' : 'text-slate-500',
             )}
           >
-            <span aria-hidden="true">
+            <span aria-hidden="true" className="relative">
               <GlyphMore />
             </span>
             <span className="truncate px-1">More</span>
+            <CountBadge
+              count={approvalsInRest ? approvalsWaiting : 0}
+              className="absolute top-1 left-1/2 ml-2"
+            />
           </button>
         ) : null}
       </nav>
@@ -399,20 +460,21 @@ function PhoneTabBar({ items }: { items: NavItem[] }) {
   );
 }
 
-function TabLink({ item }: { item: NavItem }) {
+function TabLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
   return (
     <NavLink
       to={item.to}
       end={item.to === '/'}
       className={({ isActive }) =>
         cn(
-          'flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-xs',
+          'relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-xs',
           isActive ? 'text-slate-900' : 'text-slate-500',
         )
       }
     >
       <span aria-hidden="true">{item.icon}</span>
       <span className="truncate px-1">{item.label}</span>
+      <CountBadge count={badge} className="absolute top-1 left-1/2 ml-2" />
     </NavLink>
   );
 }
