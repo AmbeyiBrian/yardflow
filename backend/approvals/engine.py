@@ -323,8 +323,16 @@ def project_of(document):  # type: ignore[no-untyped-def]
 #: already store, so ``can_approve`` can tell them apart from a request alone,
 #: without importing ``commercials`` into the engine.
 FINANCE_DOCUMENT_TYPES = frozenset(
-    {"commercials.ProjectExpense", "commercials.AllowanceRequest"}
+    {
+        "commercials.ProjectExpense",
+        "commercials.AllowanceRequest",
+        "commercials.SitePurchase",  # R7: routed exactly as an expense (§4.19.3)
+    }
 )
+
+#: A subcontract payment has one level, the project's PM, and no PAID stage
+#: (R8, §4.19.4). Its own set so it never reaches ``_finance_levels``.
+SUBCONTRACT_PAYMENT_TYPES = frozenset({"commercials.SubcontractPayment"})
 
 #: The permission the second finance level is addressed to (§4.17.7).
 FINANCE_APPROVE_PERMISSION = "finance.approve"
@@ -399,6 +407,19 @@ def required_levels(document, *, facts: ApprovalFacts | None = None) -> list[Req
     # nothing else (§4.20.3).
     if document_type_of(document) in SUPPLIER_DOCUMENT_TYPES:
         return [RequiredLevel(level=1, permission=FINANCE_APPROVE_PERMISSION)]
+    # R8: one level, the project's PM. `_project_level` raises
+    # PROJECT_HAS_NO_ACTIVE_MANAGER for an inactive manager; a missing one is
+    # refused the same way (D28, no fallback approver).
+    if document_type_of(document) in SUBCONTRACT_PAYMENT_TYPES:
+        level = _project_level(document)
+        if level is None:
+            project = project_of(document)
+            raise ProjectHasNoActiveManager(
+                f"{project} has no project manager, so nobody can approve this "
+                f"payment. An owner must assign one (D28).",
+                details={"project": str(project)},
+            )
+        return [level]
 
     # O6, D22: project material routes to that project's manager, as the only
     # level, and never reaches the criticality rules below.
@@ -622,7 +643,11 @@ def can_approve(user, approval_request: ApprovalRequest, *, document=None) -> tu
     # by the O6 exception, which exists because a PM is the *only* level on
     # project material. Here Finance is a second signature, so the exception has
     # nothing to stand on.
-    if approval_request.document_type in FINANCE_DOCUMENT_TYPES | SUPPLIER_DOCUMENT_TYPES:
+    if (
+        approval_request.document_type in FINANCE_DOCUMENT_TYPES
+        or approval_request.document_type in SUPPLIER_DOCUMENT_TYPES
+        or approval_request.document_type in SUBCONTRACT_PAYMENT_TYPES
+    ):
         requester_id = (
             getattr(document, "requested_by_id", None) or approval_request.requested_by_id
         )

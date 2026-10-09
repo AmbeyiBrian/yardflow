@@ -207,6 +207,68 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
             "requested_by_id": supplier.registered_by_id,
         }
 
+    def _purchase_summary(self, approval_request: ApprovalRequest) -> dict:
+        """R7: what a PM or Finance needs to judge a site purchase from the list."""
+        from commercials.models import SitePurchase
+
+        purchase = (
+            SitePurchase.objects.filter(pk=approval_request.document_id)
+            .select_related("project", "site", "recorded_by")
+            .prefetch_related("lines")
+            .first()
+        )
+        if purchase is None:
+            return {"label": approval_request.document_number}
+
+        return {
+            "id": purchase.pk,
+            "kind": "PURCHASE",
+            "number": purchase.number or approval_request.document_number,
+            "description": ", ".join(
+                line.description or str(line.item_type) for line in purchase.lines.all()
+            ),
+            "amount": str(purchase.amount),
+            "type": purchase.get_destination_display(),
+            "requested_by": str(purchase.recorded_by),
+            "requested_by_id": purchase.recorded_by_id,
+            "project": str(purchase.project),
+            "site": purchase.site.name,
+            "incurred_on": purchase.purchase_date.isoformat(),
+            "over_budget_by": (
+                str(purchase.over_budget_by) if purchase.over_budget_by is not None else None
+            ),
+            "over_budget_reason": purchase.over_budget_reason,
+        }
+
+    def _subcontract_payment_summary(self, approval_request: ApprovalRequest) -> dict:
+        """R8: a payment, with the contract it is against."""
+        from commercials.models import SubcontractPayment
+
+        payment = (
+            SubcontractPayment.objects.filter(pk=approval_request.document_id)
+            .select_related("subcontract__project", "subcontract__subcontractor", "recorded_by")
+            .first()
+        )
+        if payment is None:
+            return {"label": approval_request.document_number}
+
+        contract = payment.subcontract
+        return {
+            "id": payment.pk,
+            "kind": "SUBCONTRACT_PAYMENT",
+            "number": contract.number,
+            "description": f"Payment to {contract.subcontractor}",
+            "amount": str(payment.signed_amount),
+            "type": "Subcontract payment",
+            "requested_by": str(payment.recorded_by),
+            "requested_by_id": payment.recorded_by_id,
+            "project": str(contract.project),
+            "site": "",
+            "incurred_on": payment.paid_on.isoformat(),
+            "reference": payment.reference,
+            "contract_value": str(contract.contract_value),
+        }
+
     def get_document(self, approval_request: ApprovalRequest) -> dict:
         """Enough of the document to decide without a second request.
 
@@ -221,6 +283,11 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
             return self._allowance_summary(approval_request)
         if approval_request.document_type == "network.Supplier":
             return self._supplier_summary(approval_request)
+
+        if approval_request.document_type == "commercials.SitePurchase":
+            return self._purchase_summary(approval_request)
+        if approval_request.document_type == "commercials.SubcontractPayment":
+            return self._subcontract_payment_summary(approval_request)
 
         if approval_request.document_type != "dispatch.GateOut":
             return {"label": approval_request.document_number}

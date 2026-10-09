@@ -157,7 +157,7 @@ def paid_float(tech, pm, finance_user, site, amount="5000"):
 class TestOpenProjectsOf:
     def test_lists_open_projects_by_reference(self, tenant, project, site, pm):
         other = ProjectFactory(reference="WO-9900", manager=pm)
-        other.sites.add(site)
+        other.sites.add(site, through_defaults={"organization_id": other.organization_id})
 
         assert [p.reference for p in finance.open_projects_of(site)] == ["WO-9900", "WO-9901"]
 
