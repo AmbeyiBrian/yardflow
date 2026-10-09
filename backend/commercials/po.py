@@ -20,6 +20,7 @@ from core.audit import record
 from core.exceptions import DomainError
 from core.models import AuditAction
 from network.models import Project, ProjectStatus
+from notifications.events import emit_po_attached
 
 
 class ProjectAlreadyHasPo(DomainError):
@@ -104,6 +105,12 @@ def attach_po(  # type: ignore[no-untyped-def]
             readdress_project_requests(
                 project, old_manager_id=old_manager_id, actor=actor, request=request
             )
+        # R12: Finance is told the PO arrived, so it can fill in the milestones.
+        emit_po_attached(
+            project,
+            days_without_po=(project.po_recorded_at - project.opened_at).days,
+            actor=actor,
+        )
         record(
             AuditAction.DOCUMENT_AMENDED,
             actor=actor,

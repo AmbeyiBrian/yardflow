@@ -39,6 +39,9 @@ RETURN_ACKNOWLEDGEMENT_GRACE_DAYS = 7
 #: How far ahead a vehicle's insurance or inspection expiry is flagged (R14).
 ASSET_EXPIRY_LEAD_DAYS = 30
 
+#: How often an unpaid overdue milestone is chased again (R11, §4.19.7).
+MILESTONE_OVERDUE_REPEAT_DAYS = 7
+
 
 @shared_task(base=TenantTask, requires_organization=False)
 def dispatch_sweeps() -> dict:
@@ -152,6 +155,7 @@ def sweep_tenant(self, organization_id) -> dict:  # type: ignore[no-untyped-def]
         ("expired_gate_passes", _sweep_expired_gate_passes),
         ("unacknowledged_returns", _sweep_unacknowledged_returns),
         ("asset_expiries", _sweep_asset_expiries),
+        ("milestones", _sweep_milestones),
     ):
         try:
             results[name] = run(organization_id)
@@ -276,3 +280,58 @@ def _sweep_asset_expiries(organization_id) -> int:
                 )
                 count += 1
     return count
+
+
+def _sweep_milestones(organization_id) -> dict:
+    """R11, §4.19.7: tell Finance a milestone is due, and chase an overdue one.
+
+    Judged from the milestone's *state* (``milestone_state``) and stamped on the
+    row, so a missed run catches up the next day, a daily run cannot nag, and
+    two overlapping runs cannot both alert: DUE alerts once, OVERDUE again only
+    after ``MILESTONE_OVERDUE_REPEAT_DAYS``.
+    """
+    from datetime import timedelta
+
+    from django.db import transaction
+    from django.utils import timezone
+
+    from commercials.milestones import State, states_for_project
+    from commercials.models import ProjectMilestone
+    from network.models import Project, ProjectStatus
+    from notifications.events import emit_milestone_notice
+    from notifications.matrix import Event
+
+    today = timezone.localdate()
+    counts = {"due": 0, "overdue": 0}
+    projects = Project.objects.filter(status=ProjectStatus.OPEN).exclude(po_number="")
+    for project in projects.select_related("manager"):
+        for milestone, state in states_for_project(project, today):
+            if state.state == State.DUE:
+                field, key, event = "due_notified_on", "due", Event.PO_MILESTONE_DUE
+                if milestone.due_notified_on is not None:
+                    continue
+                claim = ProjectMilestone.objects.filter(
+                    pk=milestone.pk, due_notified_on__isnull=True
+                )
+            elif state.state == State.OVERDUE:
+                field, key, event = (
+                    "overdue_notified_on",
+                    "overdue",
+                    Event.PO_MILESTONE_OVERDUE,
+                )
+                last = milestone.overdue_notified_on
+                if last is not None and today < last + timedelta(
+                    days=MILESTONE_OVERDUE_REPEAT_DAYS
+                ):
+                    continue
+                claim = ProjectMilestone.objects.filter(
+                    pk=milestone.pk, overdue_notified_on=last
+                )
+            else:
+                continue
+            with transaction.atomic():
+                if not claim.update(**{field: today}):
+                    continue
+                emit_milestone_notice(event, project, milestone, state)
+                counts[key] += 1
+    return counts

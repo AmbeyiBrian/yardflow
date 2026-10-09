@@ -38,7 +38,11 @@ RESOURCE_ROUTES = {
     # R4, §4.17.9: money out.
     "commercials.ProjectExpense": "/money/expenses/{id}",
     "commercials.AllowanceRequest": "/money/requests/{id}",
+    # R7, R8, R11 (§4.19.12). A subcontract payment is decided on Approvals; a
+    # milestone and an attached PO live on the project page.
     "commercials.SitePurchase": "/money/purchases/{id}",
+    "commercials.SubcontractPayment": "/approvals",
+    "network.Project": "/projects/{id}",
     # R14, R15 (§4.20.9): the register screens.
     "network.Supplier": "/settings/network?tab=suppliers",
     "assets.Asset": "/assets/{id}",

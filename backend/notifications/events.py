@@ -93,7 +93,10 @@ _FINANCE_TARGETS = frozenset(
     {
         "commercials.ProjectExpense",
         "commercials.AllowanceRequest",
+        # R7, R8 (§4.19.12): a site purchase is routed as an expense, a
+        # subcontract payment has the PM level only and no PAID stage.
         "commercials.SitePurchase",
+        "commercials.SubcontractPayment",
     }
 )
 
@@ -140,10 +143,16 @@ def _finance_payload(entry) -> dict:
     says what was true when it happened: a rejection reads with the reason it was
     given even if the entry is later amended and sent again.
     """
-    from commercials.models import AllowanceRequest, SitePurchase
+    from commercials.models import AllowanceRequest, SitePurchase, SubcontractPayment
 
+    if isinstance(entry, SubcontractPayment):
+        details = _subcontract_payment_payload(entry)
+        _add_decision_details(entry, details)
+        return details
     if isinstance(entry, SitePurchase):
-        return _purchase_payload(entry)
+        details = _purchase_payload(entry)
+        _add_decision_details(entry, details)
+        return details
 
     is_request = isinstance(entry, AllowanceRequest)
     if is_request:
@@ -184,11 +193,119 @@ def _finance_payload(entry) -> dict:
             payload["evidence_state"] = "ARRIVING"
         else:
             payload["evidence_state"] = "NONE"
+    _add_decision_details(entry, payload)
+    return payload
+
+
+def _add_decision_details(entry, payload: dict) -> None:  # type: ignore[no-untyped-def]
+    """What every kind shares: the over-budget flag, the reason, the reference."""
+    over = getattr(entry, "over_budget_by", None)
+    if over:
+        # R7 (§4.19.12): an approver sees the overrun and what the recorder said.
+        payload["over_budget_by"] = f"{over:.2f}"
+        payload["over_budget_by_display"] = _kes(over)
+        if getattr(entry, "over_budget_reason", ""):
+            payload["over_budget_reason"] = entry.over_budget_reason
     if entry.decision_reason:
         payload["reason"] = entry.decision_reason
-    if entry.payment_reference:
-        payload["reference"] = entry.payment_reference
-    return payload
+    reference = getattr(entry, "payment_reference", "")
+    if reference:
+        payload["reference"] = reference
+
+
+def _subcontract_payment_payload(payment) -> dict:  # type: ignore[no-untyped-def]
+    """A subcontract payment (R8, §4.19.12): what the PM needs to judge it."""
+    from decimal import Decimal
+
+    from commercials.budget import subcontract_work_done
+    from commercials.models import ExpenseStatus, SubcontractPayment
+
+    contract = payment.subcontract
+    paid = sum(
+        (
+            row.signed_amount
+            for row in SubcontractPayment.objects.filter(
+                subcontract=contract, status=ExpenseStatus.APPROVED
+            )
+        ),
+        Decimal("0"),
+    )
+    return {
+        "kind": "subcontract_payment",
+        "number": contract.number,
+        "label": f"Subcontract payment {_kes(payment.amount)} · {contract}",
+        "amount": f"{payment.amount:.2f}",
+        "amount_display": _kes(payment.amount),
+        "category": "subcontract payment",
+        "site": "",
+        "project": str(contract.project),
+        "subcontractor": str(contract.subcontractor),
+        "recorded_by": payment.recorded_by.full_name or payment.recorded_by.email,
+        "status": payment.status,
+        "work_done": f"{subcontract_work_done(contract):.2f}",
+        "paid": f"{paid:.2f}",
+        "contract_value": f"{contract.contract_value:.2f}",
+        "reference": payment.reference,
+    }
+
+
+def emit_yard_delivery_expected(purchase) -> NotificationEvent | None:  # type: ignore[no-untyped-def]
+    """R7 (§4.19.3): a yard purchase was approved, so a delivery is on its way.
+
+    For the purchase service to call when it creates the draft gate-in.
+    """
+    supplier = getattr(purchase, "supplier", None)
+    return emit(
+        Event.PURCHASE_YARD_DELIVERY_EXPECTED,
+        purchase,
+        payload={
+            "label": str(purchase),
+            "number": purchase.number,
+            "project": str(purchase.project),
+            "supplier": str(supplier) if supplier is not None else "",
+            "amount_display": _kes(purchase.amount),
+        },
+    )
+
+
+def emit_po_attached(project, *, days_without_po: int, actor) -> NotificationEvent | None:  # type: ignore[no-untyped-def]
+    """R12: Finance is told a PO arrived after the work started."""
+    return emit(
+        Event.PO_ATTACHED,
+        project,
+        payload={
+            "label": project.reference,
+            "project": project.reference,
+            "po_number": project.po_number,
+            "contract_value_display": _kes(project.contract_value or 0),
+            "days_without_po": days_without_po,
+            "attached_by": actor.full_name or actor.email,
+        },
+    )
+
+
+def emit_milestone_notice(  # type: ignore[no-untyped-def]
+    event_key: str, project, milestone, state
+) -> NotificationEvent | None:
+    """R11: a milestone is due to invoice, or its payment is overdue.
+
+    Emitted on the *project*, so the notification links to the project page.
+    """
+    return emit(
+        event_key,
+        project,
+        payload={
+            "label": f"{project}: {milestone.name}",
+            "project": str(project),
+            "milestone": milestone.name,
+            "amount_display": _kes(state.amount) if state.amount is not None else "",
+            "outstanding_display": _kes(state.invoiced - state.received),
+            "due_by": state.due_by.isoformat() if state.due_by else "",
+            "latest_invoice_date": (
+                state.latest_invoice_date.isoformat() if state.latest_invoice_date else ""
+            ),
+        },
+    )
 
 
 def dispatch_event(event_id, *, organization_id=None) -> int:
@@ -240,6 +357,9 @@ def _dispatch(event: NotificationEvent) -> int:
 
     document = _load_target(event)
     recipients = resolve_recipients(organization, groups, document, event.payload)
+    # The PM's copy is for information: in-app only, unless they are also told
+    # in their own right through another group (§4.19.7).
+    in_app_only = _in_app_only_ids(organization, groups, document, event.payload)
 
     spec = MATRIX_BY_EVENT.get(event.event_key)
     subject = (
@@ -252,6 +372,8 @@ def _dispatch(event: NotificationEvent) -> int:
     created = 0
     for user in recipients:
         for channel in channels:
+            if user.pk in in_app_only and channel != Channel.IN_APP:
+                continue
             destination = _destination_for(user, channel)
             if not destination and channel != Channel.IN_APP:
                 # No address on that channel for this person. Recorded as skipped
@@ -269,6 +391,22 @@ def _dispatch(event: NotificationEvent) -> int:
                 send_delivery(delivery)
 
     return created
+
+
+def _in_app_only_ids(organization, groups, document, payload) -> set[int]:  # type: ignore[no-untyped-def]
+    copy_groups = [g for g in groups if g in _IN_APP_ONLY_GROUPS]
+    if not copy_groups:
+        return set()
+    full = resolve_recipients(
+        organization, [g for g in groups if g not in _IN_APP_ONLY_GROUPS], document, payload
+    )
+    copied = resolve_recipients(organization, copy_groups, document, payload)
+    full_ids = {user.pk for user in full}
+    return {user.pk for user in copied if user.pk not in full_ids}
+
+
+#: Groups that are told in-app only, whatever channels the event carries.
+_IN_APP_ONLY_GROUPS = frozenset({Recipient.PROJECT_MANAGER})
 
 
 def _record(event, user, channel, subject, body, destination, status):
@@ -435,6 +573,11 @@ def _resolve_group(organization, group: str, document, payload: dict | None = No
     if group == Recipient.FINANCE_APPROVERS:
         return _users_with_permission(organization, PERM.FINANCE_APPROVE)
 
+    if group == Recipient.PROJECT_MANAGER:
+        is_project = document._meta.label == "network.Project"
+        project = document if is_project else getattr(document, "project", None)
+        return [getattr(project, "manager", None)]
+
     if group == Recipient.CUSTODY_HOLDER:
         return [getattr(document, "custody_holder", None)]
 
@@ -571,6 +714,8 @@ def render_body(event: NotificationEvent) -> str:
         return _finance_body(event, headline)
     if event.event_key in _ATTENDANCE_EVENTS:
         return _attendance_body(event)
+    if event.event_key in _PO_EVENTS:
+        return _po_body(event)
 
     if event.event_key == Event.GATE_OUT_AWAITING_APPROVAL:
         destination = payload.get("destination")
@@ -672,9 +817,19 @@ def _finance_headline(event: NotificationEvent) -> str:
         noun = f"Allowance request {payload['number']}" if payload.get("number") else "Request"
     elif payload.get("kind") == "purchase":
         noun = f"Site purchase {payload['number']}" if payload.get("number") else "Site purchase"
+    elif payload.get("kind") == "subcontract_payment":
+        noun = "Subcontract payment"
     else:
         noun = "Expense"
     what = f"{payload.get('amount_display', '')} {str(payload.get('category', '')).lower()}".strip()
+    if payload.get("kind") == "purchase":
+        what = payload.get("amount_display", "")
+        if payload.get("supplier"):
+            what += f" from {payload['supplier']}"
+    elif payload.get("kind") == "subcontract_payment":
+        what = payload.get("amount_display", "")
+        if payload.get("subcontractor"):
+            what += f" to {payload['subcontractor']}"
     place = f"at {payload['site']}" if payload.get("site") else f"on {payload.get('project', '')}"
     headline = f"{noun} {verb}: {what} {place}".strip()
     if event.event_key == Event.FINANCE_AWAITING_APPROVAL and payload.get("recorded_by"):
@@ -706,6 +861,21 @@ def _finance_body(event: NotificationEvent, headline: str) -> str:
     if payload.get("kind") == "supplier":
         return _supplier_body(event, parts)
     if event.event_key == Event.FINANCE_AWAITING_APPROVAL:
+        if payload.get("over_budget_by_display"):
+            line = f"Over the project's budget by {payload['over_budget_by_display']}."
+            if payload.get("over_budget_reason"):
+                line += f" Reason given: {payload['over_budget_reason']}"
+            parts.append(line)
+        if payload.get("kind") == "purchase":
+            if payload.get("destination") == "INTO_YARD":
+                parts.append("Goods are for the yard, so approval creates a delivery.")
+            else:
+                parts.append("Goods are used at the site.")
+        elif payload.get("kind") == "subcontract_payment":
+            parts.append(
+                f"Work done {_kes(payload['work_done'])}, paid so far {_kes(payload['paid'])}, "
+                f"contract value {_kes(payload['contract_value'])}."
+            )
         evidence = payload.get("evidence_state")
         if evidence == "NONE":
             parts.append("No receipt has been attached.")
@@ -778,3 +948,50 @@ def _attendance_body(event: NotificationEvent) -> str:
             "No project manager or Director can approve it. Assign one so the day can be approved."
         )
     return " ".join(parts)
+
+
+# --------------------------------------------------------------------------
+# PO and milestone wording (R11, R12, §4.19.12)
+# --------------------------------------------------------------------------
+
+_PO_EVENTS = frozenset(
+    {
+        Event.PO_MILESTONE_DUE,
+        Event.PO_MILESTONE_OVERDUE,
+        Event.PO_ATTACHED,
+        Event.PURCHASE_YARD_DELIVERY_EXPECTED,
+    }
+)
+
+
+def _po_body(event: NotificationEvent) -> str:
+    payload = event.payload or {}
+    project = payload.get("project", "")
+    if event.event_key == Event.PO_MILESTONE_DUE:
+        amount = f" ({payload['amount_display']})" if payload.get("amount_display") else ""
+        return (
+            f"Milestone \"{payload.get('milestone', '')}\"{amount} on {project} is due. "
+            "Raise the invoice."
+        )
+    if event.event_key == Event.PO_MILESTONE_OVERDUE:
+        owed = payload.get("outstanding_display", "")
+        invoiced_on = payload.get("latest_invoice_date")
+        since = f" Invoiced {invoiced_on}." if invoiced_on else ""
+        return (
+            f"Milestone \"{payload.get('milestone', '')}\" on {project} is overdue: "
+            f"{owed} is still unpaid.{since} Chase the client."
+        )
+    if event.event_key == Event.PO_ATTACHED:
+        days = payload.get("days_without_po")
+        late = f" after {days} day{'' if days == 1 else 's'} without one" if days else ""
+        return (
+            f"PO {payload.get('po_number', '')} ({payload.get('contract_value_display', '')}) "
+            f"was attached to project {project}{late} by {payload.get('attached_by', '')}. "
+            "Review the default milestones and fill in their shares."
+        )
+    supplier = f" from {payload['supplier']}" if payload.get("supplier") else ""
+    return (
+        f"Purchase {payload.get('number', '')}{supplier} for {project} "
+        f"({payload.get('amount_display', '')}) was approved for the yard. "
+        "A delivery is expected."
+    ).replace("  ", " ")

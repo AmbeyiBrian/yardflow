@@ -145,6 +145,19 @@ def _purchase_committed(project) -> Decimal:  # type: ignore[no-untyped-def]
     return _money(_signed(unreceived))
 
 
+def subcontract_work_done(contract) -> Decimal:  # type: ignore[no-untyped-def]
+    """Σ of the agreed prices of the contract's closed jobs (R8)."""
+    from jobs.models import Job, JobStatus
+
+    return sum(
+        (
+            job.agreed_price or ZERO
+            for job in Job.objects.filter(subcontract=contract, status=JobStatus.CLOSED)
+        ),
+        ZERO,
+    )
+
+
 def _subcontract_component(project) -> BudgetComponent:  # type: ignore[no-untyped-def]
     from commercials.models import (
         ExpenseStatus,
@@ -152,19 +165,9 @@ def _subcontract_component(project) -> BudgetComponent:  # type: ignore[no-untyp
         SubcontractPayment,
         SubcontractStatus,
     )
-    from jobs.models import Job, JobStatus
-
     spent = committed = ZERO
     for contract in Subcontract.objects.filter(project=project):
-        work_done = sum(
-            (
-                job.agreed_price or ZERO
-                for job in Job.objects.filter(
-                    subcontract=contract, status=JobStatus.CLOSED
-                )
-            ),
-            ZERO,
-        )
+        work_done = subcontract_work_done(contract)
         paid = _signed(
             SubcontractPayment.objects.filter(
                 subcontract=contract, status=ExpenseStatus.APPROVED

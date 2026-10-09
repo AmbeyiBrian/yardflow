@@ -39,7 +39,11 @@ class Recipient:
     #: the named PM, or the holders of the permission — and never its recorder.
     LEVEL_APPROVERS = "level_approvers"
     #: R15: everyone holding ``finance.approve``, whether or not a level is open.
+    #: Used for R11's milestone notices: "Recipient.FINANCE" in design §4.19.12.
     FINANCE_APPROVERS = "finance_approvers"
+    #: The project's PM, told for information. Always in-app only, whatever
+    #: channels the event carries (§4.19.7: "PM copied in app").
+    PROJECT_MANAGER = "project_manager"
 
 
 class Event:
@@ -83,6 +87,11 @@ class Event:
     ATTENDANCE_AWAITING_APPROVAL = "attendance.awaiting_approval"
     ATTENDANCE_REJECTED = "attendance.rejected"
     ATTENDANCE_UNROUTED = "attendance.unrouted"
+    # R11, R12, R7 (§4.19.12). SMS off (D30).
+    PO_MILESTONE_DUE = "po.milestone_due"
+    PO_MILESTONE_OVERDUE = "po.milestone_overdue"
+    PO_ATTACHED = "po.attached"
+    PURCHASE_YARD_DELIVERY_EXPECTED = "purchase.yard_delivery_expected"
 
 
 @dataclass(frozen=True)
@@ -290,6 +299,32 @@ DEFAULT_MATRIX: tuple[EventSpec, ...] = (
         (Recipient.OWNER,),
         (Channel.IN_APP,),
         carries_a_control=True,
+    ),
+    EventSpec(
+        Event.PO_MILESTONE_DUE,
+        "Milestone due to invoice",
+        (Recipient.FINANCE_APPROVERS,),
+        (Channel.IN_APP, Channel.EMAIL),
+        carries_a_control=True,
+    ),
+    EventSpec(
+        Event.PO_MILESTONE_OVERDUE,
+        "Milestone payment overdue",
+        (Recipient.FINANCE_APPROVERS, Recipient.PROJECT_MANAGER),
+        (Channel.IN_APP, Channel.EMAIL),
+        carries_a_control=True,
+    ),
+    EventSpec(
+        Event.PO_ATTACHED,
+        "PO attached to a project",
+        (Recipient.FINANCE_APPROVERS,),
+        (Channel.IN_APP,),
+    ),
+    EventSpec(
+        Event.PURCHASE_YARD_DELIVERY_EXPECTED,
+        "Yard purchase delivery expected",
+        (Recipient.STOREKEEPERS,),
+        (Channel.IN_APP,),
     ),
     EventSpec(
         Event.GATE_OUT_EXPIRED,
