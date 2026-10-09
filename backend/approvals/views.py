@@ -176,6 +176,37 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
             "to_date": allowance.to_date.isoformat(),
         }
 
+    def _supplier_summary(self, approval_request: ApprovalRequest) -> dict:
+        """R15: what Finance needs to check a business before it can be paid."""
+        from network.models import Supplier
+
+        supplier = (
+            Supplier.objects.filter(pk=approval_request.document_id)
+            .select_related("registered_by")
+            .first()
+        )
+        if supplier is None:
+            return {"label": approval_request.document_number}
+
+        return {
+            "id": supplier.pk,
+            "kind": "SUPPLIER",
+            "number": "",
+            "description": supplier.name,
+            "name": supplier.name,
+            "kra_pin": supplier.kra_pin,
+            "contact_name": supplier.contact_name,
+            "phone": supplier.phone,
+            "email": supplier.email,
+            "bank_name": supplier.bank_name,
+            "account_number": supplier.account_number,
+            "mpesa_type": supplier.mpesa_type,
+            "mpesa_number": supplier.mpesa_number,
+            "mpesa_account": supplier.mpesa_account,
+            "requested_by": str(supplier.registered_by),
+            "requested_by_id": supplier.registered_by_id,
+        }
+
     def get_document(self, approval_request: ApprovalRequest) -> dict:
         """Enough of the document to decide without a second request.
 
@@ -188,6 +219,8 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
             return self._expense_summary(approval_request)
         if approval_request.document_type == "commercials.AllowanceRequest":
             return self._allowance_summary(approval_request)
+        if approval_request.document_type == "network.Supplier":
+            return self._supplier_summary(approval_request)
 
         if approval_request.document_type != "dispatch.GateOut":
             return {"label": approval_request.document_number}

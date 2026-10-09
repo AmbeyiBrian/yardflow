@@ -335,6 +335,10 @@ FINANCE_APPROVE_PERMISSION = "finance.approve"
 FINANCE_PM_LEVEL = 1
 FINANCE_LEVEL = 2
 
+#: The supplier register (R15, §4.20.3): one level, addressed to Finance, and
+#: the registrar never decides their own entry.
+SUPPLIER_DOCUMENT_TYPES = frozenset({"network.Supplier"})
+
 
 def is_finance_document(document) -> bool:  # type: ignore[no-untyped-def]
     return document_type_of(document) in FINANCE_DOCUMENT_TYPES
@@ -390,6 +394,11 @@ def required_levels(document, *, facts: ApprovalFacts | None = None) -> list[Req
     # rules — an expense has no category criticality to match.
     if is_finance_document(document):
         return _finance_levels(document)
+
+    # R15: a supplier has no project and no category, so one Finance level and
+    # nothing else (§4.20.3).
+    if document_type_of(document) in SUPPLIER_DOCUMENT_TYPES:
+        return [RequiredLevel(level=1, permission=FINANCE_APPROVE_PERMISSION)]
 
     # O6, D22: project material routes to that project's manager, as the only
     # level, and never reaches the criticality rules below.
@@ -613,7 +622,7 @@ def can_approve(user, approval_request: ApprovalRequest, *, document=None) -> tu
     # by the O6 exception, which exists because a PM is the *only* level on
     # project material. Here Finance is a second signature, so the exception has
     # nothing to stand on.
-    if approval_request.document_type in FINANCE_DOCUMENT_TYPES:
+    if approval_request.document_type in FINANCE_DOCUMENT_TYPES | SUPPLIER_DOCUMENT_TYPES:
         requester_id = (
             getattr(document, "requested_by_id", None) or approval_request.requested_by_id
         )

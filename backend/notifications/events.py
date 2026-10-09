@@ -387,6 +387,9 @@ def _resolve_group(organization, group: str, document) -> list:
     if group == Recipient.LEVEL_APPROVERS:
         return _level_approvers(organization, document)
 
+    if group == Recipient.FINANCE_APPROVERS:
+        return _users_with_permission(organization, PERM.FINANCE_APPROVE)
+
     if group == Recipient.CUSTODY_HOLDER:
         return [getattr(document, "custody_holder", None)]
 
@@ -453,7 +456,9 @@ def _level_approvers(organization, document) -> list:
     else:
         people = []
 
-    recorder_id = getattr(document, "recorded_by_id", None)
+    recorder_id = getattr(document, "recorded_by_id", None) or getattr(
+        document, "registered_by_id", None
+    )
     return [person for person in people if person.pk != recorder_id]
 
 
@@ -566,6 +571,8 @@ def _finance_headline(event: NotificationEvent) -> str:
     if verb is None:
         return ""
     payload = event.payload or {}
+    if payload.get("kind") == "supplier":
+        return f"Supplier {verb}: {payload.get('label', '')}".strip()
     if payload.get("kind") == "request":
         noun = f"Allowance request {payload['number']}" if payload.get("number") else "Request"
     else:

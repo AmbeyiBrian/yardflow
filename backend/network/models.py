@@ -688,6 +688,15 @@ class Supplier(TenantModel, TimeStampedModel):  # type: ignore[django-manager-mi
     def is_usable(self) -> bool:
         return self.status == SupplierStatus.APPROVED and self.is_active
 
+    @property
+    def requested_by_id(self) -> int:
+        """The approval engine's name for the registrar (§4.20.3)."""
+        return self.registered_by_id
+
+    @property
+    def requested_by(self):  # type: ignore[no-untyped-def]
+        return self.registered_by
+
     @staticmethod
     def normalise_name(value: str) -> str:
         """Casefolded with runs of whitespace collapsed (R15)."""

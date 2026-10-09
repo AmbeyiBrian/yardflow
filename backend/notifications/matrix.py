@@ -38,6 +38,8 @@ class Recipient:
     #: R4, §4.17.9: whoever the open level of a finance entry is addressed to —
     #: the named PM, or the holders of the permission — and never its recorder.
     LEVEL_APPROVERS = "level_approvers"
+    #: R15: everyone holding ``finance.approve``, whether or not a level is open.
+    FINANCE_APPROVERS = "finance_approvers"
 
 
 class Event:
@@ -71,6 +73,8 @@ class Event:
     FINANCE_APPROVED = "finance.approved"
     FINANCE_REJECTED = "finance.rejected"
     FINANCE_PAID = "finance.paid"
+    # R15, §4.20.2: a PIN or payment detail of an approved supplier changed.
+    SUPPLIER_DETAILS_CHANGED = "supplier.details_changed"
 
 
 @dataclass(frozen=True)
@@ -245,6 +249,13 @@ DEFAULT_MATRIX: tuple[EventSpec, ...] = (
         "Expense or request paid",
         (Recipient.REQUESTER,),
         (Channel.IN_APP,),
+    ),
+    EventSpec(
+        Event.SUPPLIER_DETAILS_CHANGED,
+        "Supplier payment details changed",
+        (Recipient.FINANCE_APPROVERS,),
+        (Channel.IN_APP, Channel.EMAIL),
+        carries_a_control=True,
     ),
     EventSpec(
         Event.GATE_OUT_EXPIRED,
