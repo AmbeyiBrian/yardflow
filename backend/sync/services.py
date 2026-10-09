@@ -134,7 +134,12 @@ def apply_submission(
 
     try:
         with transaction.atomic():
-            document = handler(payload, submitted_by=submitted_by, request=request)
+            if operation in _CAPTURE_TIMED:
+                document = handler(
+                    payload, submitted_by=submitted_by, request=request, captured_at=captured_at
+                )
+            else:
+                document = handler(payload, submitted_by=submitted_by, request=request)
     except DomainError as refusal:
         # §8.4: not force-posted, not dropped. Recorded with everything needed to
         # resolve it — including the payload, which is the only record of what the
@@ -489,6 +494,67 @@ def _apply_supplier(payload: dict, *, submitted_by=None, request=None):
     )
 
 
+# --------------------------------------------------------------------------
+# Clock-in and clock-out (R13, §4.18.9). The same services the endpoints call;
+# the moment is the payload's ``at``, else the envelope's ``captured_at``.
+# --------------------------------------------------------------------------
+
+
+def _clock_time(payload: dict, captured_at):
+    raw = payload.get("at") or captured_at
+    if raw in (None, ""):
+        raise _bad("at", "The time this was captured is missing.")
+    if hasattr(raw, "tzinfo"):
+        return raw
+    from django.utils.dateparse import parse_datetime
+
+    parsed = parse_datetime(str(raw))
+    if parsed is None:
+        raise _bad("at", "Not a valid time.")
+    return parsed
+
+
+def _fix(payload: dict):
+    fix = payload.get("fix")
+    if fix is not None and not isinstance(fix, dict):
+        raise _bad("fix", "Not a valid location fix.")
+    return fix
+
+
+def _apply_clock_in(payload: dict, *, submitted_by=None, request=None, captured_at=None):
+    """A clock-in captured with no signal (R13, R6)."""
+    from attendance.services import clock_in
+    from locations.models import Location
+    from network.models import Project, Site
+
+    return clock_in(
+        person=submitted_by,
+        at=_clock_time(payload, captured_at),
+        fix=_fix(payload),
+        site=_tenant_object(Site, payload, "site"),
+        location=_tenant_object(Location, payload, "location"),
+        project=_tenant_object(Project, payload, "project"),
+        client_uuid=_uuid(payload, "client_uuid"),
+        place_area=payload.get("place_area"),
+        request=request,
+    )
+
+
+def _apply_clock_out(payload: dict, *, submitted_by=None, request=None, captured_at=None):
+    """A clock-out captured with no signal; never refused on position (R13)."""
+    from attendance.services import clock_out
+
+    return clock_out(
+        person=submitted_by,
+        at=_clock_time(payload, captured_at),
+        fix=_fix(payload),
+        client_uuid=_uuid(payload, "client_uuid"),
+        session_client_uuid=payload.get("session_client_uuid") or None,
+        place_area=payload.get("place_area"),
+        request=request,
+    )
+
+
 def _resolve_superseded(submission, payload: dict, resolved_by, request) -> None:
     """"Fix and resend" (R6): the corrected entry landing closes the old refusal.
 
@@ -546,7 +612,12 @@ _HANDLERS: dict[str, Any] = {
     str(SyncOperation.ALLOWANCE_REQUEST): _apply_allowance_request,
     str(SyncOperation.CASUAL): _apply_casual,
     str(SyncOperation.SUPPLIER): _apply_supplier,
+    str(SyncOperation.CLOCK_IN): _apply_clock_in,
+    str(SyncOperation.CLOCK_OUT): _apply_clock_out,
 }
+
+#: Handlers that also need the envelope's capture time (R13).
+_CAPTURE_TIMED = {str(SyncOperation.CLOCK_IN), str(SyncOperation.CLOCK_OUT)}
 
 
 # --------------------------------------------------------------------------

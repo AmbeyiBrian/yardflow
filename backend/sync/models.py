@@ -45,6 +45,9 @@ class SyncOperation(models.TextChoices):
     CASUAL = "CASUAL", "Register a casual"
     # R15, §4.20.8: a supplier added at the gate; Finance still approves it online.
     SUPPLIER = "SUPPLIER", "Add a supplier"
+    # R13, §4.18.9: clocking in and out. Approving and correcting a day are not offline.
+    CLOCK_IN = "CLOCK_IN", "Clock in"
+    CLOCK_OUT = "CLOCK_OUT", "Clock out"
 
 
 class SubmissionStatus(models.TextChoices):

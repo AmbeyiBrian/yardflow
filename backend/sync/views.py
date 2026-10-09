@@ -321,6 +321,8 @@ class OfflineBundleView(APIView):
                     "finance_limits": serializers.DictField(),
                     "suppliers": serializers.ListField(child=serializers.DictField()),
                     "vehicles": serializers.ListField(child=serializers.DictField()),
+                    "offices": serializers.ListField(child=serializers.DictField()),
+                    "attendance": serializers.DictField(),
                 },
             )
         }
@@ -382,6 +384,7 @@ class OfflineBundleView(APIView):
                 "internal_ref": row.internal_ref,
                 "client": row.client_id,
                 "open_projects": open_projects.get(row.pk, []),
+                **_area(row),
             }
             for row in Site.objects.all()
         ]
@@ -466,8 +469,34 @@ class OfflineBundleView(APIView):
                 "people": people,
                 "releasable_gate_outs": releasable,
                 **self._finance(request.user),
+                **self._attendance(request.user),
             }
         )
+
+    @staticmethod
+    def _attendance(user) -> dict:  # type: ignore[no-untyped-def]
+        """What clocking in needs offline (R13, §4.18.9).
+
+        ``locations`` leaves OFFICE out, so the clockable YARD and OFFICE places
+        travel here with their coordinates.
+        """
+        from locations.models import Location, LocationType
+
+        settings = user.organization.settings
+        return {
+            "offices": [
+                {"id": row.pk, "name": row.name, "type": row.type, **_area(row)}
+                for row in Location.objects.filter(
+                    is_active=True,
+                    is_system=False,
+                    type__in=(LocationType.YARD, LocationType.OFFICE),
+                ).order_by("name")
+            ],
+            "attendance": {
+                "accuracy_cap_m": settings.clock_accuracy_cap_m,
+                "auto_close_hour": settings.clock_auto_close_hour,
+            },
+        }
 
     @staticmethod
     def _finance(user) -> dict:  # type: ignore[no-untyped-def]
@@ -546,6 +575,17 @@ class OfflineBundleView(APIView):
                 ).order_by("name")
             ],
         }
+
+
+def _area(place) -> dict:  # type: ignore[no-untyped-def]
+    """A place's clock-in area; coordinates are null until somebody sets them."""
+    has = place.latitude is not None and place.longitude is not None
+    return {
+        "latitude": float(place.latitude) if has else None,
+        "longitude": float(place.longitude) if has else None,
+        "radius_m": place.radius_m,
+        "has_coordinates": has,
+    }
 
 
 def _mask(id_number: str) -> str:
