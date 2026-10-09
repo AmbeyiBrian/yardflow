@@ -39,6 +39,8 @@ from core.audit import client_ip, record
 from core.exceptions import DomainError, PermissionDeniedError
 from core.models import AuditAction
 from core.numbering import DocumentType, allocate_number
+from notifications.events import emit
+from notifications.matrix import Event
 
 PENDING_STATUSES = (ExpenseStatus.PENDING_PM, ExpenseStatus.PENDING_FINANCE)
 
@@ -263,6 +265,19 @@ def _route(entry: ProjectExpense | AllowanceRequest, actor) -> None:  # type: ig
     if entry.status != target:
         entry.status = target
         entry.save()
+    # Recording and sending again both come through here, so both tell whoever
+    # holds the first open level (R4, §4.17.9).
+    _notify(entry, Event.FINANCE_AWAITING_APPROVAL)
+
+
+def _notify(entry, event_key: str) -> None:  # type: ignore[no-untyped-def]
+    """Tell people about an entry (R4, §4.17.9).
+
+    Called inside the caller's transaction: ``emit`` sends only after commit, so
+    a failed send never undoes an approval and a rolled-back one sends nothing
+    (L3).
+    """
+    emit(event_key, entry)
 
 
 def _existing(model, client_uuid):  # type: ignore[no-untyped-def]
@@ -610,11 +625,13 @@ def decide[Entry: (ProjectExpense, AllowanceRequest)](
             entry.save()
             note = f"Rejected at level {decided.level}: {reason}"
             action = AuditAction.REJECTED
+            _notify(entry, Event.FINANCE_REJECTED)
         elif upcoming is not None:
             entry.status = ExpenseStatus.PENDING_FINANCE
             entry.save()
             note = f"Approved at level {decided.level}; now waiting on Finance."
             action = AuditAction.APPROVED
+            _notify(entry, Event.FINANCE_AWAITING_APPROVAL)
         else:
             if entry.status == ExpenseStatus.PENDING_PM:
                 # The guard allows only the §4.17.3 moves; an entry with no
@@ -626,6 +643,7 @@ def decide[Entry: (ProjectExpense, AllowanceRequest)](
             entry.save()
             note = "Approved by Finance."
             action = AuditAction.APPROVED
+            _notify(entry, Event.FINANCE_APPROVED)
         _audit(action, entry, actor=actor, request=request, note=note)
     return entry
 
@@ -720,6 +738,7 @@ def mark_paid[Entry: (ProjectExpense, AllowanceRequest)](
         entry.paid_by = actor
         entry.payment_reference = reference
         entry.save()
+        _notify(entry, Event.FINANCE_PAID)
         _audit(
             AuditAction.STATUS_CHANGED,
             entry,

@@ -67,6 +67,9 @@ def emit(event_key: str, document, *, payload: dict | None = None) -> Notificati
 
 def _payload_for(document) -> dict:
     """Enough context to render a message without re-querying the document."""
+    if document._meta.label in _FINANCE_TARGETS:
+        return _finance_payload(document)
+
     payload = {"label": str(document)}
 
     for attribute in ("number", "status", "purpose_type"):
@@ -82,6 +85,73 @@ def _payload_for(document) -> dict:
     if holder is not None:
         payload["custody_holder"] = str(holder)
 
+    return payload
+
+
+#: Money out (R4, §4.17.9): the two documents that go through finance approval.
+_FINANCE_TARGETS = frozenset({"commercials.ProjectExpense", "commercials.AllowanceRequest"})
+
+
+def _kes(amount) -> str:
+    """``KES 1,200``, with cents only when there are some."""
+    from decimal import Decimal
+
+    value = Decimal(amount)
+    return f"KES {value:,.0f}" if value == value.to_integral_value() else f"KES {value:,.2f}"
+
+
+def _finance_payload(entry) -> dict:
+    """What an approver needs to decide, and what a recorder needs to know (§4.17.9).
+
+    Built once at emit time so the message does not re-query the entry, and so it
+    says what was true when it happened: a rejection reads with the reason it was
+    given even if the entry is later amended and sent again.
+    """
+    from commercials.models import AllowanceRequest
+
+    is_request = isinstance(entry, AllowanceRequest)
+    if is_request:
+        what = entry.get_type_display()
+    else:
+        what = entry.category.name
+
+    payload: dict = {
+        "kind": "request" if is_request else "expense",
+        # Two places always: the entry may still hold the Decimal it was given.
+        "amount": f"{entry.amount:.2f}",
+        "amount_display": _kes(entry.amount),
+        "category": what,
+        "site": entry.site.name if entry.site_id else "",
+        "project": str(entry.project),
+        "recorded_by": entry.recorded_by.full_name or entry.recorded_by.email,
+        "status": entry.status,
+    }
+    if is_request:
+        payload["number"] = entry.number
+        payload["label"] = f"{entry.number} {what}".strip()
+        # R2: a second float is allowed, but the approver is told of the first.
+        from commercials.finance import open_float_warning
+
+        warning = open_float_warning(entry.recorded_by, exclude=entry)
+        if warning is not None:
+            payload["float_warning"] = {
+                "number": warning["number"],
+                "balance": str(warning["balance"]),
+            }
+    else:
+        # Expenses have no number, so the label is the readable stand-in.
+        payload["label"] = f"Expense {_kes(entry.amount)} · {what}"
+        # Same three states as the Approvals sheet (O16, §4.17.8).
+        if entry.is_evidenced:
+            payload["evidence_state"] = "ATTACHED"
+        elif entry.photos_expected:
+            payload["evidence_state"] = "ARRIVING"
+        else:
+            payload["evidence_state"] = "NONE"
+    if entry.decision_reason:
+        payload["reason"] = entry.decision_reason
+    if entry.payment_reference:
+        payload["reference"] = entry.payment_reference
     return payload
 
 
@@ -136,7 +206,7 @@ def _dispatch(event: NotificationEvent) -> int:
     recipients = resolve_recipients(organization, groups, document)
 
     spec = MATRIX_BY_EVENT.get(event.event_key)
-    subject = spec.label if spec else event.event_key
+    subject = _finance_headline(event) or (spec.label if spec else event.event_key)
     body = render_body(event)
 
     created = 0
@@ -309,7 +379,13 @@ def _resolve_group(organization, group: str, document) -> list:
     from accounts.permissions_registry import PERM
 
     if group == Recipient.REQUESTER:
-        return [getattr(document, "requested_by", None)]
+        # Money entries name their requester `recorded_by` (R4).
+        return [
+            getattr(document, "requested_by", None) or getattr(document, "recorded_by", None)
+        ]
+
+    if group == Recipient.LEVEL_APPROVERS:
+        return _level_approvers(organization, document)
 
     if group == Recipient.CUSTODY_HOLDER:
         return [getattr(document, "custody_holder", None)]
@@ -336,6 +412,49 @@ def _resolve_group(organization, group: str, document) -> list:
         return _users_with_permission(organization, PERM.GATE_IN_POST)
 
     return []
+
+
+def _level_approvers(organization, document) -> list:
+    """Who the lowest open level of a finance entry is addressed to (R4, §4.17.9).
+
+    Mirrors ``can_approve``: a named user is that user's alone; a permission
+    level goes to those who hold it *directly* (a delegation does not lend a
+    Finance signature, D22); a role level to the role's holders. The recorder is
+    never told to approve their own entry, whatever they hold.
+    """
+    from accounts.models import User
+    from approvals.engine import document_type_of
+    from approvals.models import ApprovalRequest, ApprovalRequestStatus
+
+    if document is None:
+        return []
+
+    open_levels = ApprovalRequest.objects.filter(
+        document_type=document_type_of(document),
+        document_id=str(document.pk),
+        status__in=(ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED),
+    ).order_by("level", "id")
+    current = open_levels.first()
+    if current is None:
+        return []
+
+    if current.required_user_id is not None:
+        people = list(User.objects.filter(pk=current.required_user_id, is_active=True))
+    elif current.required_permission:
+        people = _users_with_permission(organization, current.required_permission)
+    elif current.required_role_id is not None:
+        people = list(
+            User.objects.filter(
+                organization=organization,
+                is_active=True,
+                user_roles__role_id=current.required_role_id,
+            ).distinct()
+        )
+    else:
+        people = []
+
+    recorder_id = getattr(document, "recorded_by_id", None)
+    return [person for person in people if person.pk != recorder_id]
 
 
 def _users_with_permission(organization, codename: str) -> list:
@@ -382,6 +501,10 @@ def render_body(event: NotificationEvent) -> str:
     payload = event.payload or {}
     number = payload.get("number") or payload.get("label") or ""
 
+    headline = _finance_headline(event)
+    if headline:
+        return _finance_body(event, headline)
+
     if event.event_key == Event.GATE_OUT_AWAITING_APPROVAL:
         destination = payload.get("destination")
         where = f" — for {destination}" if destination else ""
@@ -419,3 +542,62 @@ def render_body(event: NotificationEvent) -> str:
 
     spec = MATRIX_BY_EVENT.get(event.event_key)
     return f"{spec.label if spec else event.event_key}: {number}".strip(": ")
+
+
+# --------------------------------------------------------------------------
+# money out wording (R4, §4.17.9)
+# --------------------------------------------------------------------------
+
+_FINANCE_VERBS = {
+    Event.FINANCE_AWAITING_APPROVAL: "waiting for your approval",
+    Event.FINANCE_APPROVED: "approved",
+    Event.FINANCE_REJECTED: "rejected",
+    Event.FINANCE_PAID: "paid",
+}
+
+
+def _finance_headline(event: NotificationEvent) -> str:
+    """One plain sentence, used as the email subject and the start of the body.
+
+    "Expense waiting for your approval: KES 1,200 fuel at Ruiru by John". Empty
+    for any other event, which keeps its own wording.
+    """
+    verb = _FINANCE_VERBS.get(event.event_key)
+    if verb is None:
+        return ""
+    payload = event.payload or {}
+    if payload.get("kind") == "request":
+        noun = f"Allowance request {payload['number']}" if payload.get("number") else "Request"
+    else:
+        noun = "Expense"
+    what = f"{payload.get('amount_display', '')} {str(payload.get('category', '')).lower()}".strip()
+    place = f"at {payload['site']}" if payload.get("site") else f"on {payload.get('project', '')}"
+    headline = f"{noun} {verb}: {what} {place}".strip()
+    if event.event_key == Event.FINANCE_AWAITING_APPROVAL and payload.get("recorded_by"):
+        headline += f" by {payload['recorded_by']}"
+    return headline
+
+
+def _finance_body(event: NotificationEvent, headline: str) -> str:
+    payload = event.payload or {}
+    parts = [f"{headline}."]
+    if event.event_key == Event.FINANCE_AWAITING_APPROVAL:
+        evidence = payload.get("evidence_state")
+        if evidence == "NONE":
+            parts.append("No receipt has been attached.")
+        elif evidence == "ARRIVING":
+            parts.append("The receipt photos have not arrived yet.")
+        warning = payload.get("float_warning")
+        if warning:
+            parts.append(
+                f"They still hold float {warning['number']} with a balance of "
+                f"{_kes(warning['balance'])}."
+            )
+        parts.append("Open Approvals to decide.")
+    elif event.event_key == Event.FINANCE_REJECTED:
+        if payload.get("reason"):
+            parts.append(f"Reason: {payload['reason']}")
+        parts.append("You can correct it and send it again.")
+    elif event.event_key == Event.FINANCE_PAID and payload.get("reference"):
+        parts.append(f"Payment reference: {payload['reference']}.")
+    return " ".join(parts)

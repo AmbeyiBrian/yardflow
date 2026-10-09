@@ -35,15 +35,25 @@ RESOURCE_ROUTES = {
     "custody.CustodyExpectation": "/custody",
     "custody.CustodyTransfer": "/custody/handovers",
     "stock.StockCount": "/stock/counts/{id}",
+    # R4, §4.17.9: money out.
+    "commercials.ProjectExpense": "/money/expenses/{id}",
+    "commercials.AllowanceRequest": "/money/requests/{id}",
 }
 
+#: Events whose link is not the document's own page. An approver goes to the
+#: Approvals screen, where the decision is made, not to the recorder's page
+#: (R4, §4.17.9).
+EVENT_ROUTES = {"finance.awaiting_approval": "/approvals"}
 
-def resource_for(target_type: str, target_id: str) -> str:
+
+def resource_for(target_type: str, target_id: str, event_key: str = "") -> str:
     """The client route for a notification's subject.
 
     Computed here rather than on the client so a new document type needs no
     frontend release to become tappable.
     """
+    if event_key in EVENT_ROUTES:
+        return EVENT_ROUTES[event_key]
     template = RESOURCE_ROUTES.get(target_type)
     if not template or not target_id:
         return ""
@@ -79,7 +89,8 @@ class NotificationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_resource(self, delivery) -> str:
-        return resource_for(delivery.event.target_type, delivery.event.target_id)
+        event = delivery.event
+        return resource_for(event.target_type, event.target_id, event.event_key)
 
 
 class NotificationViewSet(TenantScopedViewSet):

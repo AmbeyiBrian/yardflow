@@ -35,6 +35,9 @@ class Recipient:
     HOLDER = "holder"
     SUPERVISOR = "supervisor"
     FALLBACK_APPROVER = "fallback_approver"
+    #: R4, §4.17.9: whoever the open level of a finance entry is addressed to —
+    #: the named PM, or the holders of the permission — and never its recorder.
+    LEVEL_APPROVERS = "level_approvers"
 
 
 class Event:
@@ -63,6 +66,11 @@ class Event:
     REPORT_EXPORT_READY = "report.export_ready"
     # O7: an expensive release on a project, told to the owner after the fact.
     HIGH_VALUE_PROJECT_RELEASE = "project.high_value_release"
+    # R4, §4.17.9: money out. SMS is off by default (D30).
+    FINANCE_AWAITING_APPROVAL = "finance.awaiting_approval"
+    FINANCE_APPROVED = "finance.approved"
+    FINANCE_REJECTED = "finance.rejected"
+    FINANCE_PAID = "finance.paid"
 
 
 @dataclass(frozen=True)
@@ -210,6 +218,33 @@ DEFAULT_MATRIX: tuple[EventSpec, ...] = (
         (Recipient.STOREKEEPERS, Recipient.OWNER),
         (Channel.IN_APP,),
         carries_a_control=True,
+    ),
+    # R4, §4.17.9. No SMS or WhatsApp (D30); email carries the detail an
+    # approver wants before deciding.
+    EventSpec(
+        Event.FINANCE_AWAITING_APPROVAL,
+        "Expense or request awaiting approval",
+        (Recipient.LEVEL_APPROVERS,),
+        (Channel.IN_APP, Channel.EMAIL),
+        carries_a_control=True,
+    ),
+    EventSpec(
+        Event.FINANCE_APPROVED,
+        "Expense or request approved",
+        (Recipient.REQUESTER,),
+        (Channel.IN_APP,),
+    ),
+    EventSpec(
+        Event.FINANCE_REJECTED,
+        "Expense or request rejected",
+        (Recipient.REQUESTER,),
+        (Channel.IN_APP, Channel.EMAIL),
+    ),
+    EventSpec(
+        Event.FINANCE_PAID,
+        "Expense or request paid",
+        (Recipient.REQUESTER,),
+        (Channel.IN_APP,),
     ),
     EventSpec(
         Event.GATE_OUT_EXPIRED,
