@@ -556,6 +556,7 @@ class TestSettingsAndSeeds:
             PERM.FINANCE_APPROVE,
             PERM.PROJECT_VIEW_COST,
             PERM.REPORT_VIEW_ALL,
+            PERM.ATTENDANCE_VIEW_ALL,
         }
         assert PERM.FINANCE_APPROVE in DEFAULT_ROLES["Owner"]
         assert PERM.FINANCE_APPROVE not in DEFAULT_ROLES["Project manager"]

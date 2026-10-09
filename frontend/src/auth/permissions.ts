@@ -39,6 +39,8 @@ export const PERM = {
 
   // R14 (§4.20.7). Writes to the asset register; every member may read it.
   ASSET_MANAGE: 'asset.manage',
+  // Epic R. Everyone's clocked time.
+  ATTENDANCE_VIEW_ALL: 'attendance.view_all',
 
   CATALOGUE_MANAGE: 'catalogue.manage',
   SETTINGS_MANAGE: 'settings.manage',

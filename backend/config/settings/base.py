@@ -97,6 +97,7 @@ LOCAL_APPS = [
     "disposition",
     "notifications",
     "commercials",
+    "attendance",
     "reporting",
     "sync",
     "platform_admin",

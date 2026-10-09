@@ -78,6 +78,9 @@ class PERM:
 
     # Assets (Epic R, §4.20.7)
     ASSET_MANAGE = "asset.manage"
+    # Clock-in (Epic R, §4.18.8)
+    #: See every person's time, not only your own and your projects'.
+    ATTENDANCE_VIEW_ALL = "attendance.view_all"
 
     # Configuration
     CATALOGUE_MANAGE = "catalogue.manage"
@@ -196,6 +199,13 @@ ALL_PERMISSIONS: tuple[PermissionSpec, ...] = (
         "pick a vehicle (R14).",
     ),
     PermissionSpec(
+        PERM.ATTENDANCE_VIEW_ALL,
+        "See everyone's clocked time",
+        "Finance",
+        "Every person's work days and sessions, not only your own and those on "
+        "your projects (R13).",
+    ),
+    PermissionSpec(
         PERM.CATALOGUE_MANAGE,
         "Manage the catalogue and master data",
         "Configuration",
@@ -291,6 +301,7 @@ DEFAULT_ROLES: dict[str, tuple[str, ...]] = {
         PERM.FINANCE_APPROVE,
         PERM.PROJECT_VIEW_COST,
         PERM.REPORT_VIEW_ALL,
+        PERM.ATTENDANCE_VIEW_ALL,
     ),
     "Storekeeper": (
         PERM.GATE_IN_POST,
