@@ -1244,6 +1244,1101 @@ recorder. The payload carries amount, type, site, `evidence_state` and the float
 11. Changing a project's PM re-addresses its open PM-level requests.
 12. Photo captions come from a fixed list on the phone.
 
+### 4.18 Clock-in (Epic R, R13)
+
+> **Status: approved 2026-10-09.**
+
+#### 4.18.1 The decision: extend the places, add one small app, reuse the approval tables
+
+- **Places are extended, not copied** (R13). `network.Site` already has nullable `latitude` and
+  `longitude`, so it gains only `radius_m`. `locations.Location` gains all three, and a new
+  `LocationType.OFFICE` beside `YARD`. Nothing else about either model changes.
+- **`attendance/` is a new tenant app** with two records: `WorkSession` (one clock-in to one
+  clock-out) and `WorkDay` (one person, one local date, the thing that is approved). Hours are never
+  stored; they are summed on read, so a correction cannot leave a stale total.
+- **Approval reuses `approvals.engine`** (§5). A work day is a third document kind beside gate-outs
+  and finance entries, with `ApprovalRequest` and the append-only `ApprovalAction` unchanged. The
+  engine gains four small changes (4.18.5), because a day can need two approvers at once and the
+  engine today answers levels strictly in order.
+- **One area check, written twice and tested against one fixture** (4.18.4), because the phone must
+  make the same decision the server will (R13 offline).
+
+D28 holds: there is no fallback approver for a PM's day. D29 (PM only) does not apply to days.
+
+#### 4.18.2 Data model
+
+New tables are tenant tables: `enable_rls` in an `attendance` migration and fixtures in
+`attendance/isolation.py` (§2, A3).
+
+| Model / field | Shape | Notes |
+|---|---|---|
+| `Site.radius_m` (new) | int, default 200 | CHECK 20-2000. `latitude`/`longitude` already exist. |
+| `Location.latitude`, `longitude`, `radius_m` | decimal(9,6) null; same; int default 200 | CHECKs: ranges, and lat/lng both set or both null. Not enforced in `Location.save` (it runs `full_clean`, so the rule would break seeds and system rows); enforced in serializers and admin (4.18.8). |
+| `LocationType.OFFICE` (new) | choice | Clockable. Never gets a `StockNode` (nodes are created lazily by `locations/nodes.py`, so none exists unless something asks) and is excluded from stock pickers. |
+| `Site.area_history`, `Location.area_history` | JSON list | Newest first, max 10 entries `{lat, lng, radius_m, valid_until}`, pushed whenever the area changes. Lets the server recognise the area an offline phone legitimately held (4.18.4). |
+| `OrganizationSettings.clock_auto_close_hour` | int 0-23, default 18 | R13. |
+| `OrganizationSettings.clock_accuracy_cap_m` | int, default 100 | R13: a 2 km "fix" cannot pass. |
+| `WorkSession` | `person`, exactly one of `site` / `location` (CHECK), `project` (null), `work_day`, `local_date` | Project resolved at clock-in (4.18.5). `local_date` is in the organization's `timezone`. |
+| | `clock_in_at` (phone time), `clock_in_received_at`, `in_lat`, `in_lng`, `in_accuracy_m`, `in_distance_m` | R13: the phone's time is the record; arrival time sits beside it. |
+| | `clock_out_at` (null), `clock_out_received_at`, `out_lat`, `out_lng`, `out_accuracy_m`, `out_distance_m` | All null while open; out position null when none was available. |
+| | `closed_by` | `PERSON` / `NEXT_CLOCK_IN` / `AUTO`. |
+| | `in_client_uuid`, `out_client_uuid` | Unique per org: offline idempotency, as `GateIn.client_uuid`. |
+| | `in_checked_area` (JSON null), `area_changed` (bool) | What the phone checked against; set only on offline replay (4.18.4). |
+| | `approval_request` → ApprovalRequest, null | The slice this session belongs to (4.18.5). Null = unrouted. |
+| | constraints | Partial UNIQUE `(organization, person)` where `clock_out_at IS NULL` (one open session); CHECK out ≥ in. |
+| `WorkDay` | `person`, `date`, `status`, `formed_at` | UNIQUE `(organization, person, date)`. `status`: `OPEN`, `PENDING`, `APPROVED`, `REJECTED`, a projection of its slices' requests, as a gate-out's is. Exposes `requested_by_id` and `recorded_by_id` as aliases of `person_id`. |
+| `WorkSessionCorrection` | `session` (null for an added session), `work_day`, `kind` (`EDIT` / `ADD`), `place` (site or location, ADD only), `original_in_at`, `original_out_at`, `corrected_in_at`, `corrected_out_at`, `reason`, `made_by`, `made_at`, `rejected_request`, `reopened_request` | Append-only. The session keeps its original times untouched; the corrected times apply from the latest correction (4.18.6). |
+| `OrganizationSettings.finance_director_role` | existing | Reused as the Director for days. Null: a day with nobody to approve it stays unrouted and the owner is told. |
+
+**Derived flags** (computed on read, never stored): *outside at clock-out* (`out_distance_m` beyond
+the place's radius), *no position at clock-out*, *closed automatically* (`closed_by=AUTO`), *sent
+late* (`received_at - at > 1 h`, constant `LATE_AFTER`), *area changed* (`area_changed`),
+*corrected* (has a correction).
+
+**Guards.** A session is immutable once its slice is `APPROVED`. While open or pending, only the
+service functions in 4.18.5 and 4.18.6 change it. Audit rows are written for clock-in, clock-out,
+auto-close, routing and correction.
+
+#### 4.18.3 Places and who may clock in where (R13)
+
+A place is clockable when it is **active, has coordinates**, and is a Site of any status other than
+decommissioned, or a Location of type `YARD` or `OFFICE`. Stores, vehicles and quarantine are not
+clockable. `Location.is_system` rows are exempt from the coordinates rule, and are not clockable.
+Casuals are not users and do not clock in (R3).
+
+#### 4.18.4 The area check (R13)
+
+`core/geo.py`: `haversine_m(a, b)` and `check_area(fix, place, cap)`, returning `NO_FIX`,
+`TOO_VAGUE` (accuracy above the cap), or the distance and `inside = distance <= radius + accuracy`.
+The accuracy allowance is what lets a real phone indoors pass; the cap is what stops a bad fix doing
+the same. The TypeScript twin is `features/attendance/area.ts`. A shared
+`shared/area-cases.json` (inside, outside, on the edge, bad accuracy, near the poles and the date
+line) is read by pytest and by Vitest, so the two cannot drift.
+
+**Offline replay, the phone's check stands** (R13, decided 2026-10-09). A `CLOCK_IN` payload carries
+`place_area: {lat, lng, radius_m}`, the area the phone checked against. On replay the server:
+1. checks the fix against the place's **current** area. Inside: accepted as normal;
+2. else checks it against `place_area`, but only when `place_area` equals the current area or an
+   `area_history` entry whose `valid_until` is not before `captured_at`. Inside that: **accepted,
+   `area_changed=True`**, `in_checked_area` stored, flag shown to the approver;
+3. else refused `CLOCK_OUTSIDE_AREA`. A phone cannot name an area the place never had.
+
+An online clock-in is checked against the current area only. A clock-out is never refused on
+position (R13); it stores the distance and flags if outside.
+
+#### 4.18.5 Flows and routing
+
+**Clock-in** (`attendance/services.py::clock_in`), in one transaction:
+1. Lock the person's user row; return the existing session for a known `in_client_uuid`.
+2. The place must be clockable (4.18.3): `PLACE_NOT_AVAILABLE`, `PLACE_HAS_NO_COORDINATES`.
+3. Time bounds on `clock_in_at`: at most 5 minutes ahead of the server, at most 72 hours old, and
+   not before the person's previous session ended: `CLOCK_TIME_INVALID`, `CLOCK_OVERLAP`.
+4. Area check (4.18.4): `CLOCK_LOCATION_REQUIRED`, `CLOCK_LOCATION_TOO_VAGUE`, `CLOCK_OUTSIDE_AREA`
+   (the message states the distance).
+5. Resolve the project. `commercials/finance.py::resolve_project` raises on none; it is split so a
+   non-raising `open_projects_of(site)` exists and `resolve_project` calls it. One open project is
+   taken; none gives `project=None` (the Director approves); two or more need `project`
+   (`PROJECT_AMBIGUOUS`, as R1). A YARD or OFFICE has no project.
+6. Close any open session at this `clock_in_at` (`closed_by=NEXT_CLOCK_IN`, no out position).
+7. Get-or-create the `WorkDay` for `local_date` (status `OPEN`); create the session; audit.
+
+**Clock-out** (`clock_out`): the session is found by `session_client_uuid`, else the person's open
+one; none gives `CLOCK_NOT_CLOCKED_IN`. Never refused on position. A replayed clock-out whose time
+is earlier than an `AUTO` or `NEXT_CLOCK_IN` close replaces it while the slice is undecided, so
+being offline does not cost the hours; once decided, `CLOCK_SESSION_LOCKED`.
+
+**Auto-close and day formation** (`attendance/sweeps.py`, beat entry `attendance-sweep`, hourly at
+:05; the existing `core.sweeps.dispatch_sweeps` is a daily 05:30 job, too coarse for an hour that
+the tenant sets). Following its shape, `dispatch_attendance_sweep` fans out per active
+organization to `attendance_sweep_tenant`, each step guarded separately as in `sweep_tenant`.
+- `close_stale_sessions`: an open session is closed **at the cutoff itself** (not at the time the
+  sweep ran): `clock_auto_close_hour` on the session's local date, or midnight for a session opened
+  after that hour. `closed_by=AUTO`.
+- `form_days`: each past `OPEN` day with no open session is routed (`route_day`) and becomes
+  `PENDING`. Day formation uses the organization's `timezone`, tested in Nairobi and in a second
+  zone.
+
+**`route_day`** groups the day's unrouted sessions by addressee and creates one request per group.
+Idempotent: a session already on a request is skipped, and a late-arriving session reopens only its
+own slice.
+- Addressee: the session's project manager; with no project, the Director (the people holding
+  `finance_director_role`).
+- A PM's own sessions go to the Director; a Director's own go to another Director. Nobody approves
+  their own day (R13).
+- With no addressee the session stays unrouted and the owner gets `attendance.unrouted`. Clock-in
+  is never refused for this.
+- A day spanning two PMs has two requests, answered **in parallel** (R13: each for their own
+  sessions). The day is `APPROVED` only when every slice is.
+
+**Engine changes** (`approvals/engine.py`, `approvals/addressing.py`, `notifications/events.py`):
+1. `WORK_DAY_DOCUMENT_TYPES = {"attendance.WorkDay"}` and `_work_day_levels`, which return the
+   slice's single level-1 request (addressed with `required_user`, or by Director role), no
+   `due_at`, no delegation. `required_levels` and `create_requests` take the slice.
+2. `can_approve`: the self-approval refusal for work days runs first, before the `required_user`
+   branch, so a PM can never approve their own day through the "PM may self-approve" exception.
+3. `next_pending_request` and `record_decision` take an optional `approval_request`. Today they
+   assume one chain per document; with parallel slices a rejection supersedes **only that slice**,
+   not the other PM's.
+4. `addressing.open_requests_addressed_to`: the gate-out blanket (`PERM.GATE_OUT_APPROVE` sees every
+   role level) excludes work-day requests, and the "earlier level open" exclusion is per slice.
+5. `_level_approvers` (notifications) returns the addressees of **every** open request at the lowest
+   level, not just the first; for a day that is both PMs.
+6. `readdress_project_requests` gains a `WorkDay` branch: reassigning a project's PM moves that
+   project's open slices to the new PM (and `WorkSession.project` is unchanged).
+
+#### 4.18.6 Correcting a rejected day (R13, decided 2026-10-09)
+
+Rejection needs a reason. A rejected slice does not end the day: the person may correct it.
+
+`attendance/services.py::correct_session`, allowed to the day's person only, only while the
+**slice** of that session is `REJECTED`, for up to 30 days after the rejection:
+- **EDIT** an existing session: new `corrected_in_at` and/or `corrected_out_at`, or a clock-out for
+  an auto-closed session. **ADD** a missing session at a clockable place (kind `ADD`, `place`
+  required; it takes the session's project rules from 4.18.5 step 5).
+- `reason` is required (`CORRECTION_REASON_REQUIRED`). Times must stay on the day's `local_date`,
+  `out ≥ in`, and not overlap another session (`CLOCK_TIME_INVALID`, `CLOCK_OVERLAP`). No position
+  is taken: a correction is the person's statement, not a measurement, and it is flagged
+  *corrected*.
+- The session's recorded times and position are **never overwritten**. A `WorkSessionCorrection`
+  row stores original and corrected; effective times are those of the latest correction.
+- It reopens **only the rejected slice**: a new `ApprovalRequest` to the **same addressee** (the
+  rejected request's `required_user` / role), level 1, PENDING, with the correction's
+  `rejected_request` and `reopened_request` linking old to new. The slice's sessions are repointed
+  to the new request; the old request and its `ApprovalAction` rows stay, so history shows
+  reject, correct, decide. The other PM's slice, if already approved, is not touched. The day goes
+  back to `PENDING`.
+- A second rejection allows another correction; each is a row.
+- The approver sees, per session: the place, times and hours as corrected, the **original** times
+  beside them, the reason, who and when, plus the earlier rejection reason.
+
+#### 4.18.7 Endpoints
+
+| Endpoint | Purpose | Permission |
+|---|---|---|
+| `GET /work-sessions/open` | The caller's open session, if any. | member |
+| `POST /work-sessions/clock-in` | `{site \| location, project?, at?, fix, place_area?, client_uuid}` | member |
+| `POST /work-sessions/clock-out` | `{at?, fix?, session_client_uuid?, client_uuid}` | member |
+| `GET /work-days?scope=mine\|team\|all` | Filters: person, project, status, date range, `awaiting_me`. | scoped, below |
+| `GET /work-days/{id}` | Sessions with flags, distances, corrections, slices and their status. | scoped |
+| `POST /work-days/{id}/decide` | `{approved, reason}` on the caller's slice; `reason` required to reject. | engine |
+| `POST /work-sessions/{id}/correct` | `{kind, corrected_in_at?, corrected_out_at?, place?, reason}` | the person |
+| `GET/PATCH /attendance/settings` | auto-close hour, accuracy cap. | read member; write `settings.manage` |
+| `PATCH` sites, locations | Coordinates and radius; `has_coordinates` on read; `?missing_coordinates=true`. | existing |
+
+`approvals/pending` and `get_document` summarise work days (the finance fix in 4.17.6 already
+narrows the list to what is addressed to the caller).
+
+#### 4.18.8 Permissions and visibility
+
+- You see your own days. A PM sees days with a session on their projects, **their slice only**
+  being decidable. Holders of the new `attendance.view_all` (Owner automatically; added to the seeded
+  Finance role through `accounts/role_sync`) and of the Director role see everyone. Recording is
+  open to every member.
+- `attendance.view_all` is registered in `accounts/permissions_registry.py` and
+  `frontend/src/auth/permissions.ts` (group "Attendance").
+- **Coordinates are required** (R13): a `CoordinatesMixin` shared by the site and location
+  serializers (and admin) refuses a save without latitude and longitude, `COORDINATES_REQUIRED`,
+  for every Site and for `YARD` and `OFFICE` locations, except `is_system` rows. Existing sites
+  without them keep working everywhere else; they simply cannot be clocked in at. Seeding
+  (`locations/nodes.py::seed_locations_and_nodes`, which creates "Main yard") and factories get
+  coordinates; for a **new tenant** "Main yard" starts blank and Settings shows a "Set coordinates"
+  prompt until it has them.
+
+#### 4.18.9 Offline (R6, R13, §8)
+
+D17 widens by two `SyncOperation`s, `CLOCK_IN` and `CLOCK_OUT`. The
+`sync/services._HANDLERS` entries validate with the online serializers and call `clock_in` /
+`clock_out`, so every rule runs on replay. Approving and correcting are not offline (§8.3 unchanged).
+- **Bundle:** `OfflineBundleView` adds `latitude`, `longitude`, `radius_m`, `has_coordinates` to
+  `sites` and to YARD and OFFICE locations, and `attendance: {accuracy_cap_m, auto_close_hour}`.
+- **On the phone:** `area.ts` checks the area from the bundle and refuses early with the same words.
+  The open session is held as a local reference row (so Clock out works with no network), its
+  `client_uuid` is the `session_client_uuid` the clock-out names. `ATTENDANCE_OPERATIONS` in
+  `offline/db.ts`; the capture time is the phone's, and `captured_at` is what the server compares
+  with `area_history`.
+- **Idempotency:** `SyncSubmission (organization, client_uuid)` plus the session's own unique
+  `in_client_uuid` / `out_client_uuid`.
+- **Refusal:** a refused entry becomes a `SyncException` with its code and stays on the phone (R6).
+  A clock-in refused for being outside the area is never turned into hours by resending. If the
+  person really was there, the Director adds the day (4.18.6a).
+
+#### 4.18.10 Notifications
+
+New events in `notifications/matrix.py`: `attendance.awaiting_approval` (`LEVEL_APPROVERS`, in-app
+and email; one per slice, with person, date, hours and flags), `attendance.rejected` (to the person,
+in-app and email, with the reason and a link to correct), `attendance.unrouted` (to the owner,
+in-app). A corrected slice sends `attendance.awaiting_approval` again, tagged "corrected". SMS off
+(D30).
+
+#### 4.18.11 Frontend
+
+- **Clock-in card on Home** (`features/attendance/`): reads the position once, lists clockable places
+  nearest first with their distance, shows the open session and an elapsed time. Refusals state the
+  distance or "turn location on". Offline entries show "Waiting to send".
+- **My time** (`/time`): own days, hours and status; Team and Everyone toggles by permission. A
+  rejected day shows the reason and a **Correct** sheet (edit a time, or add a missing session, with
+  a required reason).
+- **Approvals, Days tab** (`DayApprovals.tsx`): the day with sessions, distances, flags, original
+  against corrected, and Approve / Reject (reason required).
+- **Settings, Clock-in** (`AttendancePage.tsx`): hour and accuracy cap; sites and locations missing
+  coordinates.
+- **Sheets:** `SiteSheet` and `LocationSheet` in `features/settings/NetworkPage.tsx` are create-only
+  today, so each gains an **edit mode** with latitude, longitude, radius and a "Use my location"
+  button (`components/ui/UseMyLocation.tsx`). `features/quickCreate.tsx` reuses the same sheets
+  (`QUICK_CREATE.sites` / `.locations`), so the quick "Add new site" gets the same required
+  coordinates. The site list gets a "No coordinates" badge and filter.
+- **Helpers:** `area.ts`, `position.ts`, `nearby.ts`, `offline.ts`, `queued.ts`, with Vitest.
+
+#### 4.18.12 Errors
+
+| Code | HTTP | When |
+|---|---|---|
+| `CLOCK_LOCATION_REQUIRED` | 400 | No fix. The screen says to turn location on. |
+| `CLOCK_LOCATION_TOO_VAGUE` | 400 | Accuracy above the cap. |
+| `CLOCK_OUTSIDE_AREA` | 409 | States the distance. |
+| `CLOCK_PLACE_REQUIRED` | 400 | Neither or both of site and location. |
+| `PLACE_HAS_NO_COORDINATES` | 409 | Names the place so someone can fix it. |
+| `PLACE_NOT_AVAILABLE` | 409 | Inactive, decommissioned, or not clockable. |
+| `CLOCK_TIME_INVALID` | 400 | Future, over 72 h old, or off the day. |
+| `CLOCK_OVERLAP` | 409 | Overlaps another session. |
+| `CLOCK_NOT_CLOCKED_IN` | 409 | Clock-out with no open session. |
+| `CLOCK_SESSION_LOCKED` | 409 | The slice is decided. |
+| `CORRECTION_NOT_ALLOWED` | 409 | The slice is not rejected, or the 30 days are over. |
+| `CORRECTION_REASON_REQUIRED` | 400 | R13. |
+| `WORK_DAY_SELF_APPROVAL` | 403 | The person tried to decide their own day. |
+| `WORK_DAY_NOT_DECIDABLE` | 409 | Wrong status. |
+| `COORDINATES_REQUIRED` | 400 | Site, YARD or OFFICE saved without them. |
+| `PROJECT_AMBIGUOUS`, `REJECTION_REASON_REQUIRED` | 400 | Existing. |
+
+#### 4.18.13 Testing
+
+- **Backend:**
+  - Geo fixture; clock in and out; the two-sessions day; auto-close in Nairobi and a second timezone.
+  - Concurrency: two simultaneous clock-ins leave one open session.
+  - `route_day`: PM, Director, no project, a PM's own, a Director's own, two PMs, no approver,
+    idempotency, a late session reopening one slice.
+  - Each engine change; visibility; coordinates required; RLS and isolation.
+  - Offline replay: inside the new area, inside only the old area (accepted and flagged), outside
+    both, and a forged `place_area`.
+  - Correction: EDIT, ADD, only on a rejected slice, same approver, other slice untouched, original
+    kept, window.
+  - Sync: replay, refusal, clock-out by `session_client_uuid`, replay overriding an auto-close.
+- **Frontend:** Vitest on `area.ts` with the shared fixture, and on `queued.ts`.
+- **E2E (phone, `context.setGeolocation`):**
+  1. Outside the area, clock-in is refused with the distance; inside it succeeds.
+  2. Offline, clock in; the area is edited by an owner; online again, the clock-in lands flagged.
+  3. Clock out; the PM rejects the day with a reason; the person adds a correction; the same PM sees
+     original and correction and approves.
+
+#### 4.18.14 Assumptions taken (each can be changed later without redesign)
+
+1. The Director for days is `finance_director_role`; no separate setting.
+2. `OFFICE` is a `LocationType` that never gets a `StockNode` and is excluded from stock pickers.
+3. `attendance.view_all` is a new permission rather than reusing `report.view_all`.
+4. A new tenant's "Main yard" starts without coordinates, with a prompt in Settings.
+5. The Days tab shows requests addressed to the caller, plus days on projects they manage.
+6. Corrections are allowed for 30 days after a rejection; there is no limit on rounds.
+7. A correction takes no position; it is flagged, not area-checked.
+8. `area_history` keeps ten changes; a phone older than that is checked against the current area.
+9. A refused clock-in does not become hours by resending. If the person really was there, the
+   Director adds the day with a reason (decided 2026-10-09; 4.18.6a), and the PM may also move the
+   place's pin for next time.
+10. Parallel slices and the days' hourly sweep are the only engine and scheduler additions.
+
+#### 4.18.6a A day added by the Director (decided 2026-10-09)
+
+For someone who was on site but whose phone placed them outside, or could not clock in at all:
+`POST /work-days/add` (`{person, date, place, project?, start, end, reason}`), allowed only to a
+holder of the Director role (`finance_director_role`), never for their own day. It creates a
+`WorkSession` with no position, `closed_by = PERSON`, and a stored `added_by` and `added_reason`; the
+session is flagged **"added by the Director"** wherever it shows, and the action is audited. The
+day is then routed as usual (4.18.4); the Director's own slice is refused self-approval, so a day
+the Director added is approved by the site's PM, or by another Director-role holder when there is no
+project. Error `WORK_DAY_ADD_NOT_ALLOWED` (403) for anyone else.
+
+### 4.19 Finance stage 2 — POs, budgets and sites (Epic R, R7–R12)
+
+> **Status: approved 2026-10-09.**
+
+#### 4.19.1 The decision: what is extended, what is new, and why
+
+Stage 2 adds money *in* (milestones), money to subcontractors, and one more thing to buy. Almost all
+of it hangs off structures that already exist, so the rule is: **extend the row that exists; add a
+table only where nothing fits, and say why.**
+
+| Need | Built on | New, and why nothing fits |
+|---|---|---|
+| R7 purchase | The stage 1 lifecycle, not the row. `StatusGuardMixin`, `ExpenseStatus`, `COSTED_STATUSES`, `finance._route/decide/mark_paid`, `engine._finance_levels`, `LEVEL_APPROVERS`, `Attachment` | **`SitePurchase` + `SitePurchaseLine`.** See the decision below. |
+| R8 contract | `network.Subcontractor` (O4), `Job.subcontractor/agreed_price` (O3), `SubcontractorSpendReport` | **`Subcontract`** (the contract has a value, sites, terms, document; a job cannot hold those) and **`SubcontractPayment`** (cash against a contract; not a cost line — cost stays the closed job's agreed price, O11). |
+| R9 budget | `Project.cost_budget`, `current_cost_budget`, `costing.cost_for`, `ProjectViewSet.performance`, `may_see_project_cost` | Nothing stored: **`commercials/budget.py`** computes committed and spent. Three columns for the reason (4.19.5). |
+| R10 site dates | `Project.sites` (an auto M2M — no through model today, so nothing to extend) | **`ProjectSite`** becomes its through model; the existing table and rows are kept (4.19.6). |
+| R11 PO payments | `Project` (+3 columns), `Attachment`, the report framework, `core.sweeps.dispatch_sweeps` | **`ProjectMilestone`, `MilestoneInvoice`, `MilestoneReceipt`.** Nothing in the system records money coming in. |
+| R12 late PO | `Project.po_number` and `a_po_project_is_fully_specified` | One action and one timestamp. No new table. |
+
+**Why `SitePurchase` and not a `ProjectExpense` with a kind.** I weighed it seriously, because the
+lifecycle is identical. Against: an expense is one amount against one category; a purchase is a
+supplier, a destination, a receiving location, N priced lines and, for yard goods, a link to a
+`GateIn`. Folding that in would add six nullable columns and a child table to a row that already
+carries fuel, casual-labour and float columns, and every `ProjectExpense` consumer
+(`reports_finance.ExpensesLedgerReport`, `expense_cost`, the Money screens) would need an `if kind`
+to stay right — and an INTO_YARD "expense" must be **kept out** of `expense_cost`, which is the
+opposite of what that function is for. For: no new approval wiring. That saving is kept anyway,
+because the wiring is generic: `AllowanceRequest` already proved a second entry kind rides the same
+mixin, statuses, engine branch, services and notifications. So `SitePurchase` is the **third entry
+kind of the same family**, not a second implementation. Its cost is counted by a sibling of
+`expense_cost`, not inside it.
+
+`SubcontractPayment` is the fourth member but with one level (R8) and no PAID stage, because it
+*records* a payment Finance already made; the PM's approval confirms it.
+
+Where it lives: all new finance tables in `commercials` (RLS in a new migration, fixtures in
+`commercials/isolation.py`, §2, A3); `ProjectSite` and the PO columns in `network`; `Job.subcontract`
+in `jobs`.
+
+**From §4.20:** `network.Supplier` (beside Client and Subcontractor) and its `assert_payable(supplier)`
+hook. The only couplings: `SitePurchase.supplier` FK, "not inactive to record", and `assert_payable`
+at approve-for-payment and mark-paid (`SUPPLIER_NOT_APPROVED`). §4.20 adds `GateIn.supplier`, so the
+draft delivery an INTO_YARD purchase creates sets both `supplier` and `supplier_name`. §4.20's
+migration must run before this section's `SitePurchase.supplier` FK.
+
+#### 4.19.2 Data model
+
+| Model / field | Shape | Notes |
+|---|---|---|
+| `SitePurchase` (new) | `number` (series `SP`), `project`, `site` (required), `supplier` → Supplier PROTECT, `purchase_date`, `destination` `USED_AT_SITE`/`INTO_YARD`, `receive_into` → Location null, `amount`, `recorded_by`, `status`, decided/paid columns exactly as `ProjectExpense`, `reverses`, `gate_in` OneToOne → `receiving.GateIn` null PROTECT, `over_budget_by`, `over_budget_reason`, `photos_expected`, `client_uuid` | `StatusGuardMixin`, `ExpenseStatus`, the same `a_decided_…_records_when` CHECK, unique `(organization, number)` and `(organization, client_uuid)`. `receive_into` is required when INTO_YARD, forbidden otherwise (CHECK). `amount` is stored (the sum of the lines, set by the service) so `_visible_to`, reports and the budget need no join. `requested_by_id` alias as the others. Never deleted. New `DocumentType.SITE_PURCHASE` (D37). |
+| `SitePurchaseLine` (new) | `purchase`, `item_type` → ItemType null, `description` char(200), `quantity` dec(14,3) > 0, `uom`, `unit_price` dec(14,2) ≥ 0 | CHECK: `item_type` or `description` present. Frozen with the purchase from APPROVED (the `ExpenseCasualLine._guard` pattern). Line total = `quantity × unit_price`, rounded to 2 places. |
+| `Subcontract` (new) | `number` (series `SC`), `project`, `subcontractor` → network.Subcontractor, `sites` M2M Site, `contract_value`, `payment_terms` text, `status` `ACTIVE`/`CLOSED`, `created_by` | Signed contract is an `Attachment`. Sites must be a subset of `project.sites`. Several per (project, subcontractor) are allowed (different scopes). Never deleted; closed. |
+| `SubcontractPayment` (new) | `subcontract`, `amount`, `paid_on`, `reference`, `recorded_by`, `status` (PENDING_PM / APPROVED / REJECTED only), decided columns, `reverses` self-FK, `over_budget_*` absent | `StatusGuardMixin`. Reference required. Invoice is an `Attachment`. A wrong approved payment is reversed, not edited (O16 discipline). Exposes `project` (via the subcontract) for the engine. |
+| `Job.subcontract` (new) | → `Subcontract`, null PROTECT; `over_contract_reason` char(500) | CHECK: set only when `delivery_mode = SUBCONTRACTED`. Service check: same project, same `subcontractor`. Joins `_DELIVERY_FIELDS`, so frozen once the job is CLOSED, like price. |
+| `ProjectSite` (new, through) | `project`, `site`, `mobilised_on`, `accepted_on`, tenant columns | `Project.sites` gets `through="ProjectSite"`. Unique `(project, site)`. Certificate is an `Attachment` captioned "Acceptance certificate". |
+| `Project` (+) | `po_issue_date` date null, `payment_terms` char(500), `payment_terms_days` small int null, `po_recorded_at` datetime null | PO PDF is an `Attachment` captioned "PO". Existing `a_po_project_is_fully_specified` stays; the issue date is required by the service, not the CHECK, so existing POs remain valid. |
+| `ProjectMilestone` (new) | `project`, `sequence`, `name`, `share_type` `PERCENT`/`AMOUNT`, `share_value`, `condition` `NONE`/`ALL_SITES_ACCEPTED`/`DATE`, `condition_date`, `due_notified_on`, `overdue_notified_on` | Unique `(project, sequence)`. CHECK: `condition_date` iff DATE. Amount = percent × `current_contract_value`, or the amount. |
+| `MilestoneInvoice` (new) | `milestone`, `invoice_number`, `invoice_date`, `amount`, `recorded_by`, `voided_at`, `voided_by`, `void_reason` | Append-only; a mistake is voided, never edited or deleted. Document is an `Attachment`. |
+| `MilestoneReceipt` (new) | `milestone`, `received_on`, `amount`, `reference`, `recorded_by`, void columns | Many per milestone: partial receipts (decided 2026-10-09). |
+| `over_budget_by`, `over_budget_reason` (new) | dec(14,2) null; char(500) | On `ProjectExpense`, `AllowanceRequest`, `SitePurchase`. Written once, at recording; frozen with the row. |
+| `Attachment` | no schema change | New targets and caption values in 4.19.9. |
+
+**Not stored:** committed, spent, remaining, work done, paid, owed, milestone due and overdue,
+site accepted, collection and dispatch dates. All are queries (D23).
+
+**Existing-constraint note.** `ProjectSerializer.sites` is writable today. DRF makes a through-model
+M2M read-only, so the serializer declares `sites` explicitly and calls `network.services.set_project_sites`.
+A bulk `project.sites.add()` no longer fills `organization`; the one grep hit outside tests is none,
+but fixtures and factories that use it must move to the service (4.19.16 risk).
+
+#### 4.19.3 R7: site purchases, and how each destination is costed
+
+**Recording** (`finance.record_site_purchase`, same shape as `record_expense`): `resolve_project(site,
+project)`; lines validated (at least one, quantity > 0, price ≥ 0); supplier not INACTIVE; INTO_YARD
+requires `receive_into` (a YARD or STORE location) **and** a catalogue `item_type` on every line (free
+text goods cannot be received into stock: `SITE_PURCHASE_YARD_NEEDS_CATALOGUE`); `amount` = Σ lines;
+`_require_other_approver`; budget check (4.19.5); `_route` (PM, then Finance — PM skipped when the
+recorder is the PM or the Director, as `_finance_levels`). Idempotent on `client_uuid`.
+`SitePurchase` joins `engine.FINANCE_DOCUMENT_TYPES`; nothing else in the engine changes for it.
+
+**Cost accounting.** The one rule: *money reaches project cost exactly once, by one route.*
+
+| | USED_AT_SITE | INTO_YARD |
+|---|---|---|
+| Reaches cost | On APPROVED, as a new `costing.purchase_cost(project)` (signed, `COSTED_STATUSES`, reversals negative), a new `ProjectCost.purchases` line included in `total`. | **Not by the purchase.** `purchase_cost` filters `destination = USED_AT_SITE`. The goods become cost when issued to the project, through the ledger (`material_cost`, §4.14). |
+| Gate-in | none | On APPROVED the same transaction creates a **draft** `GateIn` (below). |
+| In the budget (4.19.5) | Spent, from approval (it is cost). | Committed from approval until its gate-in is POSTED; then it leaves the budget and the ledger takes over at issue. |
+
+Honest limit, stated rather than hidden: yard stock is valued at `ItemType.unit_cost` when it moves
+(§3.2, D27), not at the price on the purchase. The purchase price drives the money screens and the
+budget until receipt; the P&L sees catalogue value at issue. Passing the paid price into the
+valuation is a ledger change and out of scope.
+
+**Draft delivery** (`receiving.services.draft_gate_in_for_purchase(purchase, actor)`, called from
+`finance.decide` when the entry becomes APPROVED and `destination = INTO_YARD`, inside its
+transaction, under `select_for_update` on the purchase so a retried approval cannot make two):
+`GateIn(source_type=PURCHASE, status=DRAFT, supplier_name=supplier.name, to_location=receive_into,
+received_at=purchase_date, for_site=site, notes="From site purchase SP-…")`; one `GateInLine` per line
+(`item_type`, `tracking_mode=item_type.default_tracking_mode`, `uom=item_type.uom`, `quantity`,
+condition NEW, owner OWN, `for_site=site`). `SitePurchase.gate_in` is set. The storekeeper opens it as
+any draft (D8): adds serials, reels or boxes, corrects quantities, posts. `for_site` means posting
+earmarks the goods to that site (Q1), which is what the buyer intended. Data errors cannot surface at
+approval, because record time validated the same fields; if one does (an item deactivated since), approval
+fails whole with `YARD_DELIVERY_FAILED` and nothing is half-done. `PROTECT` stops a linked draft being
+deleted; abandoning the purchase is a reversal.
+
+**Reversal** (`reverse_purchase`, PM or `finance.approve`, as `reverse_expense`): a reversing row born
+APPROVED. For INTO_YARD it is refused while the gate-in is POSTED (`SITE_PURCHASE_RECEIVED`: void the
+gate-in first, through the existing `void_gate_in`); while still DRAFT the draft is removed with it.
+
+**Paying** is `mark_paid`, with one extra refusal: supplier not APPROVED → `SUPPLIER_NOT_APPROVED`.
+**Offline** is 4.19.11.
+
+#### 4.19.4 R8: subcontracts, payments, and what is owed
+
+**Subcontract** (`commercials/contracts.py`): created by the project's PM, or `finance.approve`. Sites
+must belong to the project. `contract_value` may be changed by the PM or Finance; each change is an
+`AuditAction` row with old and new value (history without a variation table; see assumptions).
+
+**Jobs link.** `JobSerializer` gains `subcontract` and `over_contract_reason`. When a job is created or
+re-priced as SUBCONTRACTED: if the project has exactly one ACTIVE subcontract with that subcontractor
+it is chosen automatically, if several the user chooses (`SUBCONTRACT_AMBIGUOUS`), if none the job is
+**allowed unlinked** and the sheet says "not under a contract" (jobs predating this stage, and POs that
+never sign one, keep working). Then `committed_value = Σ agreed_price` over the subcontract's non-cancelled jobs
+(open or closed, so the check sees what is awarded, not only what is done). If that plus this job exceeds
+`contract_value`, `over_contract_reason` is required (`SUBCONTRACT_OVER_VALUE`); it warns and records, it does
+not block. It is shown on the subcontract and to the PM.
+
+**Payment** (`contracts.record_subcontract_payment`, `finance.approve`): `amount > 0`, `paid_on` not in the
+future, `reference` required. Routing is a **second engine branch**: `required_levels` returns one level,
+the project's PM (`_project_level`, so an inactive or missing PM is the same `PROJECT_HAS_NO_ACTIVE_MANAGER`),
+and `can_approve` refuses the recorder as it does for finance entries. If the recorder *is* the PM there is
+nobody else to give the signature, so recording is refused (`PAYMENT_NEEDS_OTHER_APPROVER`). `decide`
+generalises over the entry types; the approved branch of a one-level entry moves PENDING_PM → APPROVED
+directly (the guard already allows the two single steps, so the service passes through none it should not:
+a payment has its own, smaller transition table). A rejection needs a reason and returns it to Finance,
+who may resubmit.
+
+**Figures** (`contracts.position(subcontract)`, a query):
+
+| Figure | Definition |
+|---|---|
+| Contract value | `Subcontract.contract_value` |
+| Work done | Σ `agreed_price` of its CLOSED jobs (the O11 rule: closing, not award) |
+| Paid | Σ signed APPROVED payments (reversals negative); pending ones are shown separately as "awaiting approval" |
+| Owed | work done − paid. Negative reads "advance paid" |
+| Flags | paid > work done (advance); paid > contract value (shown to the PM when deciding) |
+
+Neither refuses; both appear on the payment's approval sheet.
+
+**Report.** `SubcontractorSpendReport` (`reports_finance.py`) gains `paid` and `owed` columns and a
+`subcontract` filter; `delivered` and `committed` are unchanged. `paid` is one more grouped
+`Sum` over APPROVED `SubcontractPayment` rows (project-filtered like the others), `owed = delivered − paid`.
+Delivered work with no subcontract still counts in `delivered` (legacy), so it correctly reads as owed.
+A per-subcontract report is not added; the subcontract tab (4.19.13) is that view.
+
+#### 4.19.5 R9: committed and spent, and the over-budget reason
+
+`commercials/budget.py::position(project) -> BudgetPosition`, pure queries, no stored numbers (D23).
+**Budget** is `project.current_cost_budget` (so approved variations count, O2). **Spent** is project cost
+(O11, now including `purchases`) plus the paid money cost does not see; **committed** is what will
+become spend and has not yet:
+
+| Component | Spent | Committed |
+|---|---|---|
+| Cost (`cost_for(project).total`: material, loss, subcontractor, labour, expenses, purchases) | all of it | |
+| Allowance requests that are not floats | PAID: amount | APPROVED, unpaid: amount |
+| Floats | PAID: `amount − Σ costed expenses on it − returned_amount`, at least 0 (the part not yet cost; expenses on it are already in cost) | APPROVED, unpaid: amount |
+| INTO_YARD purchases | | APPROVED and gate-in not POSTED: amount (paid or not) |
+| Subcontracts | advance: `max(paid − work done, 0)` | `max(contract_value − max(work done, paid), 0)` |
+
+This is **a deliberate departure from the wording of R9** ("spent = project cost plus paid entries"),
+which would count a paid expense twice, once in cost and once as paid; the table counts each shilling in
+exactly one cell. Likewise an approved-unpaid USED_AT_SITE purchase or expense is *spent* (it is cost),
+not committed. Committed plus spent, the figure that matters for "will we overspend", is the same under
+either reading; only the split differs. Awaiting-approval entries are shown as a third line
+(`pending`), outside both. `remaining = budget − committed − spent`. A project with no PO has no budget:
+`position` returns `budget = None` and no remaining; a CLOSED project reads cost from its snapshot
+and commits nothing (entries on it are refused already, `ProjectNotOpen`).
+
+**Over-budget reason.** `budget.check(project, amount)` returns `over_by` when `committed + spent +
+pending + amount > budget` (pending included so two simultaneous entries cannot each slip under).
+Called by `record_expense`, `request_allowance`, `record_site_purchase`, **not** for: float-backed expenses
+(the float was checked when requested), reversals, projects without a budget (R12), or subcontract
+payments (the contract is the control, R8). Online: `over_by > 0` with no `over_budget_reason` raises
+`OVER_BUDGET_REASON_REQUIRED` (400, `details` carry `over_by` only for holders of `project.view_cost`,
+else just `over: true`); with a reason it records `over_budget_by` and the reason. The forms ask
+*before* sending where they can (4.19.13). **On replay (offline) it never refuses**: the phone's figures
+may be stale, so the server records `over_budget_by` and an empty reason, and the approver sees "over
+budget, no reason given". That is R9's "warns, does not block" applied to a phone that could not know.
+
+**Approvers see it.** The serializers of the three entry kinds expose `is_over_budget`,
+`over_budget_reason` and, where `may_see_project_cost`, `over_budget_by`. The PM and Finance sheets show a
+banner with the overrun and the reason; the notification payload carries it (4.19.12). The recorder sees
+their own reason, not the figures.
+
+`ProjectViewSet.performance` and the project serializer gain `budget_position` (gated by
+`may_see_project_cost`, which already lets the PM see their own project's cost, O14).
+
+#### 4.19.6 R10: site dates
+
+`ProjectSite` is the through model: `Project.sites` is unchanged to callers (`project.sites.all()`,
+`filter(sites=…)`, `ProjectFilter.site`, `reconciliation.py`'s `project__sites`), because the join table
+is the same table. The migration is state-only for the table (`SeparateDatabaseAndState` with
+`db_table = "network_project_sites"`), then `AddField organization` (backfilled from `project`,
+then NOT NULL), `mobilised_on`, `accepted_on`, timestamps, `enable_rls`, and the isolation fixture.
+
+| Field | Source |
+|---|---|
+| Mobilisation, acceptance dates | Typed by the project's PM (or `catalogue.manage`): `PATCH /project-sites/{id}` |
+| Acceptance certificate | `Attachment` on `network.ProjectSite`, caption "Acceptance certificate" |
+| `is_accepted` | `accepted_on` set **and** a certificate attached (R10) |
+| Material collection | Earliest `GateOut.released_at` among gate-outs with `site = site` whose project is this one |
+| Dispatch | Latest `GateOut.released_at`, same set |
+| Waiting in the yard | The earmarks report (Q5, `material-by-site`) filtered to the site; linked, not copied |
+
+"Whose project is this one" must use the same resolution as `engine.project_of` (a gate pass reaches its
+project through its job), so routing, costing and this view cannot disagree. Collection and dispatch are
+read-only fields of the site row, computed in one grouped query for the whole project (never one per
+site). `GateOut.released_at` is overwritten by each release (`dispatch/services.py`), so a pass released
+in two goes shows its *last* release; the "first" date is therefore the earliest *final-or-only* release
+per pass. Acceptable for a date shown to a PM; recorded as an assumption, and fixable with a first-release
+stamp later.
+
+`set_project_sites` refuses removing a site that has a date, a certificate, or an entry against it
+(`SITE_HAS_PROJECT_DATA`).
+
+#### 4.19.7 R11: the PO's payments
+
+**On the project.** `po_issue_date`, `payment_terms` (text, as typed on the PO) and `payment_terms_days`
+(the number the clock uses), set with the PO (R12). The PO PDF is an attachment captioned "PO".
+
+**Milestones** (`commercials/milestones.py`, pure, shared by the API, the report and the sweep):
+`milestone_state(milestone, today, accepted_dates) -> State`.
+
+| State | Rule |
+|---|---|
+| Condition met | NONE: the project has a PO. ALL_SITES_ACCEPTED: the project has at least one site and every `ProjectSite.is_accepted`. DATE: `today ≥ condition_date`. |
+| `met_on` | NONE: `po_issue_date`. ALL_SITES_ACCEPTED: the latest `accepted_on`. DATE: that date. |
+| Invoiced / received | Σ non-void invoices / Σ non-void receipts |
+| **DUE** | condition met and nothing invoiced |
+| **OVERDUE** | `invoiced − received > 0` and `today > latest invoice_date + payment_terms_days`. No terms days, never overdue (the screen says "set payment terms"). |
+| Otherwise | NOT_DUE, INVOICED, PART_PAID, PAID |
+
+The latest invoice date, not the first, so a second invoice for the same milestone restarts the clock
+rather than the client being chased for something just sent. A milestone's amount is its share of
+`current_contract_value`.
+
+**Defaults.** Attaching a PO (4.19.8) seeds M1 *Deposit* (NONE), M2 *Conditional acceptance* and M3
+*Final acceptance* (both ALL_SITES_ACCEPTED), **with empty shares** that Finance fills in; the project
+screen warns until shares total 100% (a warning, not a block: contracts differ). Existing PO projects
+get nothing automatically; Finance presses "Add default milestones". Milestones may be added, renamed,
+re-shared or removed while nothing is invoiced against them; after that, only the condition date.
+
+**Recording.** Finance (`finance.approve`) adds an invoice (date, number, amount, document) and receipts
+(date, amount, reference). Receipts beyond the invoiced amount are refused (`RECEIPT_EXCEEDS_INVOICED`);
+over-invoicing a milestone beyond its amount warns. Voiding needs a reason.
+
+**Notifications.** `core.sweeps.dispatch_sweeps` (05:30 daily, §12) gains `_sweep_milestones(organization_id)`
+beside `_sweep_custody_overdue`: for each OPEN PO project, DUE not yet notified → `po.milestone_due`
+(stamps `due_notified_on`); OVERDUE and not notified in 7 days → `po.milestone_overdue`. Recipient: the
+holders of `finance.approve` (new `Recipient.FINANCE`), in-app and email, with the project's PM copied in
+app. No new beat entry.
+
+**PO payments report** (`commercials/reports_finance.py`, `@register`, slug `po-payments`, category
+Finance, `required_permission = finance.approve`): one row per PO project with value, invoiced, received,
+outstanding (`value − received`), invoiced-unpaid, next milestone and its state, and a filter for status,
+client, manager and "overdue only". Built on `reporting.framework` exactly as `SubcontractorSpendReport`
+is (`columns`, `filters`, `rows`, `totals`), so export to CSV and the reports page need no work. The
+project screen shows the same figures per milestone (amounts hidden from a viewer without
+`project.view_margin` or `finance.approve`; they see states only, matching O14).
+
+#### 4.19.8 R12: the PO that arrives late
+
+A project without a PO is the existing work-order project (O1); it already has no budget, so entries
+need no reason and `position` returns no budget (4.19.5). Adding the PO is one action,
+`POST /projects/{id}/attach-po` (`po_number`, `po_issue_date`, `contract_value`, `cost_budget`,
+`payment_terms`, `payment_terms_days`, optional `manager`), by the project's PM or `catalogue.manage`.
+The service sets the existing fields on the **same row**, so every job, expense, gate-out and
+attachment already on it stays attached; stamps `po_recorded_at`; seeds milestones (4.19.7); writes an
+audit row; and tells Finance in app. It refuses when the project already has a PO
+(`PROJECT_ALREADY_HAS_PO`; a changed value is a variation, O2), is not OPEN, has no manager (the existing
+CHECK needs one), or the PO number is taken (D21, the existing partial unique index, reported as a field
+error as `ProjectSerializer.validate` does).
+
+Nothing is back-filled. Entries recorded before the PO have no reason and are not re-checked; the
+budget position simply counts them, so a project that spent before its PO can open already over budget.
+That is shown, not hidden. "PO arrived after N days" is `po_recorded_at − opened_at`.
+
+**Dashboard list** (`GET /projects?po=none&status=OPEN`, a new `has_po` filter on `ProjectFilter`):
+projects working without a PO, each with `days_without_po = today − opened_at`, longest first, for those
+who hold `project.view_margin` (the owner). The dashboard card links to the project, where "Add PO"
+lives. Projects created with a PO get `po_recorded_at = opened_at`.
+
+#### 4.19.9 Documents and permissions
+
+Documents are `Attachment`s: `ATTACHABLE_TARGETS` gains the targets below, captions are the existing
+free `caption` (60 chars) chosen from a fixed list in the app (4.17.8), and PDFs are already in
+`ALLOWED_CONTENT_TYPES`.
+
+| Target | Caption | Who may attach |
+|---|---|---|
+| `network.Project` | PO | the project's PM, `catalogue.manage`, `finance.approve` |
+| `network.ProjectSite` | Acceptance certificate | the project's PM, `catalogue.manage` |
+| `commercials.Subcontract` | Contract | the project's PM, `finance.approve` |
+| `commercials.SubcontractPayment` | Invoice | its recorder (Finance), while PENDING_PM or REJECTED |
+| `commercials.MilestoneInvoice` | Invoice | `finance.approve` |
+| `commercials.SitePurchase` | Receipt | its recorder, while PENDING_* or REJECTED (an `OWNER_RULED_TARGET`; `_require_evidence_open` extends to it) |
+
+A new rule class, **`PROJECT_RULED_TARGETS`**, sits beside `OWNER_RULED_TARGETS` for the first three
+rows, because "this project's PM" is a person, not a permission (the same reason `OWNER_RULED_TARGETS`
+exists). Documents on approved or invoiced records are fixed (`ATTACHMENT_LOCKED`), except the PO,
+acceptance certificate and contract, which stay replaceable by their owners: they are reference
+documents, not evidence for an approval.
+
+**Permissions.** No new codename; `finance.approve` covers Finance's recording of invoices, receipts and
+subcontract payments, and marking purchases paid (stage 1 assumption 2, still true). The Finance role
+(seeded in stage 1) needs nothing added. `project.view_margin` reads contract value and milestone amounts.
+`_visible_to` is extended so a purchase is seen by its recorder, the project's PM, and holders of
+`finance.approve` or `project.view_cost`, as expenses are.
+
+#### 4.19.10 Endpoints
+
+| Endpoint | Purpose | Permission |
+|---|---|---|
+| `GET/POST /site-purchases`, `PATCH /{id}` | Lines nested; PATCH only while PENDING_PM, by the recorder. | member |
+| `POST /site-purchases/{id}/decide` · `/resubmit` · `/mark-paid` · `/reverse` | As expenses; `mark-paid` adds the supplier check. `?mine=true`, `?payable=true`. | engine · recorder · `finance.approve` · PM or `finance.approve` |
+| `GET/POST/PATCH /subcontracts` | `?project=`. Detail carries the position (4.19.4), its jobs and payments. | PM of the project or `finance.approve`; read: PM, `project.view_cost` |
+| `GET/POST /subcontract-payments`, `POST /{id}/decide` · `/resubmit` · `/reverse` | `?subcontract=`, `?pending=true` for the PM. | `finance.approve` to record; PM decides |
+| `POST /projects/{id}/attach-po` | 4.19.8. | PM or `catalogue.manage` |
+| `GET /projects/{id}/budget` · `POST /projects/{id}/budget-check` | Position; `{amount}` → `{over, over_by?}` for the form's early warning. | `project.view_cost` scoped by `may_see_project_cost`; check: member (boolean only) |
+| `GET/PATCH /project-sites`, `?project=` | Dates plus the derived collection and dispatch. | PM or `catalogue.manage`; read member |
+| `GET/POST/PATCH/DELETE /projects/{id}/milestones` · `POST /projects/{id}/milestones/defaults` | 4.19.7 rules for edit and delete. | `finance.approve`; read: states to PM |
+| `POST /milestones/{id}/invoices` · `/receipts`, `POST /milestone-invoices/{id}/void` (and receipts) | Reason on void. | `finance.approve` |
+| `GET /reports/po-payments` | Through the existing report framework. | `finance.approve` |
+| `GET /projects?po=none` | Dashboard list. | `project.view_margin` |
+| `POST /sync/submit` | New operation `SITE_PURCHASE`. | member |
+
+**`approvals/pending`** summarises the two new document types in `get_document`; the engine's
+`FINANCE_DOCUMENT_TYPES` gains `commercials.SitePurchase` and a sibling set holds
+`commercials.SubcontractPayment` (one level, same self-approval rule).
+
+#### 4.19.11 Offline (R6, §8)
+
+Only R7 is captured offline; contracts, payments, milestones and dates are desk work and need a
+connection (§8.3 unchanged). `SyncOperation.SITE_PURCHASE` and `sync/services._apply_site_purchase`,
+the same shape as `_apply_expense`: validate through the online serializer, call `record_site_purchase`,
+so `resolve_project`, supplier, destination and approver checks all run on replay. Lines travel inline;
+`supplier` by server id; an unapproved supplier is nameable but unpayable. "Add new supplier" is
+online-only (it is §4.20's flow), so a phone that lacks a supplier queues nothing for it. Photos reuse the
+stage 1 queue (`photos` table, `client_uuid`, "photos on the way"). Refusals become `SyncException`s the
+person can fix and resend (`supersedes_client_uuid`). The over-budget flag never refuses a replay (4.19.5).
+
+The **bundle** adds `suppliers` (non-INACTIVE: id, name, status) from §4.20's list, and per OPEN PO project
+`budget_headroom`, **only for a user who may see that project's cost**, so the form can ask for a reason
+offline. Locations and item types are already in it. The phone runs `features/money/rules.ts` helpers
+for line totals and the headroom comparison; the server decides.
+
+#### 4.19.12 Notifications
+
+Reused unchanged, by adding the new documents to `notifications/events._FINANCE_TARGETS`:
+`finance.awaiting_approval`, `.approved`, `.rejected`, `.paid`. `_finance_payload` gains
+`over_budget_by` and `over_budget_reason` (all three entry kinds), `supplier` and `destination` for
+purchases, and for subcontract payments `work_done`, `paid` and `contract_value`. New events in
+`matrix.py`:
+
+| Event | Recipients | Channels |
+|---|---|---|
+| `po.milestone_due` | new `Recipient.FINANCE` (holders of `finance.approve`) | in-app, email |
+| `po.milestone_overdue` | `Recipient.FINANCE`, PM in app | in-app, email |
+| `po.attached` | `Recipient.FINANCE` | in-app |
+| `purchase.yard_delivery_expected` | `Recipient.STOREKEEPERS` | in-app |
+
+SMS stays off (D30).
+
+#### 4.19.13 Frontend
+
+- **Money** (`features/money/`): `RecordPurchasePage.tsx` (site first, project resolved as
+  `SiteProject.tsx` does; supplier picker; destination toggle; lines editor with catalogue search or
+  free text, quantity, price, live total; `receive_into` shown for yard goods; `PhotoCapture` for the
+  receipt) and a Purchases list in My expenses, with "Waiting to send" for queued ones. `api.ts`,
+  `types.ts`, `queued.ts`, `bundle.ts`, `offline.ts` extend; `rules.ts` gains `lineTotal`,
+  `purchaseTotal`, `overBudget(headroom, amount)` with Vitest tests. When the form's amount (or the cached
+  headroom) shows an overrun it asks for the reason before sending.
+- **Approvals** (`features/dispatch/FinanceApprovals.tsx`): a Purchases tab and, for PMs, a Subcontract
+  payments tab, level-aware like the others; every sheet shows the over-budget banner, lines, supplier
+  status, and for a yard purchase "will create a delivery". **To pay** (`ToPayPage.tsx`) lists payable
+  purchases and blocks Mark paid with the supplier's status.
+- **Project screen** (`features/projects/ProjectsPage.tsx` is 670 lines; new panels are separate files,
+  loaded as tabs): `BudgetPanel` (budget, spent, committed, pending, remaining, with the components
+  expandable), `SitesPanel` (dates, derived collection and dispatch, certificate, accepted badge, link to
+  the earmarks report), `SubcontractsPanel` (contract, value, work done, paid, owed, payments, document),
+  `MilestonesPanel` (per milestone: share, condition, state, invoice and receipt forms), and
+  `AttachPoSheet` for a project without a PO.
+- **JobSheet.tsx** gains the subcontract picker and the over-contract reason, under the delivery mode it
+  already has.
+- **Dashboard** (`DashboardPage.tsx`): the "working without a PO" card (R12).
+- **Receiving**: the draft list badges "from purchase SP-…".
+- **Reports**: nothing; `po-payments` appears through the registry, and `subcontractor-spend` shows its two
+  new columns.
+
+#### 4.19.14 What changes for existing data
+
+- `Project.sites`: state-only through-model conversion; every existing link survives with null dates and
+  `organization` backfilled from its project.
+- Existing PO projects: `po_recorded_at = opened_at`, no issue date, no milestones (Finance adds them).
+- Existing subcontracted jobs: `subcontract = NULL`; the report treats them as before.
+- `ProjectCost` gains `purchases` (0 for every old row); `from_snapshot` reads it with a default, so
+  closed-project snapshots stay exactly as frozen (O13).
+- `ProjectExpense` and `AllowanceRequest` gain the two nullable over-budget columns; old rows have none.
+
+#### 4.19.15 Errors
+
+| Code | HTTP | When |
+|---|---|---|
+| `OVER_BUDGET_REASON_REQUIRED` | 400 | The entry would pass the budget and no reason was given (online only). |
+| `SITE_PURCHASE_YARD_NEEDS_CATALOGUE` | 400 | An INTO_YARD line has no catalogue item, or no `receive_into`. |
+| `SITE_PURCHASE_RECEIVED` | 409 | Reversing a purchase whose gate-in is posted. |
+| `YARD_DELIVERY_FAILED` | 409 | The draft gate-in could not be built at approval; nothing was approved. |
+| `SUPPLIER_NOT_APPROVED` | 409 | Mark paid on a purchase whose supplier is not APPROVED (R7, R15). |
+| `SUPPLIER_INACTIVE` | 400 | Recording against an INACTIVE supplier. |
+| `SUBCONTRACT_AMBIGUOUS` | 400 | Two or more active contracts with that subcontractor and none chosen. |
+| `SUBCONTRACT_OVER_VALUE` | 400 | Awarded jobs would pass the contract value and no reason was given. |
+| `SUBCONTRACT_MISMATCH` | 400 | Job and subcontract differ in project or subcontractor. |
+| `PAYMENT_NEEDS_OTHER_APPROVER` | 409 | The recorder is the project's PM. |
+| `PROJECT_ALREADY_HAS_PO` | 409 | Attaching a second PO. |
+| `RECEIPT_EXCEEDS_INVOICED` | 400 | More received than invoiced. |
+| `MILESTONE_LOCKED` | 409 | Changing the share of a milestone that has an invoice. |
+| `SITE_HAS_PROJECT_DATA` | 409 | Removing a site that has dates, a certificate or entries. |
+
+Existing codes reused: `PROJECT_AMBIGUOUS`, `SITE_HAS_NO_OPEN_PROJECT`, `SITE_NOT_ON_PROJECT`,
+`PROJECT_HAS_NO_ACTIVE_MANAGER`, `FINANCE_NO_OTHER_APPROVER`, `FINANCE_SELF_APPROVAL`,
+`FINANCE_NOT_DECIDABLE`, `PAYMENT_REFERENCE_REQUIRED`, `ATTACHMENT_LOCKED`.
+
+#### 4.19.16 Testing
+
+- **Backend, purchases:** routing as expenses (PM-recorded, Director-recorded); self-approval refused;
+  USED_AT_SITE raises `expense`-style cost on APPROVED and PAID once, a reversal lowers it; **INTO_YARD
+  adds nothing to cost on approval or payment, creates exactly one draft gate-in with the right lines,
+  location, supplier and `for_site` (also under a repeated or concurrent approval), and cost rises only
+  when the stock is issued**; free-text lines refused for yard goods; reversal blocked once the gate-in is
+  posted and removes a draft; unapproved supplier recordable but not payable; idempotent `client_uuid`.
+- **Subcontracts:** auto-link of a single contract, ambiguity, mismatch, over-value reason, jobs frozen on
+  close; payment routing (PM only, recorder-PM refused, inactive PM), reject and resubmit, reversal;
+  work done, paid, owed on a worked example including advance and legacy unlinked jobs; the report's new
+  columns against hand-computed figures.
+- **Budget:** a table-driven test of every component in 4.19.5, including a paid float with some expenses
+  (no double count), a paid and an approved-unpaid request, a yard purchase before and after posting, an
+  advance; reason required online, never refused on replay; float-backed and reversal skipped; no-PO project;
+  concurrent pending entries; `may_see_project_cost` gating; closed project from snapshot.
+- **Sites:** the through-model migration keeps links and org; `set_project_sites`; `is_accepted` needs both
+  parts; collection and dispatch from gate-outs via the `project_of` resolution, in one query count.
+- **Milestones:** every state in the table with date edges (due the day the last site is accepted; overdue
+  the day after `latest invoice + terms`), partial receipts, void, no terms days; the sweep's idempotence
+  and 7-day repeat; the report's totals.
+- **PO later:** attach keeps every row and history, rejects a second PO, a taken PO number and a missing
+  manager; seeds milestones; dashboard list and days.
+- **Cross-cutting:** RLS and isolation fixtures for every new tenant table (N-3); attachment rules for
+  each new target including `PROJECT_RULED_TARGETS`; `approvals/pending` for the new types;
+  `readdress_project_requests` re-addresses open purchase and payment requests when the PM changes; the
+  sync replay of `SITE_PURCHASE` (refusal, supersede, photos).
+- **Frontend:** Vitest on the new `rules.ts` helpers and the queued purchase.
+- **E2E (phone, then desk):**
+  1. Offline, a supervisor records a yard purchase with three lines and a receipt photo.
+  2. Online again it lands over budget with its reason; the PM approves, Finance approves; a draft delivery
+     appears for the storekeeper; project cost has not moved.
+  3. The storekeeper posts it, issues part to the project, and cost rises by the issued part only.
+  4. Finance marks it paid (supplier approved), records a subcontract payment which the PM approves, and
+     the subcontractor report shows paid and owed.
+  5. A PO-less project gets its PO: history intact, milestones seeded, a milestone shows DUE when its
+     site is accepted, and OVERDUE after the terms.
+
+#### 4.19.17 Assumptions taken (each can change without redesign) and risks
+
+1. A purchase of **any** non-INACTIVE supplier can be recorded; payment needs APPROVED. R7 says "cannot
+   be paid"; R15 says "or used on a purchase". Chosen so a supervisor in the field is not stopped.
+2. Budget split follows 4.19.5, not R9's literal wording, to avoid counting paid expenses twice. The total
+   (committed plus spent) is unaffected.
+3. An INTO_YARD purchase leaves the budget when its gate-in posts, because the ledger takes over at
+   issue. Between receipt and issue, the money sits in stock and shows in neither (as all yard stock does).
+4. Yard stock is valued at catalogue cost, not at the price on the purchase.
+5. Contract value edits are audited, not versioned, and subcontracts have no variations.
+6. The over-contract reason is recorded by whoever creates the job, not only the PM.
+7. Default milestone shares are blank, conditions M1 none and M2, M3 all sites accepted.
+8. Overdue counts from the latest invoice on a milestone.
+9. "Collection" is the earliest release date among passes, "dispatch" the latest (4.19.6).
+10. Replay never refuses for over-budget; it flags.
+11. One permission, `finance.approve`, covers every Finance action here.
+12. **Risk:** converting `Project.sites` to a through model breaks any code that bulk-adds sites without
+    `organization`; mitigated by one service and a grep of fixtures and factories before merge. **Risk:**
+    stage 4's `Supplier` model and stage 2's FK must land in an order that migrates (stage 4's `suppliers`
+    first, or stage 2 behind a nullable FK added after).
+
+### 4.20 Finance stage 4 — assets and suppliers (Epic R, R14–R15)
+
+> **Status: approved 2026-10-09.**
+
+#### 4.20.1 The decision: suppliers join the network registers, assets get one small app, nothing else is new
+
+- **`Supplier` lives in `network`** (R15), beside `Client` and `Subcontractor` (O4). Those are the
+  tenant's registers of outside parties; they share the Settings → Network screen
+  (`NetworkPage.tsx`), the `TenantScopedViewSet` pattern (`network/views.py`), `network/isolation.py`
+  and the quick-create registry (`features/quickCreate.tsx` → `ReferenceSelect`). A new `suppliers`
+  app would duplicate all of that for one table. The `Subcontractor` docstring and requirements §7
+  ("suppliers stay free text") are updated: the distinction it draws (a supplier sells goods, a
+  subcontractor does work) still holds, only "free text" goes.
+- **`Asset` and `AssetHandover` live in a new `assets` app** (R14). Nothing fits: `catalogue`/`stock`
+  are item-type quantity ledgers (R14 says an asset is *not* stock), and `network` holds parties,
+  not things owned. The app is deliberately thin: two models, one service module, one sweep.
+- **Handover history is a new append-only table, not `CustodyTransfer`.** Custody transfers
+  (`custody/models.py`) are built around `CustodyTransferLine` (item type, serial unit, quantity),
+  post stock movements on acknowledgement, and need the receiver's acknowledgement (I5). R14 wants a
+  dated record of who handed what to whom, with no acknowledgement and no ledger. Forcing an asset
+  through a transfer would need a fake item type per asset and a ledger node per person. What *is*
+  reused: the "both ends are users, they must differ" CHECK, the append-only trigger from
+  `core/immutability.py`, and `custody.services.assert_can_deactivate` (extended, 4.20.4).
+- **`Supplier` approval reuses `approvals/`** (one level, addressed by `required_permission =
+  "finance.approve"`, added in 4.17), so there is no second approval implementation.
+- **Documents and photos reuse `Attachment`** (`core/attachment_api.py`): two new targets, with the
+  existing `caption` (4.17) naming the document kind. No document model.
+- **`GateIn` and `ProjectExpense` are extended**, each by one nullable FK; their old text columns
+  stay as history.
+
+#### 4.20.2 Data model
+
+New tables are tenant tables: `enable_rls` in migrations of their app and fixtures in
+`network/isolation.py` and `assets/isolation.py` (§2, A3).
+
+| Model / field | Shape | Notes |
+|---|---|---|
+| `Supplier` (`network`) | `name`, `name_key`, `kra_pin`, `kra_pin_key`, `contact_name`, `phone`, `email`, `address`, `bank_name`, `account_number`, `mpesa_type` (`PAYBILL`/`TILL`/blank), `mpesa_number`, `mpesa_account`, `status`, `is_active`, `registered_by`, `decided_by`, `decided_at`, `decision_reason`, `client_uuid` | R15. Unique `(organization, name_key)` (casefolded, whitespace collapsed) and, where not blank, `(organization, kra_pin_key)` (upper-cased, spaces stripped); both are partial/ordinary unique constraints like `uniq_subcontractor_name_per_org`. `client_uuid` unique per org, null, for offline add (4.20.6). |
+| `SupplierStatus` | `PENDING`, `APPROVED`, `REJECTED` | A projection of the supplier's `ApprovalRequest`, as an expense's status is (4.17.1). |
+| `GateIn.supplier` (new) | → Supplier, null, PROTECT | R15. `supplier_name` stays, filled with the supplier's name at save, so search (`search_fields`), exports and old documents need no change. |
+| `Asset` (`assets`) | `type` (`VEHICLE`/`GENERATOR`/`TOOL`/`EQUIPMENT`/`OTHER`), `name`, `tag`, `tag_key`, `purchase_date`, `supplier` → Supplier null, `cost` (decimal null), `purchase_terms` (text), `make`, `model`, `insurance_expires_on`, `inspection_expires_on`, `holder` → User null, `status` (`ACTIVE`/`CLOSED`), `closed_on`, `closed_reason` (`SOLD`/`WRITTEN_OFF`), `closed_note`, `closed_by`, `insurance_alerted_for`, `inspection_alerted_for` | R14. `tag` is the registration for a vehicle. Unique `(organization, tag_key)` where not blank (upper-cased, spaces and dashes stripped, as `Casual.id_number_key`). `holder` null means **held in the yard**; it is a projection of the last handover, not a second truth. `make`, `model` and the expiry dates are for `VEHICLE` only; `clean` refuses them on other types. Never deleted: `delete` raises, as `ProjectVariation` does. |
+| `AssetHandover` | `asset`, `from_holder` null, `to_holder` null, `handed_over_by`, `handed_over_on` (date), `note` | Append-only (trigger). Null on either side means the yard. CHECK: not both null and `from_holder` ≠ `to_holder`. The first row (from nobody to the first holder or the yard) is written when the asset is created. |
+| `ProjectExpense.vehicle` (new) | → Asset, null, PROTECT | R14. `vehicle_reg` stays: it holds the typed registration on old rows, and on new rows is filled from the asset's tag so existing fuel reports read as they do. |
+| `Attachment` targets | `assets.Asset`, `network.Supplier` | `caption` (char 60, from 4.17) carries the kind: asset Photo / Contract / Logbook / Insurance / Warranty / Other; supplier KRA certificate / Certificate of incorporation / Other. |
+
+**Supplier states.** `usable` means `status = APPROVED` and `is_active`. A supplier is deactivated,
+never deleted; once any `GateIn`, `Asset` or purchase names it, PROTECT keeps it, and `delete` raises
+regardless, as `Subcontractor` never offers one. A deactivated supplier stays on the documents that
+name it and drops out of pickers.
+
+**Sensitive edits go back to Finance.** Changing `kra_pin` or any payment detail of an APPROVED
+supplier sets it back to PENDING with a new request: the bank account a payment goes to is the most
+valuable thing on the record, and "approved" must mean approved *as it now reads*. A PENDING supplier
+is still named on gate-ins; it cannot be paid (4.20.3).
+
+#### 4.20.3 Supplier flow (R15)
+
+```
+add ─► PENDING ─Finance approves─► APPROVED ──edit PIN or payment──► PENDING
+          │  ▲                        │
+      reject  resubmit            deactivate / reactivate
+          ▼  │
+       REJECTED
+```
+
+- **Adding.** Any member (`POST /suppliers`). Only `name` is required, so the gate-in clerk can add
+  "Kenya Cable Ltd" with a phone in ten seconds and move on. `kra_pin` is required to **approve**,
+  not to add (`SUPPLIER_PIN_REQUIRED`), and so is at least one payment route, because "checked
+  businesses" (R15) is the point of approval.
+- **Approval** goes through `approvals.engine`: `required_levels` gains a branch beside
+  `_finance_levels` for `network.Supplier`, returning one level addressed to
+  `required_permission="finance.approve"`, no `due_at`, no PM level (a supplier has no project).
+  `SUPPLIER_DOCUMENT_TYPES` joins `FINANCE_DOCUMENT_TYPES` in `can_approve`, so the registrar can
+  never approve their own entry (`FINANCE_SELF_APPROVAL`); `requested_by_id` aliases
+  `registered_by_id`. `approvals/pending` surfaces it to holders of the permission through the
+  fixed query of 4.17.6.
+- **Services** (`network/suppliers.py`): `add_supplier`, `update_supplier` (detects a sensitive
+  change and records it), `decide_supplier`, `resubmit`, `set_active`, `link_history`,
+  `assert_payable(supplier)`. Each writes an audit row.
+- **Duplicates.** A repeated `kra_pin_key` is refused with `SUPPLIER_PIN_DUPLICATE` naming the
+  existing supplier (its id, name and status); a repeated `name_key` with `SUPPLIER_NAME_DUPLICATE`.
+  The UI turns either into "Use <existing> instead", which is the quick-create's resolution too.
+- **The hook §4.19 uses.** `assert_payable(supplier)` raises `SUPPLIER_NOT_APPROVED` (409) unless
+  `usable`. R7 calls it when a site purchase is **approved for payment** and again at `mark_paid`;
+  it is the only definition of "may be paid or used on a purchase", so §4.19 holds no copy. A
+  supplier can be named on a draft purchase while PENDING; naming is not paying.
+
+#### 4.20.4 Asset flow (R14)
+
+- **Create** (`asset.manage`): fields as the table. A vehicle needs `tag`; others may leave it
+  blank. `holder` is chosen at creation (a person or the yard), which writes the first handover.
+- **Hand over** (`POST /assets/{id}/handover`, `{to_holder|null, note?, handed_over_on?}`): allowed to
+  `asset.manage` or the **current holder** (giving it on is natural; taking it from someone is not).
+  `handed_over_by` is the caller. Under `select_for_update` on the asset, it checks the target
+  differs from `holder` (`ASSET_ALREADY_WITH`), appends the row and updates `Asset.holder`, so two
+  simultaneous handovers cannot both start from the same holder. The date defaults to today and may
+  be back-dated, never future (`ASSET_DATE_IN_FUTURE`). Handing to an inactive user is refused.
+- **History** is the handover rows newest first: date, from, to, by, note. R14's "every holder" is
+  this list.
+- **Close** (`POST /assets/{id}/close`, `asset.manage`): `{closed_on, closed_reason, closed_note}`;
+  the reason is required, the date may not precede `purchase_date`. A CHECK mirrors
+  `a_decided_expense_records_when`: `CLOSED` needs date and reason. Closing writes a final handover
+  to the yard when someone holds it, so history ends clean. A closed asset is frozen apart from
+  attachments; it cannot take fuel (`ASSET_CLOSED`) or be handed over. No reopen in v1.
+- **Leaving staff.** `custody.services.assert_can_deactivate` also counts open assets whose `holder`
+  is the user and raises the existing `HolderStillHasMaterial` with an `assets` list in `details`,
+  so B3's "cannot deactivate while holding" covers a company vehicle, with no new rule.
+- **Fuel by vehicle.** `GET /assets/{id}/fuel?from=&to=` returns litres, spend, fill count, and
+  spend per litre where litres are known, over `ProjectExpense` rows whose `vehicle` is the asset.
+  Spend counts `status in (APPROVED, PAID)`, the same set as `costing.expense_cost`; pending is shown
+  separately as "awaiting approval". The asset detail shows the current month and last 90 days, and
+  `GET /assets/fuel-summary` ranks vehicles for the owner. No new cost source: it is a filtered
+  read of the one that exists.
+- **Recording fuel** (`commercials/finance.record_expense`): for a `FUEL` category the expense needs
+  `vehicle` (an open `VEHICLE` or `GENERATOR` asset), replacing "the registration is required". The
+  service fills `vehicle_reg` from `asset.tag`. Old payloads sending only `vehicle_reg`
+  are still accepted as **"not on the register"** (4.20.9), so replay of expenses queued before the
+  upgrade does not break. `vehicle` + a different `vehicle_reg` is `FUEL_VEHICLE_MISMATCH`.
+- **Expiry alerts** (R14): a new `_sweep_asset_expiries` step in `core/sweeps.sweep_tenant`, guarded
+  separately like its neighbours. For each ACTIVE vehicle, if `insurance_expires_on <= today + 30` and
+  `insurance_alerted_for != insurance_expires_on`, it emits `asset.expiry_due` and stores the
+  expiry it alerted on; likewise inspection. Comparing with the stored date rather than "exactly 30
+  days" means a missed beat run catches up, a renewal (new date) re-arms by itself, and a daily
+  sweep cannot nag. An already-lapsed date alerts once, worded "expired on".
+
+#### 4.20.5 Gate-in supplier (R15; section 7 free text)
+
+- **Capture.** `GateInCapturePage.tsx` replaces the Supplier text input (`gi-supplier`) with
+  `ReferenceSelect` over suppliers (usable and PENDING, active), with "Add new supplier" opening
+  `SupplierSheet` through `quickCreate.tsx`, as clients and subcontractors do. The header carries
+  `supplier` (id) in place of `supplier_name`. Source `PURCHASE` shows the picker; `CLIENT_ISSUE`
+  keeps `client`. Supplier stays optional, as the text was.
+- **API.** `GateInSerializer` (`receiving/views.py`) accepts `supplier`; on save it sets
+  `supplier_name = supplier.name`. Sending `supplier_name` alone (old queued drafts, old clients) is
+  still accepted and stored as text with `supplier` null, so nothing in the offline queue breaks.
+  A deactivated or REJECTED supplier is refused on a **new** gate-in (`SUPPLIER_NOT_USABLE_ON_GATE_IN`
+  — PENDING is fine, per R15); a document being edited keeps one it already names. The gate-in
+  list gains a `supplier` filter, and the detail shows the supplier with a status chip.
+- **Reports.** Anything grouping or showing `supplier_name` keeps working unchanged; grouping by
+  supplier uses `supplier_id` where present, falling back to the text.
+
+**Matching old names (decision).** A data migration in `receiving` links `GateIn.supplier` where
+`name_key(supplier_name)` equals a register `name_key` — exactly the R15 rule ("same" = casefolded,
+whitespace-collapsed). It **does not create suppliers from the distinct old names.** Reasons: the
+register must hold only businesses a person chose to add; old free text is full of typos and
+one-offs ("kenya cable", "KCL", "Kenya Cables Ltd") and each would become a PENDING row Finance has to
+approve or reject, burying the real queue; and creating them would invent registrar and PIN data
+nobody supplied. Because the register is empty on the day this ships, the migration is a no-op
+there; the matching that matters is `link_history(supplier)`, run when a supplier is **added or
+approved** and linking every unlinked gate-in of that tenant whose key matches. History therefore
+joins up as the register fills, in a single indexed update, and the rest stays text, exactly as R15
+says. The same function backs a "Link past deliveries" button on the supplier detail. Both are
+idempotent and never overwrite an existing `supplier`.
+
+#### 4.20.6 Endpoints
+
+| Endpoint | Purpose | Permission |
+|---|---|---|
+| `GET/POST /suppliers` (`?status=&is_active=&search=`), `PATCH /{id}` | List, add, edit. Edit by the registrar while PENDING or REJECTED; otherwise by `finance.approve`. | read and add: member |
+| `POST /suppliers/{id}/decide` · `/resubmit` | `{approved, reason}` through the engine · REJECTED → PENDING. | engine · registrar |
+| `POST /suppliers/{id}/deactivate` · `/reactivate` | Reactivating an APPROVED supplier needs no new approval. | `finance.approve` |
+| `POST /suppliers/{id}/link-history` | `{linked: n}`. | `finance.approve` |
+| `GET /suppliers?payable=true` | `usable` only; used by §4.19 pickers. | member |
+| `GET/POST /assets` (`?type=&status=&holder=&search=`), `PATCH /{id}` | Register. | read: member; write: `asset.manage` |
+| `POST /assets/{id}/handover` · `/close` | 4.20.4. | holder or `asset.manage` · `asset.manage` |
+| `GET /assets/{id}/handovers` · `/fuel` · `/assets/fuel-summary` | History, fuel, ranking. | read: member (fuel-summary `asset.manage` or `report.view_all`) |
+| `POST /attachments` | New targets; `caption` is the kind. | 4.20.7 |
+
+`GET /approvals/pending` gains `network.Supplier` in `get_document` (name, PIN, phone, who added,
+document count). The OpenAPI schema and `frontend/src/api/schema.d.ts` are regenerated.
+
+#### 4.20.7 Permissions and visibility
+
+- New `asset.manage` (group "Assets") in `accounts/permissions_registry.py` and
+  `frontend/src/auth/permissions.ts`; Owner holds it automatically. Every member **reads** the
+  register (so a fuel entry can pick a vehicle).
+- `Asset.cost` and `purchase_terms` are gated through `core/field_permissions.py` to `asset.manage`,
+  `finance.approve` and `project.view_cost`; the list omits them for others.
+- Supplier **payment details** and PIN: shown to `finance.approve` and the registrar; everyone else
+  gets name, contact person, phone and status. The picker needs nothing more.
+- No new `supplier.*` permission: adding is open (R15), approving is `finance.approve`.
+- Attachments: assets by `asset.manage` (documents are an office act); suppliers by the registrar
+  while PENDING or REJECTED, and always by `finance.approve`. Both keep the existing allow-list,
+  size, content-type and owner checks; documents are viewed through pre-signed URLs (N-7).
+  A supplier's documents are fixed once APPROVED, like an expense's photos, except by
+  `finance.approve`.
+
+#### 4.20.8 Offline (§8)
+
+- **Bundle.** `OfflineBundleView` adds `suppliers` (id, name, status; active only, no PIN or payment
+  data) and `vehicles` (id, tag, name, type; ACTIVE `VEHICLE` and `GENERATOR` only). Both are small,
+  and the two forms that need them, gate-in and the expense, are the two that work offline.
+- **Supplier added offline.** D17 widens by one `SyncOperation`, `SUPPLIER`, handled in
+  `sync/services._HANDLERS` through `add_supplier`, so duplicate checks run on replay. A gate-in
+  queued after it names `supplier_client_uuid`; the queue replays in capture order (4.17.8's casual
+  rule). A refused supplier (duplicate PIN or name) becomes a `SyncException`; "fix and resend" with
+  `supersedes_client_uuid` works as for other entries, and the dependent gate-in waits behind it.
+- **Never offline:** approving, deactivating, asset create, handover, close. Offline asset handover
+  would let a stale view reassign a vehicle; a handover happens in person and online is acceptable.
+- A vehicle added or closed after the last bundle shows its status at replay: a closed one is refused
+  with `ASSET_CLOSED` and the entry stays on the phone with the reason (R6).
+
+#### 4.20.9 Notifications
+
+One new event in `notifications/matrix.py`, `asset.expiry_due`, recipient `Recipient.OWNER`, in-app
+and email, SMS off (D30). Payload: asset name and tag, which document, the date, days left or
+"expired". Supplier approval reuses the 4.17 events with a new subject: `finance.awaiting_approval`
+(to `LEVEL_APPROVERS`, so holders of `finance.approve` other than the registrar),
+`finance.approved` and `finance.rejected` (to the registrar, with the reason); `payload.kind`
+distinguishes "supplier" from an expense for the template. No event for a handover.
+
+#### 4.20.10 Frontend
+
+- **Settings → Network** gains a Suppliers tab: list with status chips (Pending, Approved, Rejected,
+  Inactive) and search, `SupplierSheet` for add and edit (details, payment, documents through
+  `PhotoCapture`/file attach with a kind chooser), Deactivate, "Link past deliveries". Registered in
+  `quickCreate.tsx` for the gate-in and §4.19 pickers; a duplicate PIN offers "Use existing".
+- **Approvals** gets a Suppliers tab for `finance.approve`: the sheet shows PIN, payment route,
+  documents and who added it, with Approve/Reject.
+- **Assets** (`features/assets/`, nav entry for every member, write actions for `asset.manage`):
+  register list (type, tag, holder, status), `AssetDetailPage` with details, documents, handover
+  history, Hand over, Close, and a Fuel panel (litres, spend, per-litre, a month selector).
+  Expiries within 30 days or lapsed show an amber or red chip.
+- **Record expense** (`features/money/RecordExpensePage.tsx`): for a FUEL category the "Vehicle
+  registration" input becomes a vehicle picker from the bundle, plus "Not on the register" which
+  reveals the typed registration (kept as `vehicle_reg`). Local validation in `rules.ts`.
+- **Gate-in**: 4.20.5. `types.ts` and the sync payload gain `supplier` and `supplier_client_uuid`.
+
+#### 4.20.11 Errors
+
+| Code | HTTP | When |
+|---|---|---|
+| `SUPPLIER_PIN_DUPLICATE` | 409 | KRA PIN already on the register; names it. |
+| `SUPPLIER_NAME_DUPLICATE` | 409 | Same name key; names it. |
+| `SUPPLIER_PIN_REQUIRED` | 400 | Approving with no PIN or no payment route. |
+| `SUPPLIER_NOT_APPROVED` | 409 | `assert_payable` on a PENDING, REJECTED or inactive supplier. |
+| `SUPPLIER_NOT_USABLE_ON_GATE_IN` | 400 | A new gate-in names an inactive or REJECTED supplier. |
+| `FINANCE_SELF_APPROVAL`, `FINANCE_NOT_DECIDABLE` | 403, 409 | Existing, now also for suppliers. |
+| `ASSET_TAG_DUPLICATE` | 409 | Tag or registration already on the register; names it. |
+| `ASSET_ALREADY_WITH` | 409 | Handover to the current holder. |
+| `ASSET_CLOSED` | 409 | Handover, edit or fuel on a closed asset. |
+| `ASSET_DATE_IN_FUTURE` | 400 | A handover or closing date after today. |
+| `FUEL_VEHICLE_REQUIRED`, `FUEL_VEHICLE_MISMATCH` | 400 | R1 with a register in play. |
+| `HolderStillHasMaterial` (existing) | 409 | Deactivating a user who holds an asset. |
+
+#### 4.20.12 Testing
+
+- **Backend:**
+  - Supplier add by any member; approve by `finance.approve`; the registrar refused on their own;
+    reject and resubmit; PIN and name duplicates, including case and spacing; the PIN-required rule.
+  - Editing a PIN or payment detail of an APPROVED supplier does **not** reopen approval (decided
+    2026-10-09); the change is audited with before and after, and Finance is notified.
+  - `assert_payable` for each status; deactivate and reactivate; delete refused.
+  - Gate-in with a supplier fills `supplier_name`; text-only still works; inactive refused on new,
+    kept on edit; search still finds by name.
+  - `link_history`: exact and case/space match, idempotent, never overwrites, tenant-bound; the
+    migration with and without matches.
+  - Asset create writes the first handover; handover by holder, by manager, by a stranger (refused);
+    concurrent handovers; history order; yard as null; close, frozen afterwards.
+  - `assert_can_deactivate` with an asset; expiry sweep (30-day edge, catch-up after a missed day,
+    renewal re-arms, alerts once, closed assets skipped, a failure in it does not stop the other
+    sweeps).
+  - Fuel by vehicle matches `expense_cost`, counts APPROVED and PAID only, and splits pending;
+    legacy `vehicle_reg`-only expense accepted; mismatch refused.
+  - Field gating of cost and payment details; attachments' targets and locks.
+  - Sync: `SUPPLIER` then a gate-in naming it in one batch; duplicate refused and supersede;
+    bundle contents (no PIN, no payment).
+  - RLS and isolation fixtures for `Supplier`, `Asset`, `AssetHandover`.
+- **Frontend:** Vitest on the vehicle picker rules and the supplier duplicate resolution; component
+  tests for the gate-in picker's "Add new supplier".
+- **E2E (phone):**
+  1. Offline, add a supplier at gate-in and post the delivery naming it.
+  2. Online, it lands PENDING with the gate-in linked; Finance approves it after adding the PIN.
+  3. The owner adds a vehicle with insurance 20 days out; the sweep notifies once.
+  4. A driver records a fuel expense choosing that vehicle; once approved the vehicle's fuel panel
+     shows the litres and spend.
+  5. Hand the vehicle to the driver and back to the yard; history shows both.
+
+#### 4.20.13 Assumptions to confirm
+
+- A supplier added by the **only** holder of `finance.approve` cannot be approved by anyone else.
+  4.17 refuses recording for that reason (`FINANCE_NO_OTHER_APPROVER`); here it is not refused, so
+  the supplier waits PENDING (usable on gate-ins) until a second approver exists.
+- Editing PIN or payment details does not reopen approval (decided 2026-10-09); it is audited and
+  Finance is notified.
+- Fuel may be recorded against a `GENERATOR` as well as a `VEHICLE`, and "Not on the register"
+  remains as a typed fallback, because a hired truck is not an asset.
+- `asset.manage` is not added to the Finance role; the owner decides who keeps the register.
+- Old free-text suppliers are not turned into register rows (4.20.5).
+
 ## 5. Approval engine
 
 Implements `F3`, `F4`, `F5`. Lives in `approvals/engine.py` and is the only place routing is

@@ -1414,6 +1414,10 @@ company knows who worked where and for how long, and pays for days actually work
 - **A rejected day can be corrected** (decided 2026-10-09): the person adds the missing or wrong
   time with a reason, and the day goes back to the same approver, who sees the original and the
   correction.
+- **A missing day can be added by the Director** (decided 2026-10-09): when someone was on site
+  but the phone placed them outside, or could not clock in, the Director adds the hours with a
+  reason. The day is flagged "added by the Director", audited, and approved as usual (never by the
+  Director who added it).
 - **Offline, the phone's check stands** (decided 2026-10-09): if a place's area changes between an
   offline clock-in and its sync, the clock-in is accepted when it was inside the area the phone
   knew, and flagged for the approver. No hours are lost to an edit made later.
@@ -1433,8 +1437,9 @@ what we own, what it cost, and who has it. *(Elias 13.)*
   each handover is recorded with the date and who handed it over, so its history shows every holder.
   Tools already tracked as stock with custody (Epic I) stay there; this register is for
   company-owned assets, not stock.
-- **Fuel by vehicle** (decided 2026-10-09): a fuel expense (R1) picks the vehicle from the register
-  instead of typing its registration, and each vehicle shows its fuel spend and litres.
+- **Fuel by vehicle** (decided 2026-10-09): a fuel expense (R1) picks the vehicle from the register,
+  and each vehicle shows its fuel spend and litres. A hired truck that is not ours is recorded by
+  ticking "Not ours" and typing its registration.
 - Expiry dates (insurance, inspection) notify the owner 30 days ahead.
 - An asset sold or written off is closed with the date and reason, never deleted.
 
@@ -1443,8 +1448,11 @@ that we pay real, checked businesses. *(Elias 14.)*
 - A **supplier**: name, KRA PIN, contact person, phone, email, physical address, payment details
   (bank and account, or M-Pesa paybill or till), and documents (KRA certificate, certificate of
   incorporation, others).
-- Anyone may add one; **Finance approves** it before it can be paid or used on a purchase (decided
-  2026-10-09). An unapproved supplier can still be named on a gate-in.
+- Anyone may add one; **Finance approves** it before it can be paid (decided 2026-10-09). A
+  purchase from an unapproved supplier can be recorded and approved, but not marked paid until the
+  supplier is approved. An unapproved supplier can still be named on a gate-in.
+- Changing an approved supplier's KRA PIN or payment details does not need re-approval (decided
+  2026-10-09); the change is recorded with before and after, and Finance is notified.
 - A supplier can be deactivated, never deleted once used.
 - **Gate-in suppliers** (free text today, section 7): a delivery picks the supplier from the
   register, with "Add new supplier" for one not yet listed. Existing free-text names are matched to
