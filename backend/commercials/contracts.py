@@ -57,7 +57,7 @@ from notifications.events import emit
 from notifications.matrix import Event
 
 ZERO = Decimal("0.00")
-_MONEY = DecimalField(max_digits=14, decimal_places=2)
+_MONEY: DecimalField = DecimalField(max_digits=14, decimal_places=2)
 
 
 # --------------------------------------------------------------------------

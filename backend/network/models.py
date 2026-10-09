@@ -261,7 +261,7 @@ class Project(TenantModel, TimeStampedModel):
     description = models.CharField(max_length=500, blank=True)
     #: R10: through a real model so each link can carry dates. The join table is
     #: the one the plain many-to-many created, so every old link survives.
-    sites = models.ManyToManyField(
+    sites: models.ManyToManyField = models.ManyToManyField(
         Site, through="ProjectSite", related_name="projects", blank=True
     )
 
