@@ -1206,6 +1206,130 @@ already listed, so that sending a site's material is a confirmation, not a hunt.
 
 ---
 
+### Epic R — Finance
+
+> **Status: approved 2026-10-09.** From Elias's 14-point list. Built in four
+> stages, in this order: money out (R1–R6), POs and sites (R7–R12), clock-in (R13), assets and
+> suppliers (R14, R15). Stage 1 is specified in full here; stages 2–4 are stated here and detailed
+> before each is built.
+
+This epic takes YardFlow from the cost of a project to the money behind it: what people spend in the
+field, what they ask for before they go, who approves it, and what has been paid. It builds on what
+exists rather than starting again: projects carry a PO, a budget and variations (O1, O2); direct
+expenses are recorded with a receipt photo and approved (O16); subcontracted jobs carry an agreed
+price (O3, O9).
+
+**Decisions (2026-10-09):**
+- Every finance entry has two approval levels: the **project's PM, then Finance**. An expense the
+  Director records needs only Finance. This amends D29 (PM only) for every entry this epic covers.
+- Approvers are told **in the app and by email**. SMS is not used yet; the SMS channel (D30) can be
+  switched on later without changing these stories.
+- Clock-in records the phone's location **when the person taps Clock in and Clock out**, and at no
+  other time.
+- D24 ("no payables in v1") is amended: an approved request or expense can be **marked paid**, with
+  the payment reference (e.g. an M-Pesa code). YardFlow records the payment; it does not send money.
+- D17 (offline only for gate-in and gate-out) is widened to expenses, requests and casuals (R6).
+
+#### Stage 1 — Money out
+
+**R1.** As anyone in the field, I want to record a daily expense with a photo, so that every
+shilling spent on a job reaches the project. *(Elias 1.)*
+- Extends the O16 expense. The seeded categories gain **fuel, team allowance, transport and casual
+  labour**; each stays tenant-editable.
+- Fields: date, category, amount (KES), **site** (and from it the project), **scope of work** (free
+  text), description, and one or more **photos** (receipt, fuel pump, work done).
+  - Fuel also needs the **vehicle registration**, and may carry the litres.
+  - Casual labour needs **which casuals** (R3) and the days each worked.
+- No photo is allowed, but it is flagged to both approvers as "no evidence", as O16 does now.
+- The person picks a **site** and the project is filled in from it. If the site belongs to more than
+  one open project, they pick the project (decided 2026-10-09).
+
+**R2.** As anyone in the field, I want to request a float, transport, night-out or other allowance
+before I spend it, so that I am not paying the company's costs out of my own pocket. *(Elias 3.)*
+- Fields: type, amount, dates from–to, site (and project), reason.
+- A request goes through the same two levels as an expense (R4). Once approved, Finance marks it
+  **paid** with the payment reference.
+- **A float is accounted for.** Expenses recorded against a paid float reduce its balance, which the
+  person and Finance both see. Closing a float records what came back.
+- A person with an open float balance may request another; the approvers see the open balance as a
+  warning, and it is not blocked (decided 2026-10-09).
+
+**R3.** As a supervisor, I want to record the casuals I picked for a job, so that we know who was paid
+and can reach them again. *(Elias 3.)*
+- A **casuals register**: name, ID number, phone, and a photo of the ID. A casual is not a user and
+  cannot sign in.
+- A casual-labour expense (R1) names the casuals and their days. A casual seen before is picked from
+  the register, not typed again.
+- **Edge case:** the same ID number twice is refused, naming the existing record.
+
+**R4.** As a PM and then Finance, I want to approve every expense and request, so that no money moves
+on one person's word. *(Elias 10.)*
+- Two levels in order: the project's **PM**, then a user holding the new permission
+  `finance.approve` (a **Finance** role is seeded with it). Each level approves, or rejects with a
+  reason; a rejection returns the entry to whoever recorded it.
+- When the **Director** records an expense, the PM level is skipped and only Finance approves.
+  "Director" is a role the company assigns like any other (B4); the tenant setting names which role
+  counts.
+- Nobody approves their own entry at either level. If the PM recorded it, it goes straight to
+  Finance.
+- Approvers are told in the app and by email. Entries appear on the existing Approvals screen.
+- Approved entries are append-only; a mistake is reversed, not edited (as O16). Only approved
+  expenses reach project cost.
+
+**R5.** As Finance, I want the system to refuse requests that break the rules, so that I am not the
+only check. *(Elias 11.)*
+- **Overlap:** a request for the same person and type whose dates overlap an earlier pending,
+  approved or paid request is refused, naming the earlier one.
+- **Limits:** per type, a daily minimum and maximum, set in Settings. Defaults: transport within
+  Nairobi up to KES 500 a day; night-out and team allowances KES 1,500 to 10,000 a day. The daily
+  figure is the amount divided by the days. A request outside the limit is refused, saying the
+  limit.
+- A transport request says whether it is **within Nairobi or outside**. Outside has its own limit,
+  which Finance sets in Settings; there is none by default (decided 2026-10-09).
+
+**R6.** As anyone in the field, I want to record expenses, requests and casuals with no network, so
+that a bad signal at a site does not stop the work. *(Elias 12.)*
+- They can be saved on the phone, photos included, and are sent when the network returns, in the
+  same way as an offline gate-in (Epic N). The screen says what is waiting to be sent.
+- The R5 rules are checked when the entry reaches the server. A refused entry stays on the phone
+  with the reason, for the person to correct.
+
+#### Stage 2 — POs, budgets and sites *(detailed before stage 2 is built)*
+
+**R7.** Site purchases: materials bought from a supplier for a site, recorded with the supplier,
+items, amount and receipt, approved as R4, and optionally received into the yard. *(Elias 4.)*
+
+**R8.** Contracted work per site: contractor, site ID and name, and the amount, adding a contract value
+per subcontractor on a project alongside today's per-job price. *(Elias 5.)*
+
+**R9.** Every expense, request, purchase and payment is linked to its site, client and PO. A project
+shows budget against spend, and an entry that takes it over budget needs a reason. *(Elias 6.)*
+
+**R10.** Site dates: mobilisation, material collection and dispatch (from the yard's own gate-outs),
+the acceptance date and the acceptance certificate. *(Elias 7.)*
+
+**R11.** PO milestones and payments: payment terms, the PO as a PDF, and milestones M1 deposit, M2
+conditional acceptance and M3 final acceptance, each with its amount, its condition and when it was
+paid. *(Elias 8.)*
+
+**R12.** Work without a PO: a project can run before its PO arrives, and records the PO number and
+issue date when it does. *(Elias 9.)*
+
+#### Stage 3 — Clock-in *(detailed before stage 3 is built)*
+
+**R13.** Each team member clocks in and out on their phone; the location is recorded at both moments,
+and the PM or Director approves the day. *(Elias 2.)*
+
+#### Stage 4 — Assets and suppliers *(detailed before stage 4 is built)*
+
+**R14.** An investment register: company vehicles and assets, with photos, purchase terms and
+contracts. *(Elias 13.)*
+
+**R15.** Supplier onboarding: supplier details, contacts, payment details and documents. It replaces
+the free-text supplier on gate-in (section 7). *(Elias 14.)*
+
+---
+
 ## 6. Non-functional requirements
 
 | # | Requirement |

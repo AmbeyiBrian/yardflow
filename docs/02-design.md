@@ -980,6 +980,270 @@ report shows site X received 2, sent 1, diverted 1.
 
 ---
 
+### 4.17 Finance — stage 1, money out (Epic R)
+
+> **Status: approved 2026-10-09.**
+
+#### 4.17.1 The decision: extend the expense, add the request, reuse the approval tables
+
+- **`ProjectExpense` is extended, not replaced** (R1). It gains a site, a scope of work, fuel fields,
+  casual lines, a float link and a payment record, and its status set widens. It remains the only
+  source of expense cost (`commercials/costing.py::expense_cost`).
+- **`AllowanceRequest` is the one new entry kind** (R2): money asked for before it is spent. A float
+  is an `AllowanceRequest` of type FLOAT, and expenses point at it through
+  `ProjectExpense.float_request`.
+- **Approval moves into `approvals/`** (R4). Today O16 bypasses the engine
+  (`commercials.services.decide_expense` checks `project.manager_id` and flips a status). Two levels
+  would otherwise be a second approval implementation, so both entry kinds route through
+  `approvals.engine` (§5), reusing `ApprovalRequest` and the append-only `ApprovalAction`. The
+  entry's `status` is a projection of its requests, as a gate-out's is.
+
+D29 (PM only) is amended for these entries; D28 holds: there is no fallback approver.
+
+#### 4.17.2 Data model
+
+New tables are tenant tables: `enable_rls` in a `commercials` migration and fixtures in
+`commercials/isolation.py` (§2, A3).
+
+| Model / field | Shape | Notes |
+|---|---|---|
+| `ExpenseStatus` (changed) | `PENDING_PM`, `PENDING_FINANCE`, `APPROVED`, `PAID`, `REJECTED` | Replaces `SUBMITTED`; shared by `AllowanceRequest`. Reaches cost on `APPROVED`, stays on `PAID`. |
+| `ExpenseCategory.kind` (new) | `GENERAL` / `FUEL` / `CASUAL_LABOUR` | What a category demands, so renaming keeps behaviour. Seeds add Fuel, Team allowance, Transport, Casual labour. |
+| `ProjectExpense.site` | → Site, null | R1. Optional only when `project` is given directly (a permit for the PO). |
+| `ProjectExpense.scope_of_work` | text | R1. |
+| `ProjectExpense.vehicle_reg`, `litres` | char; decimal(10,2) null | Reg required when `kind=FUEL`; litres optional. |
+| `ProjectExpense.float_request` | → AllowanceRequest, null | Same person, FLOAT, PAID, open. |
+| `ProjectExpense.photos_expected` | small int | Photos the phone will send; "arriving" vs "no evidence" (4.17.8). |
+| `ProjectExpense.client_uuid` | uuid, null, unique per org | Offline idempotency, as `GateIn.client_uuid`. |
+| `ProjectExpense.paid_at`, `paid_by`, `payment_reference` | | Not set on a float-backed expense (already paid from the float). |
+| `ExpenseCasualLine` | `expense`, `casual`, `days` (> 0), `amount` (null) | Required for `CASUAL_LABOUR`. The expense total is the authority; a per-line amount is optional. |
+| `Casual` | `name`, `id_number`, `id_number_key`, `phone`, `registered_by`, `client_uuid` | R3. Unique `(organization, id_number_key)`; key = upper-cased, spaces and dashes stripped. ID photo is an `Attachment`. Not a `User`. |
+| `AllowanceRequest` | `number` (series `AR`), `type`, `transport_scope`, `amount`, `from_date`, `to_date`, `site`, `project`, `reason`, `recorded_by`, `status`, decision, paid, `closed_at`, `closed_by`, `returned_amount`, `client_uuid` | Types FLOAT, TRANSPORT, NIGHT_OUT, TEAM_ALLOWANCE, OTHER. `transport_scope` = WITHIN_NAIROBI / OUTSIDE_NAIROBI, TRANSPORT only. `days = to − from + 1`. Number via `core.numbering.allocate_number`, new `DocumentType.ALLOWANCE` (D37). |
+| `ApprovalRequest.required_permission` (new) | char, blank | A third way to address a level, beside role and user; the CHECK becomes "at most one of three". Used for `finance.approve`. |
+| `OrganizationSettings.finance_director_role` | → Role, null | R4. Null: nobody skips the PM level. |
+| `OrganizationSettings.allowance_limits` | JSON | Defaults: TRANSPORT_WITHIN_NAIROBI max 500; TRANSPORT_OUTSIDE_NAIROBI none; NIGHT_OUT and TEAM_ALLOWANCE 1,500–10,000. Null bound = no bound. FLOAT and OTHER unlimited. |
+| `Attachment.caption`, `Attachment.client_uuid` (new) | char(60); uuid null unique per org | Caption chosen on the phone from Receipt / Fuel pump / Work done / ID / Other. The uuid makes an offline upload idempotent. |
+
+**Float balance** is derived: `amount − Σ expenses on it (not REJECTED) − returned_amount`. Pending
+expenses count. It may go negative and then reads "owed to you"; settling that is a new request.
+Closing records `returned_amount ≥ 0` (R2).
+
+**Guards.** `ProjectExpense.save` keeps its `_loaded_status` guard, now allowing only the transitions
+in 4.17.3 and, once `APPROVED`, only the `paid_*` columns; `AllowanceRequest` and
+`ExpenseCasualLine` get the same. The `a_decided_expense_records_when` CHECK is rewritten for the
+new statuses. Reversal (`reverse_expense`) is unchanged, allowed to the PM or `finance.approve`, and
+the reversing row is created `APPROVED`. A reversal of a PAID expense removes it from cost; recording
+money coming back is out of scope.
+
+#### 4.17.3 Status flow and routing (R2, R4)
+
+```
+record ─► PENDING_PM ─PM approves─► PENDING_FINANCE ─Finance approves─► APPROVED ─mark paid─► PAID
+              │   ▲                       │
+          reject   resubmit            reject        (a float-backed expense stops at APPROVED)
+              ▼   │                       ▼
+           REJECTED ◄─────────────────────┘
+```
+
+There is no server-side draft: a draft is a queued entry on the phone (4.17.8).
+
+`approvals.engine.required_levels` gains a finance branch beside the O6 branch:
+1. **PM level** (`required_user = project.manager`) — **skipped** when the recorder is the project's
+   PM, or holds `settings.finance_director_role`. A skipped entry starts at `PENDING_FINANCE`.
+2. **Finance level** (`required_permission = "finance.approve"`).
+
+No `due_at` and no escalation on either level; no delegation. `can_approve` never allows the
+recorder on a finance entry, whatever `allow_self_approval` says, and the O6 self-approved-PM
+exception does not apply. Both models expose `requested_by_id` as an alias of `recorded_by_id`.
+
+**No or inactive PM** (D28): recording is refused when the PM level is needed and the project has no
+active manager (`PROJECT_HAS_NO_ACTIVE_MANAGER`). If the PM goes inactive later, the level waits;
+reassigning the project's PM re-addresses its open level-1 requests (a hook in the project update
+path). Recording is also refused when no active user other than the recorder holds
+`finance.approve` (`FINANCE_NO_OTHER_APPROVER`).
+
+**Services** (`commercials/finance.py`): `record_expense`, `request_allowance`, `decide`,
+`resubmit` (REJECTED → first open level, new requests, old rows kept), `mark_paid`, `close_float`,
+`register_casual`, `resolve_project`. Each writes an audit row. `decide_expense` is retired and its
+callers moved; `NotTheProjectManager` gives way to the engine's `NotAnApprover`.
+
+#### 4.17.4 Site to project (R1)
+
+`resolve_project(site, project=None)`: the site's OPEN projects; one is chosen automatically; two or
+more need `project` (`PROJECT_AMBIGUOUS`, listing them); none is `SITE_HAS_NO_OPEN_PROJECT`; a
+`project` not on the site is `SITE_NOT_ON_PROJECT`. `ProjectViewSet` gains `site` and `status`
+filters, and the offline bundle carries each site's open projects.
+
+#### 4.17.5 Rules (R5)
+
+`commercials/finance_rules.py`, pure, called by `request_allowance` (so replay enforces them too):
+- **Overlap** for TRANSPORT, NIGHT_OUT and TEAM_ALLOWANCE: same `recorded_by` and `type`, dates
+  intersecting, status PENDING_PM, PENDING_FINANCE, APPROVED or PAID → `ALLOWANCE_OVERLAP` naming
+  the earlier number. FLOAT and OTHER are exempt (R2 allows a second float). The check runs under
+  `select_for_update` on the recorder's user row, so two simultaneous sends cannot both pass.
+- **Limits**: key = type, or TRANSPORT_WITHIN/OUTSIDE_NAIROBI. `amount` is compared with
+  `min × days` and `max × days` (no rounding) → `ALLOWANCE_LIMIT`, stating the daily figure and the
+  limit. TRANSPORT without a scope → `TRANSPORT_SCOPE_REQUIRED`. Expenses are not limit-checked.
+
+#### 4.17.6 Endpoints
+
+| Endpoint | Purpose | Permission |
+|---|---|---|
+| `GET/POST /project-expenses`, `PATCH /{id}` | Extended payload. PATCH only while PENDING_PM, by the recorder. | member |
+| `POST /project-expenses/{id}/decide` | `{approved, reason}` on the caller's current level. | engine |
+| `POST /project-expenses/{id}/resubmit` · `/reverse` | | recorder · PM or `finance.approve` |
+| `POST /project-expenses/{id}/mark-paid` | `{payment_reference, paid_at?}`; refused for float-backed. | `finance.approve` |
+| `GET /project-expenses?mine=true` · `?payable=true` | payable = APPROVED, no float, unpaid | member · `finance.approve` |
+| `/allowance-requests` (CRUD, `decide`, `resubmit`, `mark-paid`) | Detail adds `days`, `daily_amount`, `open_float_warning`; floats add `spent`, `balance`. | as above |
+| `POST /allowance-requests/{id}/close-float` | `{returned_amount}`; PAID and open only. | `finance.approve` |
+| `GET/POST/PATCH /casuals` (`?search=`) | | member |
+| `GET/PATCH /finance/settings` | limits, director role | read member; write `finance.approve` or `settings.manage` |
+| `POST /attachments` | adds optional `caption`, `client_uuid` | see 4.17.7 |
+
+**`approvals/pending` is fixed.** It currently passes every `required_role IS NULL` row, so anyone
+sees every person-addressed (PM) request. It becomes `Q(required_role in my roles) |
+Q(required_user=me) | Q(required_permission in my permissions)`, and `get_document` summarises the
+two new document types. Gate-out PM approvals keep working because they are addressed to the PM.
+
+The open-float warning is computed on read: if the recorder has another PAID, unclosed float, the
+detail carries `open_float_warning: {number, balance}`. It never blocks (R2).
+
+#### 4.17.7 Permissions and roles
+
+- New `finance.approve` (group "Finance") in `accounts/permissions_registry.py` and
+  `frontend/src/auth/permissions.ts`; Owner holds it automatically. It covers approving at the
+  Finance level, marking paid, closing floats and setting limits. A separate pay permission can be
+  split out later.
+- New seeded role **Finance**: `finance.approve`, `project.view_cost`, `report.view_all`, added for
+  existing tenants by a data migration through `accounts/role_sync`.
+- Recording stays open to every member, as O16.
+- Attachments: the recorder (or registrar) may attach to their own entry while PENDING_* or REJECTED;
+  `commercials.Casual` becomes a target. After final approval photos are fixed.
+- Casuals: any member reads name and phone and the ID number masked to its last three characters;
+  the full number and the ID photo need `finance.approve`.
+
+#### 4.17.8 Offline (R6, §8)
+
+D17 widens to three `SyncOperation`s: `EXPENSE`, `ALLOWANCE_REQUEST`, `CASUAL`. The
+`sync/services._HANDLERS` entries validate with the online serializers and call the same services,
+so rules, `resolve_project` and the approver check all run on replay. Approving, paying and closing
+floats are never offline (§8.3 unchanged).
+
+- **Idempotency:** `SyncSubmission (organization, client_uuid)` as now, plus each entity's own
+  unique `client_uuid`.
+- **References within a queue:** an expense naming a casual registered offline in the same queue
+  sends `casual_client_uuid`; the queue replays in capture order. A float must be PAID, so it is
+  always named by server id.
+- **Photos:** Dexie `version(2)` adds a `photos` table (`queue_client_uuid`, caption, blob,
+  filename, `client_uuid`, status). After `drainQueue` marks an entry applied (it receives
+  `document_id`), `drainPhotos` uploads each blob to `/attachments` with its `client_uuid`, so a lost
+  response replays to the same attachment. Until they land, `evidence_state` is `"arriving"`, and the
+  approver sees "photos on the way", not "no evidence".
+- **Refusal:** a refused entry becomes a `SyncException` with the code and stays on the phone with
+  its reason (R6). "Fix and resend" sends a new `client_uuid` with `supersedes_client_uuid`, which
+  resolves the old exception.
+- **Bundle:** `OfflineBundleView` adds `expense_categories` (with `kind`), `casuals` (masked),
+  `my_floats` (with balances), `finance_limits` and `sites[].open_projects`. The phone runs the same
+  rules (`features/money/rules.ts`) for early warnings; the server decides.
+
+#### 4.17.9 Notifications (R4)
+
+New events in `notifications/matrix.py`: `finance.awaiting_approval` (new recipient
+`LEVEL_APPROVERS`, in-app and email), `finance.approved` (requester, in-app), `finance.rejected`
+(requester, in-app and email, with the reason), `finance.paid` (requester, in-app, with the
+reference). SMS is off by default (D30). `LEVEL_APPROVERS` resolves from the open
+`ApprovalRequest` — the `required_user`, or the active holders of `required_permission` — never the
+recorder. The payload carries amount, type, site, `evidence_state` and the float warning.
+
+#### 4.17.10 Frontend
+
+- **Money** (`features/money/`, a nav entry for every member): My expenses, My requests and floats
+  (balance; Close float for Finance), Casuals. Forms: Record expense (the existing
+  `RecordExpensePage` moved here, old route redirected), Request allowance, Add casual. Site first;
+  project filled in, or chosen when the site has 2+ open projects. Fuel asks reg and litres; casual
+  labour asks casuals and days; photos via `PhotoCapture` with a caption. Offline entries show
+  "Waiting to send".
+- **Approvals:** the Expenses tab becomes level-aware and a Requests tab is added; the sheet shows
+  the level, photos, evidence state and the float warning.
+- **To pay** (`/money/to-pay`, `finance.approve`): payable entries and a Mark paid sheet (reference
+  required).
+- **Settings → Finance:** limits, the Director role, expense categories with `kind`.
+- **Pure helpers** in `features/money/rules.ts`: `daysBetween`, `checkLimit`, `findOverlap`,
+  `floatBalance`, `candidateProjects`, `normaliseIdNumber`, with Vitest tests.
+
+#### 4.17.11 What changes for existing O16 data
+
+- A data migration moves in-flight `SUBMITTED` expenses to `PENDING_PM` and creates their two
+  approval requests. Existing APPROVED and REJECTED rows are untouched and still counted.
+- `costing.expense_cost`, `reports_finance.py` and the project figures change from
+  `status=APPROVED` to `status__in=(APPROVED, PAID)` — the easiest thing to miss.
+- A PM's approval alone no longer reaches cost: Finance must approve too, except where the PM level
+  is skipped.
+- Existing categories get `kind=GENERAL`; "Transport and fuel" stays; the four new categories are
+  added where missing.
+
+#### 4.17.12 Errors
+
+| Code | HTTP | When |
+|---|---|---|
+| `PROJECT_AMBIGUOUS` | 400 | The site is on 2+ open projects and none was chosen. |
+| `SITE_HAS_NO_OPEN_PROJECT`, `SITE_NOT_ON_PROJECT` | 400 | R1. |
+| `ALLOWANCE_OVERLAP` | 409 | Names the earlier request. |
+| `ALLOWANCE_LIMIT` | 400 | States the daily figure and the limit. |
+| `TRANSPORT_SCOPE_REQUIRED` | 400 | R5. |
+| `CASUAL_ID_DUPLICATE` | 409 | Names the existing casual. |
+| `FINANCE_NO_OTHER_APPROVER` | 409 | Nobody but the recorder holds `finance.approve`. |
+| `PROJECT_HAS_NO_ACTIVE_MANAGER` | 409 | Existing (D28). |
+| `FINANCE_SELF_APPROVAL` | 403 | The recorder tried to decide. |
+| `FINANCE_NOT_DECIDABLE` | 409 | Wrong status. |
+| `FLOAT_NOT_OPEN` | 409 | Not PAID, closed, or not the recorder's. |
+| `PAYMENT_REFERENCE_REQUIRED` | 400 | Mark paid without a reference. |
+
+#### 4.17.13 Testing
+
+- **Backend:**
+  - Routing: ordinary entries, PM-recorded entries, and Director-recorded entries with the setting
+    both set and unset.
+  - Self-approval refused at both levels, even with `allow_self_approval` on.
+  - No PM, an inactive PM, and PM reassignment.
+  - Reject, then resubmit.
+  - Overlap, including two concurrent sends, and the exempt types.
+  - All three limit cases.
+  - Float balance, closing a float, and the open-float warning.
+  - Casual duplicate and normalisation.
+  - Mark paid refused for a float-backed expense.
+  - Cost counts APPROVED and PAID only.
+  - The data migration.
+  - The fixed `approvals/pending`.
+  - `LEVEL_APPROVERS` and emails.
+  - Sync: replay, refusal, supersede, a casual and an expense in one batch, and approval refused
+    offline.
+  - Attachment `client_uuid` replay.
+  - RLS and isolation.
+- **Frontend:** Vitest on `rules.ts` and on the queue's photo step.
+- **E2E (phone):**
+  1. Offline, register a casual, record a casual-labour expense with two photos, and request
+     transport twice with overlapping dates.
+  2. Online again, the first lands with its photos and the second is refused for overlap and stays
+     on the phone.
+  3. Fixing the dates sends it.
+  4. The PM approves, Finance approves and marks it paid, and project cost rises once.
+
+#### 4.17.14 Assumptions taken (each can be changed later without redesign)
+
+1. FLOAT and OTHER are exempt from the overlap rule (R2 allows a second float).
+2. One permission, `finance.approve`, approves, pays, closes floats and sets limits.
+3. Site is optional when a project is given directly.
+4. A float may be overspent. It then reads "owed to you" and is settled by a new request.
+5. Full casual ID numbers and ID photos are visible only to `finance.approve`.
+6. A payment reference is not unique, since one M-Pesa batch can cover several entries.
+7. Casual lines carry days, and optionally an amount.
+8. No refund flow for a reversed PAID expense.
+9. "Transport and fuel" is kept beside the new categories.
+10. The `approvals/pending` leak is fixed for every document type.
+11. Changing a project's PM re-addresses its open PM-level requests.
+12. Photo captions come from a fixed list on the phone.
+
 ## 5. Approval engine
 
 Implements `F3`, `F4`, `F5`. Lives in `approvals/engine.py` and is the only place routing is
