@@ -12,7 +12,7 @@
  * a budget belongs to the person accountable for it, not to a disabled button.
  */
 
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCrumb } from '../../components/ui/breadcrumbs';
@@ -33,9 +33,25 @@ import {
 } from '../../components/ui/data';
 import { Money, MoneyInput } from '../../components/ui/money';
 import { SearchField } from '../../components/ui/SearchField';
+import { TabStrip } from '../../components/ui/TabStrip';
 import { JobSheet } from './JobSheet';
 import type { Client } from '../settings/types';
 import type { Project, ProjectJob, ProjectPerformance, ProjectVariation } from './types';
+
+// R9, R10, §4.19.13: each tab is its own file, loaded when opened.
+const BudgetPanel = lazy(() => import('./BudgetPanel'));
+const SitesPanel = lazy(() => import('./SitesPanel'));
+const SubcontractsPanel = lazy(() => import('./SubcontractsPanel'));
+const MilestonesPanel = lazy(() => import('./MilestonesPanel'));
+
+type ProjectTab = 'overview' | 'budget' | 'sites' | 'subcontracts' | 'milestones';
+const PROJECT_TABS: { key: ProjectTab; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'budget', label: 'Budget' },
+  { key: 'sites', label: 'Sites' },
+  { key: 'subcontracts', label: 'Subcontracts' },
+  { key: 'milestones', label: 'Milestones' },
+];
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -249,7 +265,8 @@ export function ProjectSheet({
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { has } = useSession();
+  const { has, user } = useSession();
+  const [tab, setTab] = useState<ProjectTab>('overview');
   const project = useDetail<Project>('projects', id);
   const performance = useResource<ProjectPerformance>(`projects/${id}/performance`);
   const variations = useList<ProjectVariation>('project-variations', { project: id });
@@ -306,6 +323,19 @@ export function ProjectDetailPage() {
         }
       />
 
+      <TabStrip<ProjectTab> tabs={PROJECT_TABS} current={tab} onSelect={setTab} aria-label="Project" />
+
+      <Suspense fallback={<Spinner />}>
+        {tab === 'budget' ? <BudgetPanel projectId={record.id} /> : null}
+        {tab === 'sites' ? (
+          <SitesPanel projectId={record.id} isManager={record.manager === user?.id} />
+        ) : null}
+        {tab === 'subcontracts' ? <SubcontractsPanel projectId={record.id} /> : null}
+        {tab === 'milestones' ? <MilestonesPanel projectId={record.id} /> : null}
+      </Suspense>
+
+      {tab === 'overview' ? (
+        <>
       {figures?.is_fully_valued === false ? (
         <Banner tone="warning">
           Some of this project&rsquo;s cost could not be valued
@@ -420,6 +450,8 @@ export function ProjectDetailPage() {
           ]}
         />
       </section>
+        </>
+      ) : null}
 
       <EditProjectSheet
         open={editing}
