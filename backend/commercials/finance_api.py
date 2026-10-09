@@ -603,7 +603,7 @@ class ProjectExpenseViewSet(_EntryActions, TenantScopedViewSet):
 # Allowance requests (R2, R5)
 # --------------------------------------------------------------------------
 
-_MONEY = DecimalField(max_digits=14, decimal_places=2)
+_MONEY: DecimalField = DecimalField(max_digits=14, decimal_places=2)
 
 
 class AllowanceRequestSerializer(serializers.ModelSerializer):
