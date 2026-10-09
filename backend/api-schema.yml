@@ -1572,6 +1572,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttachmentUrl'
           description: ''
+  /api/v1/attendance/settings:
+    get:
+      operationId: attendance_settings_retrieve
+      description: |-
+        ``/api/v1/attendance/settings`` (R13, §4.18.7).
+
+        Read by any member (the phone keeps the cap to refuse early offline);
+        written with ``settings.manage``.
+      tags:
+      - attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSettings'
+          description: ''
+    patch:
+      operationId: attendance_settings_partial_update
+      description: |-
+        ``/api/v1/attendance/settings`` (R13, §4.18.7).
+
+        Read by any member (the phone keeps the cap to refuse early offline);
+        written with ``settings.manage``.
+      tags:
+      - attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttendanceSettingsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttendanceSettingsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttendanceSettingsRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSettings'
+          description: ''
   /api/v1/auth/login:
     post:
       operationId: auth_login_create
@@ -9273,6 +9321,10 @@ paths:
         description: The pagination cursor value.
         schema:
           type: string
+      - in: query
+        name: missing_coordinates
+        schema:
+          type: boolean
       - name: ordering
         required: false
         in: query
@@ -11479,6 +11531,288 @@ paths:
               schema:
                 $ref: '#/components/schemas/Variance'
           description: ''
+  /api/v1/work-days:
+    get:
+      operationId: work_days_list
+      description: |-
+        ``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+
+        Decide, add and the correction flow arrive with the approval task; they
+        will be ``@action`` routes here, on the same visibility.
+      parameters:
+      - in: query
+        name: awaiting_me
+        schema:
+          type: boolean
+        description: Only days with a slice waiting on me.
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: First day, YYYY-MM-DD (or `from`).
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: Last day, YYYY-MM-DD (or `to`).
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: person
+        schema:
+          type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
+        description: Days with a session on this project.
+      - in: query
+        name: scope
+        schema:
+          type: string
+          enum:
+          - all
+          - mine
+          - team
+        description: Whose days. Default mine.
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: integer
+        description: Days with a session at this site.
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - OPEN
+          - PENDING
+          - REJECTED
+      tags:
+      - work-days
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWorkDayList'
+          description: ''
+  /api/v1/work-days/{id}:
+    get:
+      operationId: work_days_retrieve
+      description: |-
+        ``/api/v1/work-days`` (R13, §4.18.7). Read only for now.
+
+        Decide, add and the correction flow arrive with the approval task; they
+        will be ``@action`` routes here, on the same visibility.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this work day.
+        required: true
+      tags:
+      - work-days
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkDay'
+          description: ''
+  /api/v1/work-sessions:
+    get:
+      operationId: work_sessions_list
+      description: |-
+        ``/api/v1/work-sessions`` (R13, §4.18.7).
+
+        Reading is scoped like the days; clocking in and out is open to every
+        member and acts on the caller only.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - work-sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWorkSessionList'
+          description: ''
+    post:
+      operationId: work_sessions_create
+      description: |-
+        ``/api/v1/work-sessions`` (R13, §4.18.7).
+
+        Reading is scoped like the days; clocking in and out is open to every
+        member and acts on the caller only.
+      tags:
+      - work-sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSession'
+          description: ''
+  /api/v1/work-sessions/{id}:
+    get:
+      operationId: work_sessions_retrieve
+      description: |-
+        ``/api/v1/work-sessions`` (R13, §4.18.7).
+
+        Reading is scoped like the days; clocking in and out is open to every
+        member and acts on the caller only.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this work session.
+        required: true
+      tags:
+      - work-sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSession'
+          description: ''
+  /api/v1/work-sessions/clock-in:
+    post:
+      operationId: work_sessions_clock_in_create
+      description: |-
+        ``/api/v1/work-sessions`` (R13, §4.18.7).
+
+        Reading is scoped like the days; clocking in and out is open to every
+        member and acts on the caller only.
+      tags:
+      - work-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClockInRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClockInRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClockInRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSession'
+          description: ''
+  /api/v1/work-sessions/clock-out:
+    post:
+      operationId: work_sessions_clock_out_create
+      description: |-
+        ``/api/v1/work-sessions`` (R13, §4.18.7).
+
+        Reading is scoped like the days; clocking in and out is open to every
+        member and acts on the caller only.
+      tags:
+      - work-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClockOutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClockOutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClockOutRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkSession'
+          description: ''
+  /api/v1/work-sessions/open:
+    get:
+      operationId: work_sessions_open_retrieve
+      description: |-
+        My open session (its fields at the top level) or none, my sessions
+        today, and the limits the phone checks against (§4.18.7).
+      tags:
+      - work-sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenWorkSession'
+          description: ''
 components:
   schemas:
     AcceptCostRequest:
@@ -12409,6 +12743,20 @@ components:
       required:
       - expires_in
       - url
+    AttendanceSettings:
+      type: object
+      properties:
+        clock_auto_close_hour:
+          type: integer
+          maximum: 23
+          minimum: 0
+        clock_accuracy_cap_m:
+          type: integer
+          maximum: 100000
+          minimum: 1
+      required:
+      - clock_accuracy_cap_m
+      - clock_auto_close_hour
     AuthMethodEnum:
       enum:
       - PASSWORD
@@ -12954,6 +13302,52 @@ components:
       required:
       - acknowledged_ref
       - gate_out
+    ClockInRequest:
+      type: object
+      properties:
+        site:
+          type: integer
+          nullable: true
+        location:
+          type: integer
+          nullable: true
+        project:
+          type: integer
+          nullable: true
+        at:
+          type: string
+          format: date-time
+          nullable: true
+        fix:
+          nullable: true
+        place_area:
+          allOf:
+          - $ref: '#/components/schemas/_AreaRequest'
+          nullable: true
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+    ClockOutRequest:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+          nullable: true
+        fix:
+          nullable: true
+        session_client_uuid:
+          type: string
+          nullable: true
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        place_area:
+          allOf:
+          - $ref: '#/components/schemas/_AreaRequest'
+          nullable: true
     CloseFloatRequest:
       type: object
       properties:
@@ -12992,6 +13386,64 @@ components:
         * `FAULTY` - Faulty
         * `DAMAGED` - Damaged
         * `SCRAP` - Scrap
+    Correction:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CorrectionKindEnum'
+          readOnly: true
+        original_in_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        original_out_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        corrected_in_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        corrected_out_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        reason:
+          type: string
+          readOnly: true
+        made_by_name:
+          type: string
+          readOnly: true
+        made_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - corrected_in_at
+      - corrected_out_at
+      - id
+      - kind
+      - made_at
+      - made_by_name
+      - original_in_at
+      - original_out_at
+      - reason
+    CorrectionKindEnum:
+      enum:
+      - EDIT
+      - ADD
+      type: string
+      description: |-
+        * `EDIT` - Edit an existing session
+        * `ADD` - Add a missing session
     CostAcceptanceEnum:
       enum:
       - NOT_REQUIRED
@@ -15848,6 +16300,13 @@ components:
         * `CANCELLED` - Cancelled
     Location:
       type: object
+      description: |-
+        Validation for a serializer that carries ``latitude`` and ``longitude``.
+
+        Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+        ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+        the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+        Not yet wired into the site and location serializers.
       properties:
         id:
           type: integer
@@ -15887,6 +16346,9 @@ components:
           minimum: 20
         area_history:
           readOnly: true
+        has_coordinates:
+          type: boolean
+          readOnly: true
         children:
           type: array
           items:
@@ -15902,6 +16364,7 @@ components:
       required:
       - area_history
       - children
+      - has_coordinates
       - id
       - is_system
       - name
@@ -15909,6 +16372,13 @@ components:
       - type
     LocationRequest:
       type: object
+      description: |-
+        Validation for a serializer that carries ``latitude`` and ``longitude``.
+
+        Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+        ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+        the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+        Not yet wired into the site and location serializers.
       properties:
         parent:
           type: integer
@@ -16595,6 +17065,23 @@ components:
       - sites
       - suppliers
       - vehicles
+    OpenWorkSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessions_today:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkSession'
+        accuracy_cap_m:
+          type: integer
+        auto_close_hour:
+          type: integer
+      required:
+      - accuracy_cap_m
+      - auto_close_hour
+      - sessions_today
     OperationEnum:
       enum:
       - GATE_IN
@@ -17757,6 +18244,44 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Variance'
+    PaginatedWorkDayList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkDay'
+    PaginatedWorkSessionList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkSession'
     PasswordResetConfirmRequest:
       type: object
       description: Set a new password from a reset or invitation token.
@@ -17860,6 +18385,17 @@ components:
         holder:
           type: integer
           nullable: true
+    PatchedAttendanceSettingsRequest:
+      type: object
+      properties:
+        clock_auto_close_hour:
+          type: integer
+          maximum: 23
+          minimum: 0
+        clock_accuracy_cap_m:
+          type: integer
+          maximum: 100000
+          minimum: 1
     PatchedCasualRequest:
       type: object
       properties:
@@ -18280,6 +18816,13 @@ components:
           maxLength: 500
     PatchedLocationRequest:
       type: object
+      description: |-
+        Validation for a serializer that carries ``latitude`` and ``longitude``.
+
+        Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+        ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+        the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+        Not yet wired into the site and location serializers.
       properties:
         parent:
           type: integer
@@ -18627,6 +19170,13 @@ components:
           maxLength: 150
     PatchedSiteRequest:
       type: object
+      description: |-
+        Validation for a serializer that carries ``latitude`` and ``longitude``.
+
+        Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+        ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+        the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+        Not yet wired into the site and location serializers.
       properties:
         client:
           type: integer
@@ -20017,6 +20567,13 @@ components:
         * `AMOUNT` - Fixed amount
     Site:
       type: object
+      description: |-
+        Validation for a serializer that carries ``latitude`` and ``longitude``.
+
+        Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+        ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+        the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+        Not yet wired into the site and location serializers.
       properties:
         id:
           type: integer
@@ -20055,6 +20612,9 @@ components:
           minimum: 20
         area_history:
           readOnly: true
+        has_coordinates:
+          type: boolean
+          readOnly: true
         site_type:
           $ref: '#/components/schemas/SiteTypeEnum'
         status:
@@ -20076,6 +20636,7 @@ components:
       - area_history
       - client
       - client_name
+      - has_coordinates
       - id
       - internal_ref
       - name
@@ -20120,6 +20681,13 @@ components:
       - value
     SiteRequest:
       type: object
+      description: |-
+        Validation for a serializer that carries ``latitude`` and ``longitude``.
+
+        Mix in *before* ``serializers.ModelSerializer``. Both-or-neither and the
+        ranges always apply; ``coordinates_required`` (a bool, or a callable taking
+        the merged attrs) additionally demands them (``COORDINATES_REQUIRED``).
+        Not yet wired into the site and location serializers.
       properties:
         client:
           type: integer
@@ -20188,6 +20756,44 @@ components:
         * `ROOFTOP` - Rooftop
         * `INDOOR` - Indoor
         * `OTHER` - Other
+    Slice:
+      type: object
+      description: One approver's part of a day (§4.18.5). Empty until routing lands
+        (T16.6).
+      properties:
+        id:
+          type: integer
+        approver:
+          type: integer
+          nullable: true
+        approver_name:
+          type: string
+        project:
+          type: integer
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        status:
+          type: string
+        is_mine:
+          type: boolean
+        reason:
+          type: string
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - approver
+      - approver_name
+      - decided_at
+      - id
+      - is_mine
+      - project
+      - project_name
+      - reason
+      - status
     SourceEnum:
       enum:
       - MANUFACTURER
@@ -21348,6 +21954,195 @@ components:
           type: integer
       required:
       - credential
+    WorkDay:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        person:
+          type: integer
+          readOnly: true
+        person_name:
+          type: string
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WorkDayStatusEnum'
+          readOnly: true
+        hours:
+          type: string
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+        session_count:
+          type: integer
+          readOnly: true
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkSession'
+          readOnly: true
+        slices:
+          type: array
+          items:
+            $ref: '#/components/schemas/Slice'
+          readOnly: true
+      required:
+      - date
+      - hours
+      - id
+      - person
+      - person_name
+      - rejection_reason
+      - session_count
+      - sessions
+      - slices
+      - status
+    WorkDayStatusEnum:
+      enum:
+      - OPEN
+      - PENDING
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `OPEN` - Open
+        * `PENDING` - Waiting on approval
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+    WorkSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        site:
+          type: integer
+          readOnly: true
+          nullable: true
+        location:
+          type: integer
+          readOnly: true
+          nullable: true
+        place_name:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+          readOnly: true
+        work_day:
+          type: integer
+          readOnly: true
+        local_date:
+          type: string
+          format: date
+          readOnly: true
+        clock_in_at:
+          type: string
+          format: date-time
+          readOnly: true
+        clock_out_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        in_distance_m:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        out_distance_m:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        radius_m:
+          type: integer
+          nullable: true
+          readOnly: true
+        closed_by:
+          type: string
+          nullable: true
+          readOnly: true
+        in_client_uuid:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        flags:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        hours:
+          type: string
+          nullable: true
+          readOnly: true
+        slice_status:
+          type: string
+          nullable: true
+          readOnly: true
+        can_correct:
+          type: boolean
+          description: Mine, in a rejected slice, inside the 30 days (§4.18.6).
+          readOnly: true
+        added_reason:
+          type: string
+          readOnly: true
+        corrections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Correction'
+          readOnly: true
+      required:
+      - added_reason
+      - can_correct
+      - clock_in_at
+      - clock_out_at
+      - closed_by
+      - corrections
+      - flags
+      - hours
+      - id
+      - in_client_uuid
+      - in_distance_m
+      - local_date
+      - location
+      - out_distance_m
+      - place_name
+      - project
+      - project_name
+      - radius_m
+      - site
+      - slice_status
+      - work_day
+    _AreaRequest:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        radius_m:
+          type: number
+          format: double
+      required:
+      - lat
+      - lng
+      - radius_m
   securitySchemes:
     jwtAuth:
       type: http

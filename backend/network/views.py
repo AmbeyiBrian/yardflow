@@ -14,10 +14,12 @@ from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
 from accounts.services import resolve_permissions
+from attendance.places import AreaHistoryMixin, coordinates_needed
 from commercials.milestones_api import MilestoneInputSerializer, MilestoneSerializer
 from commercials.visibility import may_see_project_cost, may_see_project_margin
 from core.api import TenantScopedViewSet
 from core.field_permissions import PermissionGatedFieldsMixin
+from core.geo import CoordinatesMixin
 from network import suppliers as supplier_services
 from network.models import (
     Client,
@@ -66,9 +68,18 @@ class SiteReferenceSerializer(serializers.ModelSerializer):
         fields = ("id", "site", "label", "value")
 
 
-class SiteSerializer(serializers.ModelSerializer):
+class SiteSerializer(CoordinatesMixin, serializers.ModelSerializer):
     references = SiteReferenceSerializer(many=True, read_only=True)
     client_name = serializers.CharField(source="client.name", read_only=True)
+    # R13: whether the site can be clocked in at.
+    has_coordinates = serializers.SerializerMethodField()
+
+    def coordinates_required(self, attrs):  # type: ignore[no-untyped-def,override]
+        """R13, §4.18.8: every site needs them (an old site is left alone)."""
+        return coordinates_needed(self, True)
+
+    def get_has_coordinates(self, site: Site) -> bool:
+        return site.latitude is not None and site.longitude is not None
 
     class Meta:
         model = Site
@@ -84,6 +95,7 @@ class SiteSerializer(serializers.ModelSerializer):
             "longitude",
             "radius_m",
             "area_history",
+            "has_coordinates",
             "site_type",
             "status",
             "cell_id",
@@ -362,10 +374,16 @@ class SiteFilter(filters.FilterSet):
     # The search a storekeeper actually performs: they have a code off a work
     # order and no idea which system it came from.
     reference = filters.CharFilter(method="filter_any_reference")
+    # R13: the sites Settings still has to give coordinates to.
+    missing_coordinates = filters.BooleanFilter(method="filter_missing_coordinates")
 
     class Meta:
         model = Site
         fields = ["client", "status", "region"]
+
+    def filter_missing_coordinates(self, queryset, name, value):  # type: ignore[no-untyped-def]
+        missing = Q(latitude__isnull=True) | Q(longitude__isnull=True)
+        return queryset.filter(missing) if value else queryset.exclude(missing)
 
     def filter_any_reference(self, queryset, name, value):  # type: ignore[no-untyped-def]
         return queryset.filter(
@@ -373,7 +391,7 @@ class SiteFilter(filters.FilterSet):
         ).distinct()
 
 
-class SiteViewSet(TenantScopedViewSet):
+class SiteViewSet(AreaHistoryMixin, TenantScopedViewSet):
     """``/api/v1/sites`` (C6).
 
     Deletion is not offered: C6 keeps decommissioned sites permanently, because

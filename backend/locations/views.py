@@ -8,13 +8,27 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
+from attendance.places import AreaHistoryMixin, coordinates_needed
 from core.api import TenantScopedViewSet
+from core.geo import CoordinatesMixin
 from locations.models import Location, LocationType, StockNode
 
 
-class LocationSerializer(serializers.ModelSerializer):
+class LocationSerializer(CoordinatesMixin, serializers.ModelSerializer):
     children = serializers.SerializerMethodField()
     node_id = serializers.SerializerMethodField()
+    has_coordinates = serializers.SerializerMethodField()
+
+    def coordinates_required(self, attrs):  # type: ignore[no-untyped-def,override]
+        """R13, §4.18.8: a YARD or OFFICE needs them; system rows are exempt."""
+        instance = self.instance
+        kind = attrs.get("type", instance.type if instance is not None else None)
+        is_system = bool(instance.is_system) if instance is not None else False
+        rule = kind in (LocationType.YARD, LocationType.OFFICE) and not is_system
+        return coordinates_needed(self, rule)
+
+    def get_has_coordinates(self, location: Location) -> bool:
+        return location.latitude is not None and location.longitude is not None
 
     class Meta:
         model = Location
@@ -31,6 +45,7 @@ class LocationSerializer(serializers.ModelSerializer):
             "longitude",
             "radius_m",
             "area_history",
+            "has_coordinates",
             "children",
             "node_id",
         )
@@ -67,7 +82,7 @@ class StockNodeSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class LocationViewSet(TenantScopedViewSet):
+class LocationViewSet(AreaHistoryMixin, TenantScopedViewSet):
     """``/api/v1/locations`` (C4)."""
 
     serializer_class = LocationSerializer
@@ -90,8 +105,24 @@ class LocationViewSet(TenantScopedViewSet):
         (which list locations unfiltered) never see one. Asking for
         ``?type=OFFICE`` still returns them, for Settings to manage."""
         queryset = super().get_queryset()
-        if self.request.query_params.get("type") != LocationType.OFFICE:
+        # Settings' "places without coordinates" list needs the offices too.
+        if self.request.query_params.get("type") != LocationType.OFFICE and not self._missing():
             queryset = queryset.exclude(type=LocationType.OFFICE)
+        return queryset
+
+    def _missing(self) -> bool:
+        raw = self.request.query_params.get("missing_coordinates", "")
+        return raw.lower() in {"1", "true", "yes"}
+
+    def filter_queryset(self, queryset):  # type: ignore[no-untyped-def]
+        queryset = super().filter_queryset(queryset)
+        if self._missing():
+            # R13: the places that need coordinates and have none.
+            queryset = queryset.filter(
+                type__in=(LocationType.YARD, LocationType.OFFICE),
+                is_system=False,
+                latitude__isnull=True,
+            )
         return queryset
 
     def perform_destroy(self, instance):  # type: ignore[no-untyped-def]

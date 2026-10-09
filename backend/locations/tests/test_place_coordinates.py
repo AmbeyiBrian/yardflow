@@ -165,7 +165,10 @@ class TestPickers:
         assert reply.status_code == 200
         yard.refresh_from_db()
         assert yard.radius_m == 350
-        assert yard.area_history == []
+        # The client's own value is ignored; the only entry is the one the
+        # radius change itself pushed (T16.8).
+        assert [entry["radius_m"] for entry in yard.area_history] == [200]
+        assert all("x" not in entry for entry in yard.area_history)
 
 
 class TestSiteApi:

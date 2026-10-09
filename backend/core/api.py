@@ -135,6 +135,13 @@ def exception_handler(exc: Exception, context: dict) -> Response | None:
             "code": CODE_VALIDATION,
             "message": _validation_message(field_errors),
         }
+        # §4.18.12: a place saved without coordinates has its own code.
+        if any(
+            message.startswith("COORDINATES_REQUIRED")
+            for messages in field_errors.values()
+            for message in messages
+        ):
+            error["code"] = "COORDINATES_REQUIRED"
         if field_errors:
             error["field_errors"] = field_errors
         return Response({"error": error}, status=exc.status_code)

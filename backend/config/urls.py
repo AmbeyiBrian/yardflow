@@ -43,6 +43,7 @@ from accounts.webauthn_views import (
 )
 from approvals.views import ApprovalRequestViewSet, ApprovalRuleViewSet
 from assets.views import AssetViewSet
+from attendance.api import AttendanceSettingsView, WorkDayViewSet, WorkSessionViewSet
 from catalogue.views import (
     CategoryCustomFieldViewSet,
     ItemCategoryViewSet,
@@ -263,6 +264,8 @@ router.register(
 )
 router.register("item-types", ItemTypeViewSet, basename="item-type")
 router.register("clients", ClientViewSet, basename="client")
+router.register("work-days", WorkDayViewSet, basename="work-day")
+router.register("work-sessions", WorkSessionViewSet, basename="work-session")
 router.register("sites", SiteViewSet, basename="site")
 router.register("site-references", SiteReferenceViewSet, basename="site-reference")
 router.register("projects", ProjectViewSet, basename="project")
@@ -344,6 +347,8 @@ v1_patterns = [
     # C8: one settings object per tenant, so a singleton rather than a collection.
     path("settings", OrganizationSettingsView.as_view(), name="organization-settings"),
     path("finance/settings", FinanceSettingsView.as_view(), name="finance-settings"),
+    # R13: when a forgotten clock-in closes, and how precise a position must be.
+    path("attendance/settings", AttendanceSettingsView.as_view(), name="attendance-settings"),
     # M6: how each document type is numbered, and what the next one will be.
     path("number-series", NumberSeriesView.as_view(), name="number-series"),
     # A4: the company's own details and logo, managed by the company.

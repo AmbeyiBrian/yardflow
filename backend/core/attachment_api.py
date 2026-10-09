@@ -94,6 +94,9 @@ ATTACHABLE_TARGETS: dict[str, tuple[str, ...]] = {
     "commercials.SitePurchase": (),
     # Finance attaches the invoice document to a milestone invoice it recorded.
     "commercials.MilestoneInvoice": (PERM.FINANCE_APPROVE,),
+    # R14, §4.20.7: an asset's photos, logbook, insurance and purchase papers.
+    # The register is read by every member; adding to it is asset.manage's.
+    "assets.Asset": (PERM.ASSET_MANAGE,),
 }
 
 #: Targets where the **record's own owner** decides, not a permission (§4.17.7).

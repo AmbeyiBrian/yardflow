@@ -1,7 +1,7 @@
 """Isolation fixtures for the attendance tables (T16.2, A3).
 
-No endpoints exist yet (later tasks); the fixtures are registered now so the
-viewsets that arrive are covered by the A3 suite from their first commit.
+``work-day`` and ``work-session`` are the routers' basenames (T16.8); both
+viewsets are read-only for the isolation suite's verbs, so no payload is given.
 """
 
 from core.isolation import register_isolation_fixture
