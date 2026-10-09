@@ -41,7 +41,10 @@ export type QueuedOperation =
   | 'GATE_OUT_RELEASE'
   | 'EXPENSE'
   | 'ALLOWANCE_REQUEST'
-  | 'CASUAL';
+  | 'CASUAL'
+  // §4.18.9: clock-in and clock-out, the two attendance captures (R13).
+  | 'CLOCK_IN'
+  | 'CLOCK_OUT';
 
 /** The operations that carry photos, and so have a second step after they land. */
 export const FINANCE_OPERATIONS: readonly QueuedOperation[] = [
@@ -49,6 +52,13 @@ export const FINANCE_OPERATIONS: readonly QueuedOperation[] = [
   'ALLOWANCE_REQUEST',
   'CASUAL',
 ];
+
+/**
+ * Attendance captures (design §4.18.9; R13). They carry no photos; the payload holds
+ * the fix, the `client_uuid` and the `place_area` the phone checked against, so the
+ * server can tell AREA_CHANGED from a bad read when it replays.
+ */
+export const ATTENDANCE_OPERATIONS: readonly QueuedOperation[] = ['CLOCK_IN', 'CLOCK_OUT'];
 
 export type PhotoStatus =
   /** Waiting on its entry to be applied, or on a connection. */

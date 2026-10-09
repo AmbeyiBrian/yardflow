@@ -10,18 +10,34 @@
  * Clocked in: the place, the time since, and Clock out. Clock-out is never
  * blocked on position (R13); it says afterwards if the phone was outside.
  *
- * Online only for now; offline capture arrives with T16.15.
+ * Offline (§4.18.9; R6, R13): with no signal, or when the server cannot be
+ * reached, the phone checks the area itself against the cached bundle and
+ * queues the clock-in; the open session is kept locally so the card still says
+ * "clocked in" and Clock out still works. A queued entry reads "Waiting to
+ * send"; a refused one stays here with the server's reason.
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { ApiError } from '../../api/client';
 import { useList } from '../../api/hooks';
 import { Banner, Button, Card, Field, Select, Spinner } from '../../components/ui';
 import { newUuid } from '../../offline/db';
+import { useOffline } from '../../offline/OfflineProvider';
+import { isOnline, setOnline } from '../../offline/sync';
+import { isNetworkError } from '../money/drafts';
 import { useClockIn, useClockOut, useOpenSession } from './api';
 import { formatDistance, formatElapsed, sortNearby, suggest, type NearbyPlace } from './nearby';
-import { usePlaces } from './places';
+import { queueClockIn, queueClockOut, saveOpenSession, useQueuedAttendance } from './offline';
+import { usePlaces, useAccuracyCap } from './places';
 import { positionMessage, PositionError, readPosition } from './position';
+import {
+  earlyRefusal,
+  resolveSession,
+  sessionFromServer,
+  type LocalSession,
+} from './queued';
 import { clockError } from './rules';
 import type { Fix, WorkSession } from './types';
 import type { Project } from '../projects/types';
@@ -58,25 +74,94 @@ function timeOfDay(iso: string) {
 
 export function ClockInCard() {
   const open = useOpenSession();
-  if (open.isLoading) {
+  const queued = useQueuedAttendance();
+  const { places } = usePlaces();
+  const { pending } = useOffline();
+  const queryClient = useQueryClient();
+  // A clock-out that has just been made stays on screen with its message until dismissed.
+  const [held, setHeld] = useState<LocalSession | null>(null);
+
+  // §4.18.9: what lands while the card is open changes the server's answer.
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: ['work-sessions'] });
+  }, [pending, queryClient]);
+
+  // Keep the phone's copy of the open session current whenever the server has
+  // answered and nothing is waiting, so a later offline Clock out has it.
+  const serverKnown = open.isSuccess;
+  const serverSession = serverKnown ? (open.data ?? null) : null;
+  useEffect(() => {
+    if (!serverKnown || !queued.ready || queued.waiting) return;
+    void saveOpenSession(serverSession ? sessionFromServer(serverSession, places) : null);
+  }, [serverKnown, serverSession, queued.ready, queued.waiting, places]);
+
+  const session = resolveSession({
+    server: serverKnown
+      ? serverSession
+        ? sessionFromServer(serverSession, places)
+        : null
+      : undefined,
+    local: queued.local,
+    waiting: queued.waiting,
+  });
+
+  if (!queued.ready || (open.isLoading && !session && !queued.waiting)) {
     return (
       <Card>
         <Spinner className="text-slate-400" />
       </Card>
     );
   }
-  if (open.isError) {
+  if (open.isError && !isNetworkError(open.error) && !session) {
     return (
       <Banner tone="error">Could not check whether you are clocked in. Reload to try again.</Banner>
     );
   }
-  return open.data ? <ClockedIn session={open.data} /> : <ClockedOut />;
+
+  const refused = queued.entries.filter((entry) => entry.state === 'REFUSED');
+  const waiting = queued.entries.filter((entry) => entry.state === 'WAITING');
+  const shown = held ?? session;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {refused.map((entry) => (
+        <Banner key={entry.client_uuid} tone="error">
+          Your {entry.summary.toLowerCase()} was refused: {entry.reason || 'the server did not accept it'}.
+          It stays on this phone. If you were there, ask the Director to add the day.
+        </Banner>
+      ))}
+      {waiting.length > 0 ? (
+        <Banner tone="info">
+          Waiting to send: {waiting.map((entry) => entry.summary).join(', ')}. It goes when your
+          phone has signal.
+        </Banner>
+      ) : null}
+      {shown ? (
+        <ClockedIn
+          key={shown.session_client_uuid}
+          session={shown}
+          onDone={setHeld}
+          onDismiss={held ? () => setHeld(null) : undefined}
+        />
+      ) : (
+        <ClockedOut />
+      )}
+    </div>
+  );
 }
 
-function ClockedIn({ session }: { session: WorkSession }) {
+function ClockedIn({
+  session,
+  onDone,
+  onDismiss,
+}: {
+  session: LocalSession;
+  onDone: (session: LocalSession) => void;
+  onDismiss?: () => void;
+}) {
   const clockOut = useClockOut();
   const [now, setNow] = useState(() => Date.now());
-  const [done, setDone] = useState<WorkSession | null>(null);
+  const [done, setDone] = useState<WorkSession | 'queued' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const uuid = useRef(newUuid());
@@ -92,18 +177,41 @@ function ClockedIn({ session }: { session: WorkSession }) {
     // R13: a clock-out is never refused on position, so a failed read is not
     // a reason to stay clocked in; it goes without a fix and is flagged.
     const fix = await readPosition().catch(() => null);
-    clockOut.mutate(
-      { fix, session_client_uuid: String(session.id), client_uuid: uuid.current },
-      {
-        onSuccess: (row) => setDone(row),
-        onError: (e) => setError(clockError(e)),
-        onSettled: () => setBusy(false),
-      },
-    );
+    const queueIt = async () => {
+      await queueClockOut({ session, fix }, uuid.current);
+      onDone(session);
+      setDone('queued');
+    };
+    try {
+      if (!isOnline()) {
+        await queueIt();
+      } else {
+        try {
+          const row = await clockOut.mutateAsync({
+            fix,
+            session_client_uuid: session.session_client_uuid,
+            client_uuid: uuid.current,
+          });
+          onDone(session);
+          setDone(row);
+        } catch (e) {
+          // The same client_uuid is queued, so if the server did save it the
+          // replay finds that row rather than making a second (§4.18.9).
+          if (!isNetworkError(e)) throw e;
+          if (!(e instanceof ApiError)) setOnline(false);
+          await queueIt();
+        }
+      }
+    } catch (e) {
+      setError(clockError(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const outside = done?.flags?.includes('OUTSIDE_AT_CLOCK_OUT');
-  const noPosition = done?.flags?.includes('NO_POSITION_AT_CLOCK_OUT');
+  const row = done && done !== 'queued' ? done : null;
+  const outside = row?.flags?.includes('OUTSIDE_AT_CLOCK_OUT');
+  const noPosition = row?.flags?.includes('NO_POSITION_AT_CLOCK_OUT');
 
   return (
     <Card className="flex flex-col gap-3">
@@ -114,7 +222,7 @@ function ClockedIn({ session }: { session: WorkSession }) {
         {done ? (
           <p className="text-sm text-slate-600">
             {session.place_name}, {timeOfDay(session.clock_in_at)} to{' '}
-            {done.clock_out_at ? timeOfDay(done.clock_out_at) : 'now'}.
+            {row?.clock_out_at ? timeOfDay(row.clock_out_at) : 'now'}.
           </p>
         ) : (
           <p className="text-sm text-slate-600">
@@ -127,7 +235,7 @@ function ClockedIn({ session }: { session: WorkSession }) {
       {outside ? (
         <Banner tone="warning">
           You clocked out{' '}
-          {done?.out_distance_m != null ? formatDistance(done.out_distance_m) : 'away'} from{' '}
+          {row?.out_distance_m != null ? formatDistance(row.out_distance_m) : 'away'} from{' '}
           {session.place_name}. It is recorded, and the approver will see it.
         </Banner>
       ) : null}
@@ -137,8 +245,24 @@ function ClockedIn({ session }: { session: WorkSession }) {
           will see that.
         </Banner>
       ) : null}
+      {done === 'queued' ? (
+        <Banner tone="info">
+          Waiting to send. The clock-out is saved on your phone and goes when it has signal.
+        </Banner>
+      ) : null}
+      {!done && session.queued ? (
+        <Banner tone="info">
+          Waiting to send. The clock-in is saved on your phone and goes when it has signal.
+        </Banner>
+      ) : null}
       {error ? <Banner tone="error">{error}</Banner> : null}
-      {done ? null : (
+      {done ? (
+        onDismiss ? (
+          <Button block variant="secondary" onClick={onDismiss}>
+            Done
+          </Button>
+        ) : null
+      ) : (
         <Button block loading={busy} onClick={submit}>
           Clock out
         </Button>
@@ -151,6 +275,7 @@ function ClockedOut() {
   const { places, loading: placesLoading, failed } = usePlaces();
   const { reading, read } = usePosition();
   const clockIn = useClockIn();
+  const cap = useAccuracyCap();
   const [picked, setPicked] = useState<string | null>(null);
   const [projectPick, setProjectPick] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -177,33 +302,66 @@ function ClockedOut() {
     { site: chosen?.id, status: 'OPEN', page_size: 50 },
     { enabled: chosen?.kind === 'site' },
   );
-  const candidates = useMemo(
-    () =>
-      chosen?.kind === 'site'
-        ? (projects.data?.results ?? []).filter((p) => p.sites.includes(chosen.id))
-        : [],
-    [projects.data, chosen],
-  );
+  const candidates = useMemo<{ id: number; reference: string; title: string }[]>(() => {
+    if (chosen?.kind !== 'site') return [];
+    // No answer from the server (offline): the bundle's open projects for the site.
+    if (!projects.data) return chosen.open_projects ?? [];
+    return projects.data.results.filter((p) => p.sites.includes(chosen.id));
+  }, [projects.data, chosen]);
   const needsProject = candidates.length >= 2;
   const project = needsProject ? projectPick : '';
 
-  const submit = () => {
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
     if (!chosen || !fix) return;
     setError(null);
-    clockIn.mutate(
-      {
-        ...(chosen.kind === 'site' ? { site: chosen.id } : { location: chosen.id }),
-        ...(project ? { project: Number(project) } : {}),
-        fix,
-        client_uuid: uuid.current,
-      },
-      {
-        onSuccess: () => {
-          uuid.current = newUuid();
+    setBusy(true);
+    const queueIt = async () => {
+      // §4.18.9: the phone refuses early, in the server's words, from the
+      // area and cap it holds; the replay checks again at captured_at.
+      const refusal = earlyRefusal(fix, chosen, cap);
+      if (refusal) {
+        setError(refusal);
+        return;
+      }
+      const picked = candidates.find((p) => String(p.id) === project);
+      await queueClockIn(
+        {
+          place: chosen,
+          project: project ? Number(project) : null,
+          project_name: picked ? `${picked.reference} · ${picked.title}` : null,
+          fix,
         },
-        onError: (e) => setError(clockError(e)),
-      },
-    );
+        uuid.current,
+      );
+      uuid.current = newUuid();
+    };
+    try {
+      if (!isOnline()) {
+        await queueIt();
+      } else {
+        try {
+          await clockIn.mutateAsync({
+            ...(chosen.kind === 'site' ? { site: chosen.id } : { location: chosen.id }),
+            ...(project ? { project: Number(project) } : {}),
+            fix,
+            client_uuid: uuid.current,
+          });
+          uuid.current = newUuid();
+        } catch (e) {
+          // Queued under the same client_uuid: a response lost on the way back
+          // cannot become a second clock-in (N2).
+          if (!isNetworkError(e)) throw e;
+          if (!(e instanceof ApiError)) setOnline(false);
+          await queueIt();
+        }
+      }
+    } catch (e) {
+      setError(clockError(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -301,7 +459,7 @@ function ClockedOut() {
         <div className="flex flex-col gap-2">
           <Button
             block
-            loading={clockIn.isPending}
+            loading={busy}
             disabled={!chosen || (needsProject && !projectPick)}
             onClick={submit}
           >

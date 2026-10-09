@@ -26,7 +26,7 @@ const FLAG_HINTS: Partial<Record<SessionFlag, string>> = {
 export const flagLabel = (flag: SessionFlag) => FLAG_LABELS[flag] ?? flag;
 export const flagHint = (flag: SessionFlag) => FLAG_HINTS[flag];
 
-const PLAIN: Record<string, string> = {
+export const PLAIN: Record<string, string> = {
   CLOCK_LOCATION_REQUIRED: 'Turn location on to clock in.',
   CLOCK_LOCATION_TOO_VAGUE:
     'Your phone could not fix its position closely enough. Step outside or wait a moment, then try again.',

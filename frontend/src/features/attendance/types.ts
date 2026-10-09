@@ -88,6 +88,8 @@ export interface ClockPlace {
   lat: number;
   lng: number;
   radius_m: number;
+  /** From the offline bundle only: the site's open projects, so the choice works with no signal (R13). */
+  open_projects?: { id: number; reference: string; title: string }[];
 }
 
 export interface ClockInBody {

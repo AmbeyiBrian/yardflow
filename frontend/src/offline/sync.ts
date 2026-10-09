@@ -20,6 +20,7 @@
 
 import { ApiError, api } from '../api/client';
 import {
+  ATTENDANCE_OPERATIONS,
   FINANCE_OPERATIONS,
   type QueuedOperation,
   clearApplied,
@@ -103,9 +104,12 @@ async function drainEntries(): Promise<SyncOutcome> {
         // R6: a refused finance entry stays on the phone with the server's code
         // and reason, so "ALLOWANCE_OVERLAP: overlaps AR-000012" is what the
         // clerk reads when deciding how to fix it.
-        const isFinance = FINANCE_OPERATIONS.includes(
-          rows.find((row) => row.client_uuid === result.client_uuid)?.operation as QueuedOperation,
-        );
+        // R13, §4.18.9: the same for a refused clock-in or clock-out, whose
+        // CLOCK_OUTSIDE_AREA reason is never turned into hours by resending.
+        const operation = rows.find((row) => row.client_uuid === result.client_uuid)
+          ?.operation as QueuedOperation;
+        const isFinance =
+          FINANCE_OPERATIONS.includes(operation) || ATTENDANCE_OPERATIONS.includes(operation);
         await markRejected(
           result.client_uuid,
           isFinance && refusal.code && refusal.reason
@@ -160,6 +164,11 @@ export async function fetchBundle(): Promise<{ ok: boolean; passes: number }> {
       casuals?: unknown[];
       my_floats?: unknown[];
       finance_limits?: Record<string, unknown>;
+      // R13, §4.18.9: the area the phone checks a clock-in against. `sites` and
+      // `locations` carry latitude/longitude/radius_m; `locations` leaves out
+      // OFFICE, so those arrive here. Optional for an older server.
+      offices?: unknown[];
+      attendance?: { accuracy_cap_m: number; auto_close_hour: number };
       releasable_gate_outs: {
         id: number;
         number: string;
@@ -181,6 +190,8 @@ export async function fetchBundle(): Promise<{ ok: boolean; passes: number }> {
       saveReference('casuals', bundle.casuals ?? []),
       saveReference('my_floats', bundle.my_floats ?? []),
       saveReference('finance_limits', [bundle.finance_limits ?? {}]),
+      saveReference('offices', bundle.offices ?? []),
+      saveReference('attendance', bundle.attendance ? [bundle.attendance] : []),
     ]);
     // Only what the server says is approved. The device never adds to this.
     await saveReleasable(bundle.releasable_gate_outs);

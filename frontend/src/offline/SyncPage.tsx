@@ -25,6 +25,7 @@ import { Banner, Button, Card, Field, Spinner, Textarea } from '../components/ui
 import { Checkbox } from '../components/ui';
 import { EmptyState, PageHeader, Sheet, Stat, StatusBadge } from '../components/ui/data';
 import { type QueuedMutation, allQueued, clearApplied } from './db';
+import { describeAttendance } from '../features/attendance/queued';
 import { describeEntry } from './financeQueue';
 import { useOffline } from './OfflineProvider';
 
@@ -54,18 +55,26 @@ const OPERATION_LABELS: Record<string, string> = {
   EXPENSE: 'Expense',
   ALLOWANCE_REQUEST: 'Allowance request',
   CASUAL: 'Casual registered',
+  // §4.18.9: attendance captures (R13).
+  CLOCK_IN: 'Clock-in',
+  CLOCK_OUT: 'Clock-out',
 };
 
 const FINANCE_KINDS = new Set(['EXPENSE', 'ALLOWANCE_REQUEST', 'CASUAL']);
+const ATTENDANCE_KINDS = new Set(['CLOCK_IN', 'CLOCK_OUT']);
+/** Entries that read "<what> — waiting to send / refused / sent" and show the server's code. */
+const STATED_KINDS = new Set([...FINANCE_KINDS, ...ATTENDANCE_KINDS]);
 
 /** The line a row opens with: "Expense KES 1,200 — waiting to send" (R6). */
 function rowTitle(row: QueuedMutation): string {
-  if (!FINANCE_KINDS.has(row.operation)) {
+  if (!STATED_KINDS.has(row.operation)) {
     return `${OPERATION_LABELS[row.operation] ?? row.operation}${
       row.document_number ? ` · ${row.document_number}` : ''
     }`;
   }
-  const what = describeEntry(row.operation, row.payload);
+  const what = ATTENDANCE_KINDS.has(row.operation)
+    ? describeAttendance(row)
+    : describeEntry(row.operation, row.payload);
   if (row.status === 'REJECTED') return `${what} — refused`;
   if (row.status === 'APPLIED') return `${what} — sent${row.document_number ? ` · ${row.document_number}` : ''}`;
   return `${what} — waiting to send`;
@@ -149,7 +158,7 @@ export default function SyncPage() {
                   </p>
                   {row.exception_reason ? (
                     <p className="text-sm text-red-700">
-                      {FINANCE_KINDS.has(row.operation) ? 'Refused: ' : ''}
+                      {STATED_KINDS.has(row.operation) ? 'Refused: ' : ''}
                       {row.exception_reason}
                     </p>
                   ) : null}
