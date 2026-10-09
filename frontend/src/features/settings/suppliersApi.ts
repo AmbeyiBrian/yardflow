@@ -71,6 +71,14 @@ export const useSetSupplierActive = () =>
     path: (b) => `${b.id}/${b.active ? 'reactivate' : 'deactivate'}`,
   });
 
+/** Finance decision through the approvals engine (§4.20.3, R15). */
+export const useDecideSupplier = () =>
+  useAction<{ id: number; approved: boolean; reason: string }, Supplier>({
+    resource: SUPPLIERS,
+    path: (b) => `${b.id}/decide`,
+    invalidates: [SUPPLIERS, 'approvals/pending'],
+  });
+
 export const useLinkSupplierHistory = () =>
   useAction<{ id: number }, { linked: number }>({
     resource: SUPPLIERS,

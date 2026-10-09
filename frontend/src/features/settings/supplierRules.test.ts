@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 import { ApiError } from '../../api/client';
-import { duplicateOf, normalisePin, supplierChip } from './supplierRules';
+import { duplicateOf, normalisePin, paymentRoutes, supplierChip } from './supplierRules';
+
+describe('paymentRoutes', () => {
+  it('lists bank and till routes, and nothing when none', () => {
+    expect(paymentRoutes({})).toEqual([]);
+    expect(
+      paymentRoutes({
+        bank_name: 'KCB',
+        account_number: '123',
+        mpesa_type: 'TILL',
+        mpesa_number: '55',
+      }),
+    ).toEqual(['Bank: KCB · 123', 'Till: 55']);
+  });
+});
 
 describe('normalisePin', () => {
   it('upper-cases and strips spaces', () => {

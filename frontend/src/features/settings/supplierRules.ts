@@ -59,6 +59,31 @@ export function duplicateOf(
   };
 }
 
+/**
+ * How the supplier is paid, as lines for the approval card (R15: at least one
+ * route is needed to approve, §4.20.3). Empty when none is on file.
+ */
+export function paymentRoutes(s: {
+  bank_name?: string;
+  account_number?: string;
+  mpesa_type?: string;
+  mpesa_number?: string;
+  mpesa_account?: string;
+}): string[] {
+  const routes: string[] = [];
+  if (s.bank_name || s.account_number) {
+    routes.push(`Bank: ${[s.bank_name, s.account_number].filter(Boolean).join(' · ')}`);
+  }
+  if (s.mpesa_number) {
+    const kind =
+      s.mpesa_type === 'PAYBILL' ? 'Paybill' : s.mpesa_type === 'TILL' ? 'Till' : 'M-Pesa';
+    routes.push(
+      `${kind}: ${s.mpesa_number}${s.mpesa_account ? ` (account ${s.mpesa_account})` : ''}`,
+    );
+  }
+  return routes;
+}
+
 /** Document kinds, carried in the attachment caption (§4.20.2). */
 export const SUPPLIER_DOCUMENT_KINDS = [
   'KRA certificate',

@@ -27,6 +27,7 @@ import { SwipePane } from '../../components/ui/SwipePane';
 import { useSwipeTabs } from '../../components/ui/useSwipeTabs';
 import { CloseoutQueue } from '../projects/ProjectQueuesPage';
 import { FinanceExpenseQueue, FinanceRequestQueue } from './FinanceApprovals';
+import { SupplierApprovalQueue } from '../settings/SupplierApprovals';
 import { biometricsAvailable, signApproval } from '../../auth/webauthn';
 import { useSession } from '../../auth/session';
 import {
@@ -69,7 +70,7 @@ function decisionLine(action: {
   return `${verb} by ${who}${action.reason ? ` — ${action.reason}` : ''}`;
 }
 
-type Tab = 'material' | 'expenses' | 'requests' | 'closeouts';
+type Tab = 'material' | 'expenses' | 'requests' | 'closeouts' | 'suppliers';
 
 /**
  * Every decision waiting on one person, in one place.
@@ -99,6 +100,8 @@ export default function ApprovalsPage() {
     ...(has(PERM.PROJECT_VIEW_COST)
       ? [{ key: 'closeouts' as Tab, label: 'Closeout costs' }]
       : []),
+    // R15 / §4.20.3: Finance checks new suppliers.
+    ...(has(PERM.FINANCE_APPROVE) ? [{ key: 'suppliers' as Tab, label: 'Suppliers' }] : []),
   ];
 
   const [tab, setTab] = useState<Tab>(tabs[0]?.key ?? 'material');
@@ -127,6 +130,7 @@ export default function ApprovalsPage() {
         {tab === 'requests' ? <FinanceRequestQueue /> : null}
         {tab === 'closeouts' ? <CloseoutQueue /> : null}
         {tab === 'material' ? <MaterialQueue /> : null}
+        {tab === 'suppliers' ? <SupplierApprovalQueue /> : null}
       </SwipePane>
     </div>
   );
