@@ -31,6 +31,7 @@ import { Banner, Card, Spinner } from '../../components/ui';
 import { Stat } from '../../components/ui/data';
 import type { GateOut } from '../dispatch/types';
 import type { Job } from '../jobs/types';
+import { FindStock } from './FindStock';
 
 export default function DashboardPage() {
   const { user, has } = useSession();
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   const isTechnician = has(PERM.JOB_CLOSEOUT);
   const isStorekeeper = has(PERM.GATE_IN_POST) || has(PERM.GATE_OUT_RELEASE);
   const isOwner = has(PERM.GATE_OUT_APPROVE) || has(PERM.REPORT_VIEW_ALL);
+  const hasRole = isTechnician || isOwner || isStorekeeper;
 
   return (
     <div className="flex flex-col gap-5">
@@ -60,13 +62,21 @@ export default function DashboardPage() {
         </Banner>
       ) : null}
 
+      {/* E8: "do we have it, and where?" comes before the role panels. */}
+      {hasRole ? (
+        <>
+          <FindStock />
+          <YardPanel />
+        </>
+      ) : null}
+
       {/* Ordered by immediacy rather than by seniority: whoever is holding
           material has the most time-sensitive question. */}
       {isTechnician ? <TechnicianPanel /> : null}
       {isOwner ? <OwnerPanel /> : null}
       {isStorekeeper ? <StorekeeperPanel /> : null}
 
-      {!isTechnician && !isOwner && !isStorekeeper ? (
+      {!hasRole ? (
         <Card>
           <h2 className="mb-1 text-sm font-semibold text-slate-900">
             Nothing is assigned to you yet
@@ -228,6 +238,75 @@ function StorekeeperPanel() {
         value="→"
         hint="The commonest thing you do."
       />
+    </Panel>
+  );
+}
+
+/** "What is in the yard, and what is spoken for?" (E8) */
+function YardPanel() {
+  const yard = useResource<{
+    items_in_stock: number;
+    deliveries_7d: number;
+    earmarks: { site: number; name: string; items: number }[];
+    earmark_sites_more: number;
+  }>('stock/summary');
+  const summary = yard.data;
+
+  if (summary && summary.items_in_stock === 0) {
+    return (
+      <Panel title="In the yard">
+        <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-4">
+          <p className="text-sm text-slate-700">Nothing in stock yet</p>
+          <Link
+            to="/gate-in/new"
+            className="flex min-h-[44px] items-center text-sm font-medium text-slate-900 underline"
+          >
+            Receive a delivery
+          </Link>
+        </div>
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel title="In the yard" loading={yard.isLoading}>
+      <Tile
+        to="/stock"
+        label="Items in stock"
+        value={summary?.items_in_stock ?? '–'}
+        hint="Kinds of item with something on hand."
+      />
+      <Tile
+        to="/gate-in"
+        label="Deliveries this week"
+        value={summary?.deliveries_7d ?? '–'}
+        hint="Received in the last 7 days."
+      />
+      {summary && summary.earmarks.length > 0 ? (
+        <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+            Earmarked for sites
+          </p>
+          <ul className="m-0 list-none p-0">
+            {summary.earmarks.map((row) => (
+              <li key={row.site}>
+                <Link
+                  to={`/stock?earmarked_for=${row.site}`}
+                  className="flex min-h-[44px] items-center justify-between gap-3 text-sm text-slate-900"
+                >
+                  <span className="min-w-0 break-words">{row.name}</span>
+                  <span className="shrink-0 tabular-nums text-slate-600">
+                    {row.items} {row.items === 1 ? 'item' : 'items'}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {summary.earmark_sites_more > 0 ? (
+            <p className="text-xs text-slate-500">and {summary.earmark_sites_more} more</p>
+          ) : null}
+        </div>
+      ) : null}
     </Panel>
   );
 }

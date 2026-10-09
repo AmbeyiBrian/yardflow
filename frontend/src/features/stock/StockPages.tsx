@@ -15,7 +15,7 @@
  */
 
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useCrumb } from '../../components/ui/breadcrumbs';
 
 import { api } from '../../api/client';
@@ -66,7 +66,10 @@ type StockRow = StockBalance & Pick<EarmarkRow, 'earmarked' | 'free'>;
 export default function StockPage() {
   const navigate = useNavigate();
   const [lookupError, setLookupError] = useState<string | null>(null);
-  const [itemFilter, setItemFilter] = useState('');
+  // E8: Home links here as `/stock?item=` and `/stock?earmarked_for=`.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [itemFilter, setItemFilterState] = useState(searchParams.get('item') ?? '');
+  const earmarkedFor = searchParams.get('earmarked_for') ?? '';
   const [nodeFilter, setNodeFilter] = useState('');
   const [includeUnavailable, setIncludeUnavailable] = useState(false);
   const { hasAny } = useSession();
@@ -81,6 +84,45 @@ export default function StockPage() {
     node: nodeFilter || undefined,
     available_only: includeUnavailable ? 'false' : undefined,
   });
+
+  /** Keeps the address in step with the filter, replacing the entry rather than adding one. */
+  function setItemFilter(next: string) {
+    setItemFilterState(next);
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        if (next) params.set('item', next);
+        else params.delete('item');
+        return params;
+      },
+      { replace: true },
+    );
+  }
+
+  function clearEarmarkFilter() {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        params.delete('earmarked_for');
+        return params;
+      },
+      { replace: true },
+    );
+  }
+
+  // `/stock` has no earmark-site filter, so rows are narrowed here on their
+  // `earmarked` split.
+  const allRows = stock.data?.results ?? [];
+  const rows = earmarkedFor
+    ? allRows.filter((row) =>
+        (row.earmarked ?? []).some(
+          (e) => String(e.site) === earmarkedFor && Number(e.quantity) > 0,
+        ),
+      )
+    : allRows;
+  const earmarkSiteName =
+    allRows.flatMap((row) => row.earmarked ?? []).find((e) => String(e.site) === earmarkedFor)
+      ?.name ?? 'this site';
 
   /** D7, E2: one identifier, whatever kind it turns out to be. */
   async function lookup(value: string) {
@@ -172,9 +214,23 @@ export default function StockPage() {
         </Field>
       </Card>
 
+      {earmarkedFor ? (
+        <div className="flex items-center gap-2 text-sm text-slate-700">
+          <span>Earmarked for {earmarkSiteName}</span>
+          <button
+            type="button"
+            aria-label="Remove earmark filter"
+            onClick={clearEarmarkFilter}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center text-xl text-slate-500 hover:text-slate-900"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+
       <ListState query={stock}>
         <DataList
-          rows={stock.data?.results ?? []}
+          rows={rows}
           rowKey={(row) => row.id}
           empty={
             <EmptyState
