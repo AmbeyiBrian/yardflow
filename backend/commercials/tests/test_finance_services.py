@@ -151,6 +151,23 @@ def paid_float(tech, pm, finance_user, site, amount="5000"):
 
 
 @pytest.mark.django_db
+class TestOpenProjectsOf:
+    def test_lists_open_projects_by_reference(self, tenant, project, site, pm):
+        other = ProjectFactory(reference="WO-9900", manager=pm)
+        other.sites.add(site)
+
+        assert [p.reference for p in finance.open_projects_of(site)] == ["WO-9900", "WO-9901"]
+
+    def test_never_raises_and_skips_closed_projects(self, tenant, project, site):
+        assert finance.open_projects_of(site) == [project]
+        type(project).objects.filter(pk=project.pk).update(
+            status=ProjectStatus.CLOSED, closed_at=timezone.now()
+        )
+
+        assert finance.open_projects_of(site) == []
+
+
+@pytest.mark.django_db
 class TestResolveProject:
     def test_one_open_project_is_chosen_for_you(self, tenant, project, site):
         assert finance.resolve_project(site) == project

@@ -1,0 +1,469 @@
+{
+  "_comment": "Read by backend/core/tests/test_geo.py and frontend/src/features/attendance/area.test.ts. distance_m is compared to within 0.01 m. Design 4.18.4.",
+  "cases": [
+    {
+      "name": "at the centre",
+      "fix": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "accuracy_m": 10
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 0.0,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "well inside",
+      "fix": {
+        "lat": -1.2916503,
+        "lng": 36.8219,
+        "accuracy_m": 10
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 50.004,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "just inside the radius",
+      "fix": {
+        "lat": -1.2903059,
+        "lng": 36.8219,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 199.495,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "just outside the radius",
+      "fix": {
+        "lat": -1.2902969,
+        "lng": 36.8219,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 200.496,
+        "inside": false,
+        "problem": null
+      }
+    },
+    {
+      "name": "outside radius but inside by accuracy allowance",
+      "fix": {
+        "lat": -1.2898517,
+        "lng": 36.8219,
+        "accuracy_m": 60
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 250.0,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "outside radius plus accuracy",
+      "fix": {
+        "lat": -1.2896718,
+        "lng": 36.8219,
+        "accuracy_m": 60
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 270.004,
+        "inside": false,
+        "problem": null
+      }
+    },
+    {
+      "name": "far away",
+      "fix": {
+        "lat": -1.35,
+        "lng": 36.9,
+        "accuracy_m": 5
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 10808.698,
+        "inside": false,
+        "problem": null
+      }
+    },
+    {
+      "name": "accuracy exactly at the cap",
+      "fix": {
+        "lat": -1.2920101,
+        "lng": 36.8219,
+        "accuracy_m": 100
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 9.996,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "accuracy over the cap",
+      "fix": {
+        "lat": -1.2920101,
+        "lng": 36.8219,
+        "accuracy_m": 100.5
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 9.996,
+        "inside": false,
+        "problem": "TOO_VAGUE"
+      }
+    },
+    {
+      "name": "accuracy over the cap, far away",
+      "fix": {
+        "lat": -1.35,
+        "lng": 36.9,
+        "accuracy_m": 500
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 10808.698,
+        "inside": false,
+        "problem": "TOO_VAGUE"
+      }
+    },
+    {
+      "name": "accuracy zero",
+      "fix": {
+        "lat": -1.2920101,
+        "lng": 36.8219,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 9.996,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "no fix at all",
+      "fix": null,
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": null,
+        "inside": false,
+        "problem": "NO_FIX"
+      }
+    },
+    {
+      "name": "empty fix",
+      "fix": {},
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": null,
+        "inside": false,
+        "problem": "NO_FIX"
+      }
+    },
+    {
+      "name": "fix without latitude",
+      "fix": {
+        "lng": 36.8,
+        "accuracy_m": 10
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": null,
+        "inside": false,
+        "problem": "NO_FIX"
+      }
+    },
+    {
+      "name": "fix without longitude",
+      "fix": {
+        "lat": -1.29,
+        "accuracy_m": 10
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": null,
+        "inside": false,
+        "problem": "NO_FIX"
+      }
+    },
+    {
+      "name": "fix without accuracy",
+      "fix": {
+        "lat": -1.29,
+        "lng": 36.8
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": null,
+        "inside": false,
+        "problem": "NO_FIX"
+      }
+    },
+    {
+      "name": "fix with null accuracy",
+      "fix": {
+        "lat": -1.29,
+        "lng": 36.8,
+        "accuracy_m": null
+      },
+      "place": {
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": null,
+        "inside": false,
+        "problem": "NO_FIX"
+      }
+    },
+    {
+      "name": "antimeridian, inside across the line",
+      "fix": {
+        "lat": 0.0,
+        "lng": -179.9999,
+        "accuracy_m": 5
+      },
+      "place": {
+        "lat": 0.0,
+        "lng": 179.9999,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 22.239,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "antimeridian, outside across the line",
+      "fix": {
+        "lat": 0.0,
+        "lng": -179.99,
+        "accuracy_m": 5
+      },
+      "place": {
+        "lat": 0.0,
+        "lng": 179.9999,
+        "radius_m": 200
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 1123.07,
+        "inside": false,
+        "problem": null
+      }
+    },
+    {
+      "name": "antimeridian, west to east just outside",
+      "fix": {
+        "lat": 10.0,
+        "lng": 179.9995,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": 10.0,
+        "lng": -179.9995,
+        "radius_m": 100
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 109.506,
+        "inside": false,
+        "problem": null
+      }
+    },
+    {
+      "name": "near the pole, opposite longitude, inside",
+      "fix": {
+        "lat": 89.9999,
+        "lng": 180.0,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": 89.9999,
+        "lng": 0.0,
+        "radius_m": 50
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 22.239,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "near the pole, a quarter turn away, inside",
+      "fix": {
+        "lat": 89.9999,
+        "lng": 90.0,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": 89.9999,
+        "lng": 0.0,
+        "radius_m": 50
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 15.725,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "near the pole, a degree south, outside",
+      "fix": {
+        "lat": 88.9999,
+        "lng": 0.0,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": 89.9999,
+        "lng": 0.0,
+        "radius_m": 50
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 111195.08,
+        "inside": false,
+        "problem": null
+      }
+    },
+    {
+      "name": "at the south pole, any longitude",
+      "fix": {
+        "lat": -90.0,
+        "lng": 123.0,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": -90.0,
+        "lng": 0.0,
+        "radius_m": 100
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 0.0,
+        "inside": true,
+        "problem": null
+      }
+    },
+    {
+      "name": "equator and prime meridian",
+      "fix": {
+        "lat": 0.0,
+        "lng": 0.0,
+        "accuracy_m": 0
+      },
+      "place": {
+        "lat": 0.0,
+        "lng": 0.0,
+        "radius_m": 20
+      },
+      "cap_m": 100,
+      "expected": {
+        "distance_m": 0.0,
+        "inside": true,
+        "problem": null
+      }
+    }
+  ]
+}

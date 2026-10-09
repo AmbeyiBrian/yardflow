@@ -164,6 +164,17 @@ def _invalid(field: str, message: str) -> FinanceInputInvalid:
 # --------------------------------------------------------------------------
 
 
+def open_projects_of(site):  # type: ignore[no-untyped-def]
+    """The open projects at ``site``, by reference. Never raises (§4.18.5 step 5).
+
+    Empty when there are none; clock-in and ``resolve_project`` each decide what
+    that, or several, means.
+    """
+    from network.models import ProjectStatus
+
+    return list(site.projects.filter(status=ProjectStatus.OPEN).order_by("reference"))
+
+
 def resolve_project(site, project=None):  # type: ignore[no-untyped-def]
     """The project an entry at ``site`` is costed to (§4.17.4).
 
@@ -191,7 +202,7 @@ def resolve_project(site, project=None):  # type: ignore[no-untyped-def]
             raise ProjectNotOpen()
         return project
 
-    open_projects = list(on_site.filter(status=ProjectStatus.OPEN).order_by("reference"))
+    open_projects = open_projects_of(site)
     if not open_projects:
         raise SiteHasNoOpenProject(
             f"{site} has no open project to cost this to.",
