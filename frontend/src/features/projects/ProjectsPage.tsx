@@ -293,7 +293,7 @@ export function ProjectDetailPage() {
               has(PERM.PROJECT_VIEW_COST) ? (
                 <Button
                   variant="ghost"
-                  onClick={() => navigate(`/expenses/new?project=${record.id}`)}
+                  onClick={() => navigate(`/money/expenses/new?project=${record.id}`)}
                 >
                   Record an expense
                 </Button>

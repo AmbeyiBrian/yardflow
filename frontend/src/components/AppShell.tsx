@@ -56,6 +56,9 @@ const NAV_ITEMS: NavItem[] = [
   // Gate-in, Gate-out, Stock — the things touched all day. Approvals moves under
   // More, where a count badge says when it needs a look.
   { to: '/stock', label: 'Stock', icon: <GlyphBoxes /> },
+  // R1–R3: anyone in the field spends, asks for an allowance or registers a
+  // casual, so no permission gates it. Lands under More on a phone.
+  { to: '/money', label: 'Money', icon: <GlyphCoins /> },
   {
     // Everything waiting on one person: gate passes, disposals, and — since
     // O16 — project expenses and closeout costs. A manager who approves only
@@ -513,6 +516,9 @@ function GlyphCheck() {
 }
 function GlyphBoxes() {
   return glyph(<><path d="M3 8h8v8H3zM13 8h8v8h-8z" /><path d="M3 8l4-4h8l4 4" /></>);
+}
+function GlyphCoins() {
+  return glyph(<><circle cx="9" cy="9" r="5" /><path d="M14 6.3A5 5 0 0 1 14 15.7M9 7v4M7.5 9h3" /><path d="M5 14.5V18c0 1.1 2 2 4.5 2 2 0 3.700-.5 4.300-1.300" /></>);
 }
 function GlyphClipboard() {
   return glyph(<><path d="M9 4h6v3H9z" /><path d="M6 6h2v0h8V6h2v15H6z" /><path d="M9 12h6M9 16h4" /></>);

@@ -41,6 +41,8 @@ export interface Attachment {
   uploaded_by_name: string;
   download_url: string;
   created_at: string;
+  /** Receipt / Fuel pump / Work done / ID / Other (§4.17.2). Blank elsewhere. */
+  caption?: string;
 }
 
 async function upload(
@@ -48,11 +50,13 @@ async function upload(
   targetId: string | number,
   file: File,
   kind: string,
+  caption?: string,
 ): Promise<Attachment> {
   const form = new FormData();
   form.set('target_type', targetType);
   form.set('target_id', String(targetId));
   form.set('kind', kind);
+  if (caption) form.set('caption', caption);
   form.set('file', file);
   // The client passes FormData through untouched, so the browser sets the
   // multipart boundary itself.
@@ -83,6 +87,7 @@ export function PhotoCapture({
   hint,
   minimum = 0,
   disabledReason,
+  caption,
   onChange,
 }: {
   /** A model label, e.g. `jobs.JobCloseout`. The API enforces the same list. */
@@ -95,6 +100,8 @@ export function PhotoCapture({
   minimum?: number;
   /** Why the camera is unavailable, when the target does not exist yet. */
   disabledReason?: string;
+  /** Sent with each upload, e.g. `Receipt`. Read at upload time, so it may change between photos. */
+  caption?: string;
   onChange?: (attachments: Attachment[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -138,7 +145,7 @@ export function PhotoCapture({
     for (const file of Array.from(files)) {
       setBusy((count) => count + 1);
       try {
-        const attachment = await upload(targetType, targetId, file, kind);
+        const attachment = await upload(targetType, targetId, file, kind, caption);
         setItems((current) => {
           const next = current.includes(attachment) ? current : [...current, attachment];
           onChange?.(next);
@@ -237,6 +244,9 @@ export function PhotoCapture({
                   {attachment.filename}
                 </a>
               )}
+              {attachment.caption ? (
+                <span className="text-center text-xs text-slate-500">{attachment.caption}</span>
+              ) : null}
               <Button
                 variant="ghost"
                 className="min-h-0 px-1 py-0.5 text-xs"

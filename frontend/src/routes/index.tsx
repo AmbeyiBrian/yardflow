@@ -89,7 +89,16 @@ const ProjectsPage = lazyRoute(() => import('../features/projects/ProjectsPage')
 const ProjectDetailPage = lazyRoute(() =>
   import('../features/projects/ProjectsPage').then((m) => ({ default: m.ProjectDetailPage })),
 );
-const RecordExpensePage = lazyRoute(() => import('../features/projects/RecordExpensePage'));
+const RecordExpensePage = lazyRoute(() => import('../features/money/RecordExpensePage'));
+const MoneyHomePage = lazyRoute(() => import('../features/money/MoneyHomePage'));
+const RequestAllowancePage = lazyRoute(() => import('../features/money/RequestAllowancePage'));
+const AddCasualPage = lazyRoute(() => import('../features/money/CasualPages'));
+const ExpenseDetailPage = lazyRoute(() =>
+  import('../features/money/DetailPages').then((m) => ({ default: m.ExpenseDetailPage })),
+);
+const RequestDetailPage = lazyRoute(() =>
+  import('../features/money/DetailPages').then((m) => ({ default: m.RequestDetailPage })),
+);
 
 const GateOutRequestPage = lazyRoute(() => import('../features/dispatch/GateOutRequestPage'));
 const GateOutListPage = lazyRoute(() => import('../features/dispatch/GateOutPages'));
@@ -150,6 +159,12 @@ const SettingsIndexRedirect = lazyRoute(() =>
     default: m.SettingsIndexRedirect,
   })),
 );
+
+/** A redirect that keeps `?project=…`, so a link from a project screen still lands filled in. */
+function RedirectKeepingSearch({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
+}
 
 function FullPageSpinner() {
   return (
@@ -272,18 +287,17 @@ export function AppRoutes() {
                 </RequirePermission>
               }
             />
-            <Route
-              path="expenses/new"
-              element={
-                // O16: anyone may record one. The person who paid for the fuel
-                // is the one holding the receipt.
-                <RequirePermission
-                  anyOf={[PERM.GATE_OUT_REQUEST, PERM.JOB_CLOSEOUT, PERM.PROJECT_VIEW_COST]}
-                >
-                  <RecordExpensePage />
-                </RequirePermission>
-              }
-            />
+            {/* Moved under Money (R1). Kept as a redirect, with the query string:
+              project screens and old bookmarks still point here. */}
+            <Route path="expenses/new" element={<RedirectKeepingSearch to="/money/expenses/new" />} />
+            {/* Money is for every member: anyone in the field may spend, ask or
+              register a casual (R1–R3). Approving is gated elsewhere. */}
+            <Route path="money" element={<MoneyHomePage />} />
+            <Route path="money/expenses/new" element={<RecordExpensePage />} />
+            <Route path="money/expenses/:id" element={<ExpenseDetailPage />} />
+            <Route path="money/requests/new" element={<RequestAllowancePage />} />
+            <Route path="money/requests/:id" element={<RequestDetailPage />} />
+            <Route path="money/casuals/new" element={<AddCasualPage />} />
             {/*
               The project queues are tabs on Approvals now, not a screen. Kept
               as a redirect rather than deleted: the link was in the sidebar and

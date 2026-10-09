@@ -12,13 +12,13 @@
  * it does the crumb holds a placeholder rather than flashing `42` and then
  * correcting itself (P3).
  *
- * Parents are declared, not chopped off the end of the URL. `/expenses/new` has
- * no `/expenses` above it and `/jobs/custody` is not a job; a trail built by
+ * Parents are declared, not chopped off the end of the URL. `/money/expenses/new` has
+ * no `/money/expenses` above it and `/jobs/custody` is not a job; a trail built by
  * splitting on slashes would invent both.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
 import { PERM, type Permission } from '../../auth/permissions';
@@ -71,7 +71,12 @@ const TRAIL: Record<string, Step> = {
   '/projects/:id': { label: null, parent: '/projects' },
   // No `/expenses` list exists above this one. It belongs to the project it was
   // opened from, which `Breadcrumbs` reads off the query string.
-  '/expenses/new': { label: 'Record an expense', parent: '/projects' },
+  '/money': { label: 'Money', parent: null },
+  '/money/expenses/new': { label: 'Record an expense', parent: '/money' },
+  '/money/expenses/:id': { label: 'Expense', parent: '/money' },
+  '/money/requests/new': { label: 'Request an allowance', parent: '/money' },
+  '/money/requests/:id': { label: 'Request', parent: '/money' },
+  '/money/casuals/new': { label: 'Add a casual', parent: '/money' },
 
   '/stock': { label: 'Stock', parent: null },
   '/stock/boxes': { label: 'Boxes', parent: '/stock' },
@@ -258,27 +263,14 @@ export function useCrumb(label: string | undefined, forPattern?: string): void {
 
 export function Breadcrumbs() {
   const location = useLocation();
-  const [params] = useSearchParams();
   const { has } = useSession();
   const context = useContext(CrumbContext);
   const pattern = useCurrentPattern();
-  const project = params.get('project');
 
   const trail = useMemo(() => {
     if (!pattern) return [];
-    const built = buildTrail(pattern, fillFrom(location.pathname, pattern));
-
-    // `/expenses/new?project=42` sits under that project rather than under the
-    // list: the screen it was opened from is what a person means by "back".
-    if (pattern === '/expenses/new' && project) {
-      built.splice(built.length - 1, 0, {
-        pattern: '/projects/:id',
-        to: `/projects/${project}`,
-        label: null,
-      });
-    }
-    return built;
-  }, [pattern, location.pathname, project]);
+    return buildTrail(pattern, fillFrom(location.pathname, pattern));
+  }, [pattern, location.pathname]);
 
   // P5: a trail of one is the screen you are already on.
   if (trail.length < 2) return null;
