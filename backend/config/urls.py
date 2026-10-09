@@ -108,8 +108,10 @@ from stock.views import (
     SerialHistoryView,
     SerialUnitViewSet,
     StockCountViewSet,
+    StockFindView,
     StockLookupView,
     StockOnHandView,
+    StockSummaryView,
     TransferView,
 )
 from sync.views import (
@@ -342,6 +344,8 @@ v1_patterns = [
     ),
     path("stock/boxes/<str:code>/issuable", BoxIssuableView.as_view(), name="box-issuable"),
     path("stock/low", LowStockView.as_view(), name="stock-low"),
+    path("stock/find", StockFindView.as_view(), name="stock-find"),
+    path("stock/summary", StockSummaryView.as_view(), name="stock-summary"),
     path("stock/client-position", ClientPositionView.as_view(), name="client-position"),
     path("stock/installed", InstalledBaseView.as_view(), name="installed-base"),
     path("stock/custody", CustodyStockView.as_view(), name="stock-custody"),

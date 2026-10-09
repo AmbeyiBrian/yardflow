@@ -10,7 +10,7 @@ Two kinds of read, and the difference matters:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.db.models import (
@@ -30,7 +30,7 @@ from django.db.models import (
 from django.db.models.functions import Coalesce
 
 from catalogue.models import TrackingMode
-from locations.models import UNAVAILABLE_NODE_TYPES, LocationType, StockNode
+from locations.models import UNAVAILABLE_NODE_TYPES, LocationType, NodeType, StockNode
 from stock.labels import read_label
 from stock.models import (
     Box,
@@ -39,6 +39,7 @@ from stock.models import (
     Reel,
     ReelStatus,
     SerialUnit,
+    SerialUnitStatus,
     StockBalance,
     StockMovement,
 )
@@ -478,3 +479,120 @@ def below_minimum_stock(organization_id) -> list[dict]:
                 }
             )
     return low
+
+
+def _inside_perimeter_balances() -> QuerySet[StockBalance]:
+    """Balances at nodes inside the yard perimeter (E8).
+
+    The same rule as ``stock.counting.is_inside_perimeter``, as a filter. Unlike
+    ``available()`` it keeps quarantine: Find stock answers "is it in the yard?",
+    not "can it be issued?".
+    """
+    from stock.counting import INSIDE_PERIMETER
+
+    return StockBalance.objects.filter(
+        node__type=NodeType.LOCATION, node__location__type__in=INSIDE_PERIMETER
+    )
+
+
+def find_stock(text: str, *, limit: int = 8) -> list[dict]:
+    """Item types matching ``text``, with what is in the yard (E8, §7.3d).
+
+    One query: the balance sum is a subquery on each row, not a query per row.
+    Items we hold come first, so a search for something we have none of still
+    lists it, after the ones we do have.
+    """
+    from catalogue.models import ItemType
+    from catalogue.search import search_match, search_rank
+
+    text = text.strip()
+    if len(text) < 2:
+        return []
+
+    quantity = DecimalField(max_digits=14, decimal_places=3)
+    on_hand = (
+        _inside_perimeter_balances()
+        .filter(item_type=OuterRef("pk"))
+        .order_by()
+        .values("item_type")
+        .annotate(total=Sum("quantity"))
+        .values("total")
+    )
+    items = (
+        ItemType.objects.filter(search_match(text), is_archived=False)
+        .annotate(
+            on_hand=Coalesce(
+                Subquery(on_hand, output_field=quantity),
+                Value(Decimal("0")),
+                output_field=quantity,
+            ),
+            rank=search_rank(text),
+        )
+        .annotate(
+            held=Case(
+                When(on_hand__gt=0, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("held", "rank", "name", "id")[:limit]
+    )
+    return [
+        {
+            "id": item.pk,
+            "code": item.code,
+            "name": item.name,
+            "unit": item.uom,
+            "on_hand": str(item.on_hand.quantize(Decimal("0.001"))),  # type: ignore[attr-defined]
+        }
+        for item in items
+    ]
+
+
+#: How many sites the Home summary names; the rest are only counted (E8).
+SUMMARY_EARMARK_SITES = 5
+
+
+def yard_summary(now: datetime) -> dict:
+    """The "In the yard" figures on Home (E8, §7.3d). A constant number of queries."""
+    from network.models import Site
+    from receiving.models import DocumentStatus, GateIn
+
+    items_in_stock = (
+        _inside_perimeter_balances()
+        .filter(quantity__gt=0)
+        .values("item_type")
+        .distinct()
+        .count()
+    )
+    deliveries = GateIn.objects.filter(
+        status=DocumentStatus.POSTED, posted_at__gte=now - timedelta(days=7)
+    ).count()
+
+    # Units, drums and bulk claims are one list of (site, item): an item
+    # earmarked three ways for a site is still one item. UNION removes repeats.
+    pairs = (
+        SerialUnit.objects.filter(earmark_site__isnull=False, status=SerialUnitStatus.IN_STOCK)
+        .values_list("earmark_site", "item_type")
+        .union(
+            Reel.objects.filter(earmark_site__isnull=False, status=ReelStatus.OPEN).values_list(
+                "earmark_site", "item_type"
+            ),
+            BulkEarmark.objects.values_list("site", "item_type"),
+        )
+    )
+    per_site: dict[int, int] = {}
+    for site_id, _item_id in pairs:
+        per_site[site_id] = per_site.get(site_id, 0) + 1
+    names = dict(Site.objects.filter(pk__in=per_site).values_list("pk", "name"))
+    ranked = sorted(per_site.items(), key=lambda row: (-row[1], names.get(row[0], ""), row[0]))
+
+    return {
+        "items_in_stock": items_in_stock,
+        "deliveries_7d": deliveries,
+        "earmarks": [
+            {"site": site_id, "name": names.get(site_id, ""), "items": count}
+            for site_id, count in ranked[:SUMMARY_EARMARK_SITES]
+        ],
+        "earmark_sites_more": max(len(ranked) - SUMMARY_EARMARK_SITES, 0),
+    }

@@ -8044,6 +8044,27 @@ paths:
                 items:
                   $ref: '#/components/schemas/EarmarkEvent'
           description: ''
+  /api/v1/stock/find:
+    get:
+      operationId: stock_find_retrieve
+      description: '``/api/v1/stock/find?q=`` (E8, §7.3d): item types with what is
+        in the yard.'
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - stock
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockFind'
+          description: ''
   /api/v1/stock/installed:
     get:
       operationId: stock_installed_list
@@ -8135,6 +8156,22 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Movement'
+          description: ''
+  /api/v1/stock/summary:
+    get:
+      operationId: stock_summary_retrieve
+      description: '``/api/v1/stock/summary`` (E8, §7.3d): the "In the yard" panel
+        on Home.'
+      tags:
+      - stock
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSummary'
           description: ''
   /api/v1/stock/transfers:
     post:
@@ -16299,6 +16336,34 @@ components:
         * `PENDING_APPROVAL` - Awaiting approval
         * `POSTED` - Posted
         * `CANCELLED` - Cancelled
+    StockFind:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockFindItem'
+      required:
+      - results
+    StockFindItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        on_hand:
+          type: string
+      required:
+      - code
+      - id
+      - name
+      - on_hand
+      - unit
     StockLookup:
       type: object
       properties:
@@ -16372,6 +16437,37 @@ components:
         * `EXTERNAL` - Supplier or client-issuing store
         * `CONSUMED` - Used up on site
         * `SCRAP` - Disposed of
+    StockSummary:
+      type: object
+      properties:
+        items_in_stock:
+          type: integer
+        deliveries_7d:
+          type: integer
+        earmarks:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockSummaryEarmark'
+        earmark_sites_more:
+          type: integer
+      required:
+      - deliveries_7d
+      - earmark_sites_more
+      - earmarks
+      - items_in_stock
+    StockSummaryEarmark:
+      type: object
+      properties:
+        site:
+          type: integer
+        name:
+          type: string
+        items:
+          type: integer
+      required:
+      - items
+      - name
+      - site
     Subcontractor:
       type: object
       properties:

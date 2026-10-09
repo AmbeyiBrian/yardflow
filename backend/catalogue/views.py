@@ -8,13 +8,14 @@ re-implemented — and T1.20's suite discovers each one automatically.
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Case, Exists, IntegerField, OuterRef, Value, When
+from django.db.models import Exists, OuterRef
 from django_filters import rest_framework as filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
 from catalogue.models import CategoryCustomField, ItemCategory, ItemType
+from catalogue.search import search_rank
 from catalogue.serializers import (
     CategoryCustomFieldSerializer,
     ItemCategorySerializer,
@@ -131,15 +132,7 @@ class ItemTypeViewSet(TenantScopedViewSet):
             # the OrderingFilter's default, i.e. ``view.ordering`` - so the
             # relevance order is declared there as well as applied here.
             self.ordering = ["search_rank", "name", "id"]
-            queryset = queryset.annotate(
-                search_rank=Case(
-                    When(name__istartswith=text, then=Value(0)),
-                    When(name__icontains=text, then=Value(1)),
-                    When(code__icontains=text, then=Value(2)),
-                    default=Value(3),
-                    output_field=IntegerField(),
-                )
-            )
+            queryset = queryset.annotate(search_rank=search_rank(text))
         return queryset
 
     @action(detail=True, methods=["post"])

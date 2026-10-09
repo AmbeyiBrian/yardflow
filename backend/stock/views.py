@@ -20,6 +20,7 @@ from decimal import Decimal
 import django_filters
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -68,11 +69,13 @@ from stock.queries import (
     client_owned_position,
     custody_holdings,
     find_by_identifier,
+    find_stock,
     installed_base,
     reel_history,
     serial_history,
     stock_as_at,
     stock_on_hand,
+    yard_summary,
 )
 
 
@@ -504,6 +507,68 @@ class LowStockView(APIView):
     def get(self, request):  # type: ignore[no-untyped-def]
         rows = below_minimum_stock(request.user.organization_id)
         return Response({"results": [_stringify(row) for row in rows]})
+
+
+class StockFindView(APIView):
+    """``/api/v1/stock/find?q=`` (E8, §7.3d): item types with what is in the yard."""
+
+    permission_classes = [IsAuthenticated, OrganizationIsActive]
+
+    @extend_schema(
+        parameters=[OpenApiParameter("q", required=False)],
+        responses={
+            200: inline_serializer(
+                "StockFind",
+                {
+                    "results": serializers.ListField(
+                        child=inline_serializer(
+                            "StockFindItem",
+                            {
+                                "id": serializers.IntegerField(),
+                                "code": serializers.CharField(),
+                                "name": serializers.CharField(),
+                                "unit": serializers.CharField(),
+                                "on_hand": serializers.CharField(),
+                            },
+                        )
+                    )
+                },
+            )
+        },
+    )
+    def get(self, request):  # type: ignore[no-untyped-def]
+        return Response({"results": find_stock(request.query_params.get("q", ""))})
+
+
+class StockSummaryView(APIView):
+    """``/api/v1/stock/summary`` (E8, §7.3d): the "In the yard" panel on Home."""
+
+    permission_classes = [IsAuthenticated, OrganizationIsActive]
+
+    @extend_schema(
+        responses={
+            200: inline_serializer(
+                "StockSummary",
+                {
+                    "items_in_stock": serializers.IntegerField(),
+                    "deliveries_7d": serializers.IntegerField(),
+                    "earmarks": serializers.ListField(
+                        child=inline_serializer(
+                            "StockSummaryEarmark",
+                            {
+                                "site": serializers.IntegerField(),
+                                "name": serializers.CharField(),
+                                "items": serializers.IntegerField(),
+                            },
+                        )
+                    ),
+                    "earmark_sites_more": serializers.IntegerField(),
+                },
+            )
+        }
+    )
+    def get(self, request):  # type: ignore[no-untyped-def]
+        return Response(yard_summary(timezone.now()))
 
 
 class ClientPositionView(APIView):
