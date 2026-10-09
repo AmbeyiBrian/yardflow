@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { readLabel, type LabelReading } from '../features/boxes/readLabel';
+import { AIM_FRACTION, aimRegion, pickNearestCentre } from './aimRegion';
 import { valueToPass } from './scanValue';
 import { Button, Field, Input } from './ui';
 import { cn } from './ui/cn';
@@ -30,7 +31,9 @@ import { cn } from './ui/cn';
 type Mode = 'idle' | 'starting' | 'scanning' | 'denied' | 'unsupported';
 
 interface BarcodeDetectorLike {
-  detect: (source: HTMLVideoElement) => Promise<{ rawValue: string }[]>;
+  detect: (source: HTMLCanvasElement) => Promise<
+    { rawValue: string; boundingBox?: { x: number; y: number; width: number; height: number } }[]
+  >;
 }
 
 declare global {
@@ -41,6 +44,9 @@ declare global {
     };
   }
 }
+
+/** The zoom steps offered, cycled in order and clipped to what the camera has. */
+const ZOOM_STEPS = [1, 2, 3];
 
 const FORMATS = ['code_128', 'code_39', 'ean_13', 'qr_code', 'data_matrix', 'itf'];
 
@@ -99,6 +105,9 @@ export function BarcodeScanner({
   const [mode, setMode] = useState<Mode>('idle');
   const [torchOn, setTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
+  //: The camera's largest zoom, or null when it has none to offer (E10).
+  const [zoomMax, setZoomMax] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1);
   const [manual, setManual] = useState('');
   const [note, setNote] = useState<string | null>(null);
   //: What the label said, when it said more than the value passed on (P3).
@@ -116,6 +125,8 @@ export function BarcodeScanner({
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setTorchOn(false);
+    setZoomMax(null);
+    setZoom(1);
     setMode('idle');
   }, []);
 
@@ -147,15 +158,22 @@ export function BarcodeScanner({
       await video.play();
 
       const track = stream.getVideoTracks()[0];
-      const capabilities = track.getCapabilities?.() as { torch?: boolean } | undefined;
+      const capabilities = track.getCapabilities?.() as
+        | { torch?: boolean; zoom?: { min: number; max: number } }
+        | undefined;
       setHasTorch(Boolean(capabilities?.torch));
+      // Zoom is offered only where the camera admits to it, like the torch. It
+      // lets a small code on a crowded label fill the box (E10).
+      const maxZoom = capabilities?.zoom?.max;
+      setZoomMax(typeof maxZoom === 'number' && maxZoom > 1 ? maxZoom : null);
+      setZoom(1);
 
       setMode('scanning');
 
       if (window.BarcodeDetector) {
         stopRef.current = runNativeDetector(video, handleResult, continuous);
       } else {
-        stopRef.current = await runZxing(video, handleResult);
+        stopRef.current = await runZxing(video, handleResult, continuous);
       }
     } catch (error) {
       // A denial is the expected case, not an exception: the flow has to finish
@@ -257,6 +275,20 @@ export function BarcodeScanner({
     }
   }
 
+  async function cycleZoom() {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || zoomMax === null) return;
+    // The next step above the current one that the camera can reach, else
+    // back to 1x.
+    const next = ZOOM_STEPS.find((step) => step > zoom && step <= zoomMax) ?? 1;
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: next } as MediaTrackConstraintSet] });
+      setZoom(next);
+    } catch {
+      setZoomMax(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className={cn('relative overflow-hidden rounded-xl bg-slate-900', mode === 'idle' && 'hidden')}>
@@ -267,13 +299,26 @@ export function BarcodeScanner({
           playsInline
           muted
         />
-        {/* A big square guide, because yard labels are QR codes and a letterbox
-            frame tells the hand to line up a strip that is not there. The
-            decoder reads the whole picture; the frame only says where to aim. */}
+        {/* A square guide, because yard labels are QR codes and a letterbox
+            frame tells the hand to line up a strip that is not there. It is
+            also the decoder's whole field of view (E10): a palm-sized label
+            carries several codes, and only the one inside the box is read. The
+            dimmed surround says the rest of the picture is ignored. */}
         {mode === 'scanning' ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="aspect-square w-[72%] rounded-xl border-2 border-white/80" />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
+            <div
+              className="relative aspect-square rounded-lg border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+              style={{ width: `${AIM_FRACTION * 100}%` }}
+            >
+              <span className="absolute left-1/2 top-1/2 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-white/80" />
+              <span className="absolute left-1/2 top-1/2 h-0.5 w-4 -translate-x-1/2 -translate-y-1/2 bg-white/80" />
+            </div>
           </div>
+        ) : null}
+        {mode === 'scanning' ? (
+          <p className="pointer-events-none absolute inset-x-0 bottom-0 p-2 text-center text-sm font-medium text-white">
+            Put the code inside the box
+          </p>
         ) : null}
         {/* A running count on the viewfinder, because the whole point of
             keeping the camera open is that nobody looks away from the box. */}
@@ -295,6 +340,11 @@ export function BarcodeScanner({
             {hasTorch ? (
               <Button variant="secondary" onClick={toggleTorch}>
                 {torchOn ? 'Light off' : 'Light on'}
+              </Button>
+            ) : null}
+            {zoomMax !== null ? (
+              <Button variant="secondary" onClick={cycleZoom}>
+                Zoom {zoom}×
               </Button>
             ) : null}
           </>
@@ -372,28 +422,47 @@ export function BarcodeScanner({
   );
 }
 
-/** Poll the native detector. ~8/second is plenty and leaves the CPU alone. */
-function runNativeDetector(
+/**
+ * One decode loop for both decoders (E10).
+ *
+ * Every ~120 ms, the centre of the video is drawn onto an offscreen canvas and
+ * only that canvas is decoded. Decoding the whole frame read whichever code on
+ * a crowded label the decoder met first; the region is what makes the drawn box
+ * mean something. It is drawn at 2x because a small code in a 40% window is
+ * only a few hundred pixels across, and the decoders do better with more.
+ * ~8/second is plenty and leaves the CPU alone.
+ */
+function runAimedLoop(
   video: HTMLVideoElement,
+  decode: (canvas: HTMLCanvasElement) => Promise<string | null> | string | null,
   onResult: (value: string) => void,
-  keepScanning = false,
+  keepScanning: boolean,
 ) {
-  const detector = new window.BarcodeDetector!({ formats: FORMATS });
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d', { willReadFrequently: true });
   let cancelled = false;
 
   const tick = async () => {
     if (cancelled) return;
     try {
-      const found = await detector.detect(video);
-      if (found.length > 0) {
-        onResult(found[0].rawValue);
-        // Stopping here is what makes a single-shot scan single-shot. When the
-        // caller wants a run of units, the loop carries on and the repeat
-        // suppression upstream decides what counts.
-        if (!keepScanning) return;
+      if (context && video.videoWidth > 0) {
+        const { sx, sy, size } = aimRegion(video.videoWidth, video.videoHeight, AIM_FRACTION);
+        canvas.width = canvas.height = size * 2;
+        context.imageSmoothingEnabled = true;
+        context.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height);
+        const value = await decode(canvas);
+        if (cancelled) return;
+        if (value) {
+          onResult(value);
+          // Stopping here is what makes a single-shot scan single-shot. When
+          // the caller wants a run of units, the loop carries on and the repeat
+          // suppression upstream decides what counts.
+          if (!keepScanning) return;
+        }
       }
     } catch {
-      // A single failed frame is normal — motion blur, or the camera settling.
+      // A single failed frame is normal — motion blur, the camera settling, or
+      // (ZXing) nothing in the box at all.
     }
     if (!cancelled) window.setTimeout(tick, 120);
   };
@@ -404,23 +473,41 @@ function runNativeDetector(
   };
 }
 
-/** The WASM decoder, for browsers with no native detector. */
-async function runZxing(video: HTMLVideoElement, onResult: (value: string) => void) {
+/** The native detector, in Chrome on Android. */
+function runNativeDetector(
+  video: HTMLVideoElement,
+  onResult: (value: string) => void,
+  keepScanning = false,
+) {
+  const detector = new window.BarcodeDetector!({ formats: FORMATS });
+  return runAimedLoop(
+    video,
+    async (canvas) => {
+      const found = await detector.detect(canvas);
+      // Several codes can still sit inside the box; the one nearest its centre
+      // is the one the hand is pointing at.
+      return pickNearestCentre(found, canvas.width, canvas.height)?.rawValue ?? null;
+    },
+    onResult,
+    keepScanning,
+  );
+}
+
+/** The WASM decoder, for browsers with no native detector (iPhone Safari). */
+async function runZxing(
+  video: HTMLVideoElement,
+  onResult: (value: string) => void,
+  keepScanning = false,
+) {
   // Imported here rather than at module scope so the decoder is downloaded only
   // by a device that needs it — it is far larger than this component (N-1).
   const { BrowserMultiFormatReader } = await import('@zxing/browser');
   const reader = new BrowserMultiFormatReader();
-  let cancelled = false;
-
-  void reader.decodeFromVideoElement(video, (result) => {
-    if (cancelled || !result) return;
-    onResult(result.getText());
-  });
-
-  return () => {
-    cancelled = true;
-    // Older builds expose `reset`; newer ones a stop control on the returned
-    // object. Either way the tracks are stopped by the caller.
-    (reader as unknown as { reset?: () => void }).reset?.();
-  };
+  return runAimedLoop(
+    video,
+    // Throws NotFoundException on an empty frame; the loop treats that as one.
+    (canvas) => reader.decodeFromCanvas(canvas).getText(),
+    onResult,
+    keepScanning,
+  );
 }
