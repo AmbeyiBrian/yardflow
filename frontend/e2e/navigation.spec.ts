@@ -54,7 +54,7 @@ test.describe('phone navigation', () => {
       entitled.length,
     );
 
-    await page.getByRole('button', { name: /^more/i }).click();
+    await page.getByRole('button', { name: /^more\b/i }).click();
     const withSheet = new Set(await reachable(page));
 
     const unreachable = entitled.filter((href) => !withSheet.has(href));
@@ -66,7 +66,7 @@ test.describe('phone navigation', () => {
     // quarantine unnoticed, and the person who puts it there works on a phone.
     await signIn(page, PEOPLE.storekeeper);
 
-    await page.getByRole('button', { name: /^more/i }).click();
+    await page.getByRole('button', { name: /^more\b/i }).click();
     await page.getByRole('dialog').getByRole('link', { name: /quarantine/i }).click();
 
     await expect(page).toHaveURL(/\/quarantine/);
@@ -74,7 +74,7 @@ test.describe('phone navigation', () => {
 
   test('the sheet gets out of the way once it has been used', async ({ page }) => {
     await signIn(page, PEOPLE.owner);
-    const more = page.getByRole('button', { name: /^more/i });
+    const more = page.getByRole('button', { name: /^more\b/i });
 
     // Navigating closes it. Otherwise it covers the screen it just opened and the
     // first thing you do on arriving is dismiss the menu.
@@ -99,7 +99,7 @@ test.describe('phone navigation', () => {
 
   test('More stays tappable while the sheet is open', async ({ page }) => {
     await signIn(page, PEOPLE.owner);
-    const more = page.getByRole('button', { name: /^more/i });
+    const more = page.getByRole('button', { name: /^more\b/i });
 
     await more.click();
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -129,10 +129,10 @@ test.describe('phone navigation', () => {
     const tabs = await reachable(page);
 
     if (entitled <= 5) {
-      await expect(page.getByRole('button', { name: /^more/i })).toBeHidden();
+      await expect(page.getByRole('button', { name: /^more\b/i })).toBeHidden();
       expect(tabs.length).toBe(entitled);
     } else {
-      await expect(page.getByRole('button', { name: /^more/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /^more\b/i })).toBeVisible();
     }
   });
 });
@@ -147,6 +147,6 @@ test.describe('desktop navigation', () => {
 
     const links = await reachable(page);
     expect(links.length).toBeGreaterThan(6);
-    await expect(page.getByRole('button', { name: /^more/i })).toBeHidden();
+    await expect(page.getByRole('button', { name: /^more\b/i })).toBeHidden();
   });
 });

@@ -1484,32 +1484,32 @@ correction (T14.9) runs on production only after its dry run has been reviewed.
 
 - [x] **T14.0 `[F]` Camera button reads "Scan QR code"** — Refs: §7.3d · E10 (trivial, done first)
 
-- [ ] **T14.1 `[B]` ISO 15434 labels in `read_label`** — Refs: §7.3d · E9
+- [x] **T14.1 `[B]` ISO 15434 labels in `read_label`** — Refs: §7.3d · E9
   New rule after the gate-pass token; new shared vectors (one serial, two, no `S`, run together,
   trailing EOT).
   *Done when:* the Python vector tests pass.
 
-- [ ] **T14.2 `[F]` ISO 15434 labels in `readLabel`** — Refs: §7.3d · E9
+- [x] **T14.2 `[F]` ISO 15434 labels in `readLabel`** — Refs: §7.3d · E9
   *Done when:* the Vitest vector tests pass against the same file.
 
-- [ ] **T14.3 `[B]` `GET /stock/find` and `GET /stock/summary`** — Refs: §7.3d · E8
+- [x] **T14.3 `[B]` `GET /stock/find` and `GET /stock/summary`** — Refs: §7.3d · E8
   *Done when:* ranking and `on_hand` (inside the perimeter only) are tested, the summary figures
   are right on a scenario with 6 earmarked sites, isolation holds, and each is one query plus a
   constant.
 
-- [ ] **T14.4 `[F]` Stock in the bar, Approvals under More with a count** — Refs: §7.3d · E7
+- [x] **T14.4 `[F]` Stock in the bar, Approvals under More with a count** — Refs: §7.3d · E7
   *Done when:* an owner's bar reads Home, Gate-in, Gate-out, Stock, More; More shows the count when
   approvals wait and none at zero.
 
-- [ ] **T14.5 `[F]` Stock page reads `?item=` and `?earmarked_for=`** — Refs: §7.3d · E8
+- [x] **T14.5 `[F]` Stock page reads `?item=` and `?earmarked_for=`** — Refs: §7.3d · E8
   *Done when:* both links land with the filter set and shown.
 
-- [ ] **T14.6 `[F]` Find stock and In the yard on Home** — Refs: §7.3d · E8
+- [x] **T14.6 `[F]` Find stock and In the yard on Home** — Refs: §7.3d · E8
   Typing lists items with quantities; a scan or Enter looks up first; offline and empty-yard states.
   *Done when:* a Vitest test covers the Enter-versus-scan helper and the screen works against a
   local backend.
 
-- [ ] **T14.7 `[F]` Aim the camera** — Refs: §7.3d · E10
+- [x] **T14.7 `[F]` Aim the camera** — Refs: §7.3d · E10
   Centre-crop decoding on both decoders, nearest-to-centre choice, smaller box with a dimmed
   surround, zoom where supported.
   *Done when:* the Vitest test of `aimRegion` passes, and on a phone a code beside the box is not
