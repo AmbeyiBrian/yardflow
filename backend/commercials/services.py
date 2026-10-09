@@ -1,9 +1,15 @@
-"""Deciding and reversing expenses (§4.14; O16, D29)."""
+"""Reversing expenses and seeding categories (§4.14; O16, D29).
+
+Deciding moved to ``commercials.finance.decide`` (§4.17.3): approval is two
+levels through the engine now, not one status flip here."""
 
 from __future__ import annotations
 
 from django.utils import timezone
 
+from accounts.permissions_registry import PERM
+from accounts.services import resolve_permissions
+from approvals.engine import NotAnApprover
 from commercials.models import (
     COSTED_STATUSES,
     DEFAULT_EXPENSE_CATEGORIES,
@@ -18,10 +24,6 @@ from core.models import AuditAction
 
 class ExpenseNotDecidable(DomainError):
     """This expense is not in a state where a decision makes sense."""
-
-
-class NotTheProjectManager(DomainError):
-    """Only the manager whose budget it lands on decides (D29)."""
 
 
 def seed_expense_categories(organization) -> list[ExpenseCategory]:
@@ -41,72 +43,6 @@ def seed_expense_categories(organization) -> list[ExpenseCategory]:
     return created
 
 
-def decide_expense(
-    expense: ProjectExpense,
-    *,
-    actor,
-    approved: bool,
-    reason: str = "",
-    request=None,
-) -> ProjectExpense:
-    """Approve or reject an expense (O16, D29).
-
-    It reaches project cost **only** on approval. This is the one cost line
-    with no ledger movement and no contract behind it, so it is also the only
-    one where a second person looks at the figure before it counts.
-    """
-    # T15.1 keeps the single-level behaviour; T15.3 replaces this function with
-    # the two-level flow through the approval engine (§4.17.3).
-    if expense.status != ExpenseStatus.PENDING_PM:
-        raise ExpenseNotDecidable(
-            f"This expense was already {expense.get_status_display().lower()}."
-        )
-
-    project = expense.project
-    if project.manager_id != actor.pk:
-        raise NotTheProjectManager(
-            "Only the manager of this project can decide its expenses (D29)."
-        )
-
-    if not approved and not reason:
-        raise ExpenseNotDecidable("Rejecting an expense needs a reason.")
-
-    if approved:
-        # The guard allows only the §4.17.3 moves, so this goes via the Finance
-        # level in two saves rather than jumping PENDING_PM to APPROVED.
-        expense.status = ExpenseStatus.PENDING_FINANCE
-        expense.save()
-    expense.status = ExpenseStatus.APPROVED if approved else ExpenseStatus.REJECTED
-    expense.decided_by = actor
-    expense.decided_at = timezone.now()
-    expense.decision_reason = "" if approved else reason
-    expense.save()
-
-    # T15.2: the status is a projection of the approval requests (§4.17.1), so a
-    # decision made here must not leave them open. They would otherwise show
-    # Finance an expense that is already APPROVED. Superseded rather than
-    # approved: this legacy path is one signature, and recording a Finance
-    # approval nobody gave would put a false signature on the trail.
-    from approvals.models import ApprovalRequest, ApprovalRequestStatus
-
-    ApprovalRequest.objects.filter(
-        document_type=expense._meta.label,
-        document_id=str(expense.pk),
-        status__in=(ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED),
-    ).update(status=ApprovalRequestStatus.SUPERSEDED, resolved_at=timezone.now())
-
-    record(
-        AuditAction.STATUS_CHANGED,
-        actor=actor,
-        organization=expense.organization_id,
-        target=expense,
-        target_label=str(expense),
-        request=request,
-        note=f"Expense {'approved' if approved else 'rejected'} on {project}.",
-    )
-    return expense
-
-
 def reverse_expense(
     expense: ProjectExpense, *, actor, reason: str, request=None
 ) -> ProjectExpense:
@@ -114,8 +50,8 @@ def reverse_expense(
 
     Never an edit, for the reason the ledger is never edited (§3.2): the
     correction and the thing it corrects should both stay visible. The reversal
-    is approved on creation — it is the manager's own act, and asking them to
-    approve their own correction would be theatre.
+    is approved on creation — it is the manager's (or Finance's) own act, and
+    asking them to approve their own correction would be theatre.
     """
     if expense.status not in COSTED_STATUSES:
         raise ExpenseNotDecidable("Only an approved expense needs reversing.")
@@ -123,9 +59,15 @@ def reverse_expense(
         raise ExpenseNotDecidable("A reversal cannot itself be reversed.")
     if expense.reversals.exists():
         raise ExpenseNotDecidable("This expense has already been reversed.")
-    if expense.project.manager_id != actor.pk:
-        raise NotTheProjectManager(
-            "Only the manager of this project can reverse its expenses (D29)."
+    # §4.17.2: the PM whose budget it lands on, or Finance. Held directly, as
+    # at the approval levels — a delegation does not lend a signature (D22).
+    permissions = resolve_permissions(actor)
+    is_finance = permissions.has(PERM.FINANCE_APPROVE) and not permissions.is_delegated(
+        PERM.FINANCE_APPROVE
+    )
+    if expense.project.manager_id != actor.pk and not is_finance:
+        raise NotAnApprover(
+            "Only the manager of this project, or Finance, can reverse its expenses."
         )
     if not reason:
         raise ExpenseNotDecidable("Reversing an expense needs a reason.")

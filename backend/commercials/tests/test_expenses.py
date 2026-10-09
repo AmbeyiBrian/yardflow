@@ -14,6 +14,9 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 
 from accounts.factories import UserFactory
+from approvals.engine import NotAnApprover
+from commercials import finance
+from commercials.finance import FinanceNotDecidable, RejectionReasonRequired
 from commercials.models import (
     DEFAULT_EXPENSE_CATEGORIES,
     ExpenseCategory,
@@ -22,11 +25,10 @@ from commercials.models import (
 )
 from commercials.services import (
     ExpenseNotDecidable,
-    NotTheProjectManager,
-    decide_expense,
     reverse_expense,
     seed_expense_categories,
 )
+from commercials.tests.finance_helpers import approve_through, submit
 from network.factories import ProjectFactory
 
 
@@ -92,36 +94,52 @@ class TestRecording:
 
 @pytest.mark.django_db
 class TestDeciding:
-    def test_the_manager_approves(self, tenant, po_project, category, technician, manager):
+    """Two levels now (§4.17.3); the full routing matrix is in test_finance_services."""
+
+    def test_the_manager_passes_it_to_finance(
+        self, tenant, po_project, category, technician, manager
+    ):
+        expense = submit(record_expense(tenant, po_project, category, technician))
+        finance.decide(expense, actor=manager, approved=True)
+        expense.refresh_from_db()
+
+        # Not yet cost: one signature is not enough (R4).
+        assert expense.status == ExpenseStatus.PENDING_FINANCE
+        assert expense.decided_at is None
+
+    def test_finance_then_approves_it(
+        self, tenant, po_project, category, technician, manager, finance_user
+    ):
         expense = record_expense(tenant, po_project, category, technician)
-        decide_expense(expense, actor=manager, approved=True)
+        approve_through(expense, pm=manager, finance_user=finance_user)
         expense.refresh_from_db()
 
         assert expense.status == ExpenseStatus.APPROVED
-        assert expense.decided_by == manager
+        assert expense.decided_by == finance_user
         assert expense.decided_at is not None
 
     def test_nobody_else_decides(self, tenant, po_project, category, technician):
-        expense = record_expense(tenant, po_project, category, technician)
+        other = UserFactory(organization=tenant, full_name="Olu Other")
+        expense = submit(record_expense(tenant, po_project, category, technician))
 
-        with pytest.raises(NotTheProjectManager):
-            decide_expense(expense, actor=technician, approved=True)
+        with pytest.raises(NotAnApprover):
+            finance.decide(expense, actor=other, approved=True)
 
     def test_rejecting_needs_a_reason(self, tenant, po_project, category, technician, manager):
-        expense = record_expense(tenant, po_project, category, technician)
+        expense = submit(record_expense(tenant, po_project, category, technician))
 
-        with pytest.raises(ExpenseNotDecidable, match="needs a reason"):
-            decide_expense(expense, actor=manager, approved=False)
+        with pytest.raises(RejectionReasonRequired):
+            finance.decide(expense, actor=manager, approved=False)
 
     def test_it_cannot_be_decided_twice(
-        self, tenant, po_project, category, technician, manager
+        self, tenant, po_project, category, technician, manager, finance_user
     ):
         expense = record_expense(tenant, po_project, category, technician)
-        decide_expense(expense, actor=manager, approved=True)
+        approve_through(expense, pm=manager, finance_user=finance_user)
         expense.refresh_from_db()
 
-        with pytest.raises(ExpenseNotDecidable, match="already"):
-            decide_expense(expense, actor=manager, approved=True)
+        with pytest.raises(FinanceNotDecidable, match="already"):
+            finance.decide(expense, actor=finance_user, approved=True)
 
     def test_a_decision_must_record_when(self, tenant, po_project, category, technician):
         expense = record_expense(tenant, po_project, category, technician)
@@ -136,9 +154,13 @@ class TestDeciding:
 
 @pytest.mark.django_db
 class TestAnApprovedExpenseIsFinal:
+    @pytest.fixture(autouse=True)
+    def _finance(self, finance_user):
+        self.finance_user = finance_user
+
     def approved(self, tenant, po_project, category, technician, manager, amount="4500.00"):
         expense = record_expense(tenant, po_project, category, technician, amount)
-        decide_expense(expense, actor=manager, approved=True)
+        approve_through(expense, pm=manager, finance_user=self.finance_user)
         expense.refresh_from_db()
         return expense
 
@@ -169,9 +191,13 @@ class TestAnApprovedExpenseIsFinal:
 
 @pytest.mark.django_db
 class TestReversal:
+    @pytest.fixture(autouse=True)
+    def _finance(self, finance_user):
+        self.finance_user = finance_user
+
     def approved(self, tenant, po_project, category, technician, manager):
         expense = record_expense(tenant, po_project, category, technician)
-        decide_expense(expense, actor=manager, approved=True)
+        approve_through(expense, pm=manager, finance_user=self.finance_user)
         expense.refresh_from_db()
         return expense
 

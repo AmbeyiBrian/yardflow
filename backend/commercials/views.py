@@ -8,8 +8,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
+from commercials import finance
 from commercials.models import ExpenseCategory, ExpenseStatus, ProjectExpense
-from commercials.services import decide_expense, reverse_expense
+from commercials.services import reverse_expense
 from core.api import TenantScopedViewSet
 
 
@@ -142,7 +143,7 @@ class ProjectExpenseViewSet(TenantScopedViewSet):
         serializer = DecideExpenseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        expense = decide_expense(
+        expense = finance.decide(
             self.get_object(),
             actor=request.user,
             approved=serializer.validated_data["approved"],

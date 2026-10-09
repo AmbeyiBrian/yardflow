@@ -17,7 +17,7 @@ import pytest
 from accounts.factories import UserFactory
 from commercials.costing import cost_for
 from commercials.models import ExpenseCategory, ProjectExpense
-from commercials.services import decide_expense
+from commercials.tests.finance_helpers import approve_through, reject_at_pm
 from jobs.models import DeliveryMode, Job, JobStatus
 from network.factories import ProjectFactory, SiteFactory
 from network.models import Subcontractor
@@ -94,12 +94,12 @@ def _subcontract(tenant, job, name, price, *, closed_on=None):
 @pytest.mark.django_db
 class TestExpensesLedger:
     def test_every_claim_is_a_row_and_only_approved_ones_total(
-        self, tenant, project, technician, manager
+        self, tenant, project, technician, manager, finance_user
     ):
         approved = _expense(tenant, project, technician, "4500.00", date(2026, 5, 2))
-        decide_expense(approved, actor=manager, approved=True)
+        approve_through(approved, pm=manager, finance_user=finance_user)
         rejected = _expense(tenant, project, technician, "9999.00", date(2026, 5, 3))
-        decide_expense(rejected, actor=manager, approved=False, reason="No receipt.")
+        reject_at_pm(rejected, pm=manager, reason="No receipt.")
         _expense(tenant, project, technician, "120.00", date(2026, 5, 4))  # still waiting
 
         table = run("expenses-ledger", {})
@@ -117,7 +117,7 @@ class TestExpensesLedger:
 
     def test_the_status_filter_narrows(self, tenant, project, technician, manager):
         rejected = _expense(tenant, project, technician, "9999.00", date(2026, 5, 3))
-        decide_expense(rejected, actor=manager, approved=False, reason="No.")
+        reject_at_pm(rejected, pm=manager, reason="No.")
         _expense(tenant, project, technician, "1.00", date(2026, 5, 4))
 
         table = run("expenses-ledger", {"status": "REJECTED"})
@@ -173,12 +173,12 @@ class TestSubcontractorSpend:
 @pytest.mark.django_db
 class TestBudgetByMonth:
     def test_months_add_up_to_cost_to_date_and_show_when_it_went_over(
-        self, tenant, project, technician, manager
+        self, tenant, project, technician, manager, finance_user
     ):
         # Budget is 60,000. May: 4,500 expense. June: 45,000 subcontract.
         # July: 20,000 subcontract — that is the month it goes over.
         approved = _expense(tenant, project, technician, "4500.00", date(2026, 5, 2))
-        decide_expense(approved, actor=manager, approved=True)
+        approve_through(approved, pm=manager, finance_user=finance_user)
         _subcontract(
             tenant,
             _job(tenant, project, technician, "JOB-B1", ref_no="SLV-11"),
@@ -205,10 +205,10 @@ class TestBudgetByMonth:
         assert Decimal(rows[-1]["cumulative"].replace(",", "")) == cost_for(project).total
 
     def test_a_window_hides_rows_without_restarting_the_running_total(
-        self, tenant, project, technician, manager
+        self, tenant, project, technician, manager, finance_user
     ):
         approved = _expense(tenant, project, technician, "4500.00", date(2026, 5, 2))
-        decide_expense(approved, actor=manager, approved=True)
+        approve_through(approved, pm=manager, finance_user=finance_user)
         _subcontract(
             tenant,
             _job(tenant, project, technician, "JOB-B3", ref_no="SLV-13"),

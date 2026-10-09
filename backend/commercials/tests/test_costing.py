@@ -25,7 +25,7 @@ from catalogue.factories import ItemTypeFactory
 from catalogue.models import TrackingMode
 from commercials.costing import cost_for, performance_for
 from commercials.models import ExpenseCategory, ProjectExpense
-from commercials.services import decide_expense
+from commercials.tests.finance_helpers import approve_through
 from jobs.models import (
     CloseoutAction,
     DeliveryMode,
@@ -123,7 +123,7 @@ def consume(tenant, job, item, quantity, *, days=None, work_date=date(2026, 5, 1
 @pytest.mark.django_db
 class TestTheFourCostLines:
     def test_a_full_lifecycle_sums_to_the_hand_figure(
-        self, tenant, project, technician, manager
+        self, tenant, project, technician, manager, finance_user
     ):
         job = make_job(tenant, project, technician, "JOB-K01")
         item = issue_to(tenant, technician, unit_cost=Decimal("1500.00"))
@@ -151,7 +151,7 @@ class TestTheFourCostLines:
             incurred_on=date(2026, 5, 2),
             recorded_by=technician,
         )
-        decide_expense(expense, actor=manager, approved=True)
+        approve_through(expense, pm=manager, finance_user=finance_user)
 
         cost = cost_for(project)
 
