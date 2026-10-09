@@ -29,6 +29,7 @@ import { PERM } from '../../auth/permissions';
 import { useSession } from '../../auth/session';
 import { Banner, Card, Spinner } from '../../components/ui';
 import { Stat } from '../../components/ui/data';
+import { useProjectsWithoutPo } from '../projects/milestonesApi';
 import type { GateOut } from '../dispatch/types';
 import type { Job } from '../jobs/types';
 import { ClockInCard } from '../attendance/ClockInCard';
@@ -162,7 +163,15 @@ function OwnerPanel() {
     page_size: 20,
   });
 
+  // R12 (§4.19.8): the owner sees open projects still working without a PO.
+  const { has } = useSession();
+  const noPo = useProjectsWithoutPo(has(PERM.PROJECT_VIEW_MARGIN));
+  const noPoRows = [...(noPo.data?.results ?? [])].sort(
+    (a, b) => (b.days_without_po ?? 0) - (a.days_without_po ?? 0),
+  );
+
   return (
+    <>
     <Panel title="Waiting on you" loading={approvals.isLoading}>
       <Tile
         to="/approvals"
@@ -195,6 +204,27 @@ function OwnerPanel() {
         />
       ) : null}
     </Panel>
+    {noPoRows.length > 0 ? (
+      <Card className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-slate-900">Working without a PO</h2>
+        {noPoRows.map((project) => (
+          <Link
+            key={project.id}
+            to={`/projects/${project.id}`}
+            className="flex items-center justify-between gap-2 text-sm text-sky-700 underline"
+          >
+            <span>
+              {project.reference}
+              {project.title ? ` · ${project.title}` : ''}
+            </span>
+            <span className="text-xs text-slate-500 no-underline">
+              {project.days_without_po ?? 0} days
+            </span>
+          </Link>
+        ))}
+      </Card>
+    ) : null}
+    </>
   );
 }
 

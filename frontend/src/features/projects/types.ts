@@ -13,6 +13,11 @@ export interface Project {
   client_name?: string;
   reference: string;
   po_number: string;
+  /** R11, R12 (§4.19.7): set with the PO. */
+  po_issue_date?: string | null;
+  payment_terms?: string;
+  payment_terms_days?: number | null;
+  po_recorded_at?: string | null;
   title: string;
   description: string;
   manager: number | null;

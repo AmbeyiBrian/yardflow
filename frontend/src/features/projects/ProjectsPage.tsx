@@ -34,6 +34,7 @@ import {
 import { Money, MoneyInput } from '../../components/ui/money';
 import { SearchField } from '../../components/ui/SearchField';
 import { TabStrip } from '../../components/ui/TabStrip';
+import { AttachPoSheet } from './AttachPoSheet';
 import { JobSheet } from './JobSheet';
 import type { Client } from '../settings/types';
 import type { Project, ProjectJob, ProjectPerformance, ProjectVariation } from './types';
@@ -275,6 +276,7 @@ export function ProjectDetailPage() {
   const [closing, setClosing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [addingJob, setAddingJob] = useState(false);
+  const [attachingPo, setAttachingPo] = useState(false);
 
   if (project.isLoading) return <Spinner />;
   if (!project.data) return <Banner tone="error">That project could not be loaded.</Banner>;
@@ -293,6 +295,12 @@ export function ProjectDetailPage() {
               {has(PERM.CATALOGUE_MANAGE) ? (
                 <Button variant="ghost" onClick={() => setEditing(true)}>
                   Edit
+                </Button>
+              ) : null}
+              {/* R12 (§4.19.8): a project that started without a PO can take one late. */}
+              {!record.po_number && (has(PERM.CATALOGUE_MANAGE) || record.manager === user?.id) ? (
+                <Button variant="ghost" onClick={() => setAttachingPo(true)}>
+                  Attach PO
                 </Button>
               ) : null}
               {has(PERM.JOB_MANAGE) ? (
@@ -459,6 +467,16 @@ export function ProjectDetailPage() {
         onClose={() => setEditing(false)}
         onSaved={() => {
           setEditing(false);
+          project.refetch();
+          performance.refetch();
+        }}
+      />
+
+      <AttachPoSheet
+        open={attachingPo}
+        project={record}
+        onClose={() => setAttachingPo(false)}
+        onAttached={() => {
           project.refetch();
           performance.refetch();
         }}
