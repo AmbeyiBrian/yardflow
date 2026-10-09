@@ -70,6 +70,15 @@ class GateIn(TenantModel, TimeStampedModel):
 
     # PURCHASE names a supplier; CLIENT_ISSUE names the client whose stock it is.
     supplier_name = models.CharField(max_length=200, blank=True)
+    # R15: the register entry, where one was chosen; ``supplier_name`` stays as
+    # the text that search, exports and old documents read.
+    supplier = models.ForeignKey(
+        "network.Supplier",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="gate_ins",
+    )
     client = models.ForeignKey(
         "network.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="gate_ins"
     )

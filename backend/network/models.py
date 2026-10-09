@@ -595,3 +595,112 @@ class Subcontractor(TenantModel, TimeStampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class SupplierStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+
+
+class MpesaType(models.TextChoices):
+    PAYBILL = "PAYBILL", "Paybill"
+    TILL = "TILL", "Till"
+
+
+class Supplier(TenantModel, TimeStampedModel):  # type: ignore[django-manager-missing]
+    """A business the tenant buys goods from (R15, §4.20.2).
+
+    Sits beside ``Subcontractor``: a supplier sells goods, a subcontractor does
+    work. ``status`` is a projection of the supplier's approval request.
+    Deactivated, never deleted.
+    """
+
+    name = models.CharField(max_length=200)
+    #: Casefolded, whitespace-collapsed ``name``; what uniqueness is judged on.
+    name_key = models.CharField(max_length=200, editable=False)
+    kra_pin = models.CharField(max_length=20, blank=True)
+    #: Upper-cased ``kra_pin`` with spaces stripped. Blank when no PIN is given.
+    kra_pin_key = models.CharField(max_length=20, blank=True, editable=False)
+
+    contact_name = models.CharField(max_length=200, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    address = models.TextField(blank=True)
+
+    bank_name = models.CharField(max_length=120, blank=True)
+    account_number = models.CharField(max_length=60, blank=True)
+    mpesa_type = models.CharField(max_length=10, choices=MpesaType.choices, blank=True)
+    mpesa_number = models.CharField(max_length=30, blank=True)
+    mpesa_account = models.CharField(max_length=60, blank=True)
+
+    status = models.CharField(
+        max_length=10, choices=SupplierStatus.choices, default=SupplierStatus.PENDING
+    )
+    is_active = models.BooleanField(default=True)
+
+    registered_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="+"
+    )
+    decided_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_reason = models.TextField(blank=True)
+
+    # R6: a supplier added offline replays to the same row.
+    client_uuid = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("name",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "name_key"], name="uniq_supplier_name_per_org"
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "kra_pin_key"],
+                condition=~Q(kra_pin_key=""),
+                name="uniq_supplier_pin_per_org",
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "client_uuid"],
+                condition=Q(client_uuid__isnull=False),
+                name="uniq_supplier_client_uuid_per_org",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def is_usable(self) -> bool:
+        return self.status == SupplierStatus.APPROVED and self.is_active
+
+    @staticmethod
+    def normalise_name(value: str) -> str:
+        """Casefolded with runs of whitespace collapsed (R15)."""
+        return " ".join(value.casefold().split())
+
+    @staticmethod
+    def normalise_pin(value: str) -> str:
+        """Upper-cased with spaces removed (R15)."""
+        return "".join(value.upper().split())
+
+    def save(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        self.name_key = self.normalise_name(self.name)
+        self.kra_pin_key = self.normalise_pin(self.kra_pin)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            extra = set()
+            if "name" in update_fields:
+                extra.add("name_key")
+            if "kra_pin" in update_fields:
+                extra.add("kra_pin_key")
+            kwargs["update_fields"] = {*update_fields, *extra}
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationError(
+            "Suppliers are deactivated, never deleted — gate-ins and purchases "
+            "still name them (R15)."
+        )

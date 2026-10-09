@@ -13,6 +13,7 @@ def register() -> None:
         Site,
         SiteReference,
         Subcontractor,
+        Supplier,
     )
 
     def make_client(organization):
@@ -64,6 +65,15 @@ def register() -> None:
             organization=organization, name="Isolation Contractor"
         )
 
+    def make_supplier(organization):
+        from accounts.models import User
+
+        return Supplier.objects.create(
+            organization=organization,
+            name="Isolation Supplier",
+            registered_by=User.objects.filter(organization=organization).first(),
+        )
+
     register_isolation_fixture("client", make_client, payload={"name": "Renamed"})
     register_isolation_fixture(
         "site", make_site, payload={"name": "Renamed", "internal_ref": "ISO-1"}
@@ -82,3 +92,4 @@ def register() -> None:
         make_project_variation,
         payload={"reference": "ISO-VAR-1"},
     )
+    register_isolation_fixture("supplier", make_supplier, payload={"name": "Renamed"})
