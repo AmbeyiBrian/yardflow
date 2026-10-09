@@ -1258,7 +1258,7 @@ recorder. The payload carries amount, type, site, `evidence_state` and the float
   stored; they are summed on read, so a correction cannot leave a stale total.
 - **Approval reuses `approvals.engine`** (§5). A work day is a third document kind beside gate-outs
   and finance entries, with `ApprovalRequest` and the append-only `ApprovalAction` unchanged. The
-  engine gains four small changes (4.18.5), because a day can need two approvers at once and the
+  engine gains six small changes (4.18.5), because a day can need two approvers at once and the
   engine today answers levels strictly in order.
 - **One area check, written twice and tested against one fixture** (4.18.4), because the phone must
   make the same decision the server will (R13 offline).
@@ -1552,9 +1552,12 @@ For someone who was on site but whose phone placed them outside, or could not cl
 holder of the Director role (`finance_director_role`), never for their own day. It creates a
 `WorkSession` with no position, `closed_by = PERSON`, and a stored `added_by` and `added_reason`; the
 session is flagged **"added by the Director"** wherever it shows, and the action is audited. The
-day is then routed as usual (4.18.4); the Director's own slice is refused self-approval, so a day
+day is then routed as usual (4.18.5); the Director's own slice is refused self-approval, so a day
 the Director added is approved by the site's PM, or by another Director-role holder when there is no
-project. Error `WORK_DAY_ADD_NOT_ALLOWED` (403) for anyone else.
+project. Error `WORK_DAY_ADD_NOT_ALLOWED` (403) for anyone else. This adds `added_by` (→ User,
+null) and `added_reason` to `WorkSession` (4.18.2), the endpoint to 4.18.7, the error to 4.18.12, an
+"Add a day" sheet on My time → Everyone for Director-role holders (4.18.11), and tests: allowed only to
+the Director, never for their own day, flagged, routed away from the adder (4.18.13).
 
 ### 4.19 Finance stage 2 — POs, budgets and sites (Epic R, R7–R12)
 
@@ -1596,8 +1599,10 @@ Where it lives: all new finance tables in `commercials` (RLS in a new migration,
 in `jobs`.
 
 **From §4.20:** `network.Supplier` (beside Client and Subcontractor) and its `assert_payable(supplier)`
-hook. The only couplings: `SitePurchase.supplier` FK, "not inactive to record", and `assert_payable`
-at approve-for-payment and mark-paid (`SUPPLIER_NOT_APPROVED`). §4.20 adds `GateIn.supplier`, so the
+hook. The only couplings: `SitePurchase.supplier` FK; recording needs a supplier that is active and
+not REJECTED (`is_active` and status PENDING or APPROVED); and `assert_payable` at `mark_paid` only
+(`SUPPLIER_NOT_APPROVED`), so a purchase from a PENDING supplier can be recorded and approved, then
+waits to be paid (R15). §4.20 adds `GateIn.supplier`, so the
 draft delivery an INTO_YARD purchase creates sets both `supplier` and `supplier_name`. §4.20's
 migration must run before this section's `SitePurchase.supplier` FK.
 
@@ -1629,7 +1634,7 @@ but fixtures and factories that use it must move to the service (4.19.16 risk).
 #### 4.19.3 R7: site purchases, and how each destination is costed
 
 **Recording** (`finance.record_site_purchase`, same shape as `record_expense`): `resolve_project(site,
-project)`; lines validated (at least one, quantity > 0, price ≥ 0); supplier not INACTIVE; INTO_YARD
+project)`; lines validated (at least one, quantity > 0, price ≥ 0); supplier active and not REJECTED; INTO_YARD
 requires `receive_into` (a YARD or STORE location) **and** a catalogue `item_type` on every line (free
 text goods cannot be received into stock: `SITE_PURCHASE_YARD_NEEDS_CATALOGUE`); `amount` = Σ lines;
 `_require_other_approver`; budget check (4.19.5); `_route` (PM, then Finance — PM skipped when the
@@ -1909,7 +1914,7 @@ online-only (it is §4.20's flow), so a phone that lacks a supplier queues nothi
 stage 1 queue (`photos` table, `client_uuid`, "photos on the way"). Refusals become `SyncException`s the
 person can fix and resend (`supersedes_client_uuid`). The over-budget flag never refuses a replay (4.19.5).
 
-The **bundle** adds `suppliers` (non-INACTIVE: id, name, status) from §4.20's list, and per OPEN PO project
+The **bundle** adds `suppliers` (active and not REJECTED: id, name, status) from §4.20's list, and per OPEN PO project
 `budget_headroom`, **only for a user who may see that project's cost**, so the form can ask for a reason
 offline. Locations and item types are already in it. The phone runs `features/money/rules.ts` helpers
 for line totals and the headroom comparison; the server decides.
@@ -2030,8 +2035,8 @@ Existing codes reused: `PROJECT_AMBIGUOUS`, `SITE_HAS_NO_OPEN_PROJECT`, `SITE_NO
 
 #### 4.19.17 Assumptions taken (each can change without redesign) and risks
 
-1. A purchase of **any** non-INACTIVE supplier can be recorded; payment needs APPROVED. R7 says "cannot
-   be paid"; R15 says "or used on a purchase". Chosen so a supervisor in the field is not stopped.
+1. A purchase from an active, PENDING or APPROVED supplier can be recorded and approved; payment needs
+   APPROVED (R15, decided 2026-10-09). A REJECTED or inactive supplier cannot be used.
 2. Budget split follows 4.19.5, not R9's literal wording, to avoid counting paid expenses twice. The total
    (committed plus spent) is unaffected.
 3. An INTO_YARD purchase leaves the budget when its gate-in posts, because the ledger takes over at
@@ -2099,15 +2104,16 @@ never deleted; once any `GateIn`, `Asset` or purchase names it, PROTECT keeps it
 regardless, as `Subcontractor` never offers one. A deactivated supplier stays on the documents that
 name it and drops out of pickers.
 
-**Sensitive edits go back to Finance.** Changing `kra_pin` or any payment detail of an APPROVED
-supplier sets it back to PENDING with a new request: the bank account a payment goes to is the most
-valuable thing on the record, and "approved" must mean approved *as it now reads*. A PENDING supplier
-is still named on gate-ins; it cannot be paid (4.20.3).
+**Sensitive edits are recorded, not re-approved** (decided 2026-10-09). Changing `kra_pin` or any
+payment detail of an APPROVED supplier keeps it APPROVED; the change is audited with before and
+after, and Finance is notified (`supplier.details_changed`, in-app and email), because the account a
+payment goes to is the most valuable thing on the record. A PENDING supplier is still named on
+gate-ins; it cannot be paid (4.20.3).
 
 #### 4.20.3 Supplier flow (R15)
 
 ```
-add ─► PENDING ─Finance approves─► APPROVED ──edit PIN or payment──► PENDING
+add ─► PENDING ─Finance approves─► APPROVED ──edit PIN or payment──► APPROVED (audited, Finance told)
           │  ▲                        │
       reject  resubmit            deactivate / reactivate
           ▼  │
@@ -2273,7 +2279,7 @@ distinguishes "supplier" from an expense for the template. No event for a handov
   history, Hand over, Close, and a Fuel panel (litres, spend, per-litre, a month selector).
   Expiries within 30 days or lapsed show an amber or red chip.
 - **Record expense** (`features/money/RecordExpensePage.tsx`): for a FUEL category the "Vehicle
-  registration" input becomes a vehicle picker from the bundle, plus "Not on the register" which
+  registration" input becomes a vehicle picker from the bundle, plus "Not ours" which
   reveals the typed registration (kept as `vehicle_reg`). Local validation in `rules.ts`.
 - **Gate-in**: 4.20.5. `types.ts` and the sync payload gain `supplier` and `supplier_client_uuid`.
 
@@ -2334,7 +2340,7 @@ distinguishes "supplier" from an expense for the template. No event for a handov
   the supplier waits PENDING (usable on gate-ins) until a second approver exists.
 - Editing PIN or payment details does not reopen approval (decided 2026-10-09); it is audited and
   Finance is notified.
-- Fuel may be recorded against a `GENERATOR` as well as a `VEHICLE`, and "Not on the register"
+- Fuel may be recorded against a `GENERATOR` as well as a `VEHICLE`, and "Not ours"
   remains as a typed fallback, because a hired truck is not an asset.
 - `asset.manage` is not added to the Finance role; the owner decides who keeps the register.
 - Old free-text suppliers are not turned into register rows (4.20.5).
