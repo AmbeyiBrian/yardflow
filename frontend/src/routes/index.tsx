@@ -41,6 +41,8 @@ const ApprovalRulesPage = lazyRoute(() => import('../features/settings/ApprovalR
 const NumberSeriesPage = lazyRoute(() => import('../features/settings/NumberSeriesPage'));
 // Epic R (T15.9): Settings → Finance and the To pay queue.
 const FinancePage = lazyRoute(() => import('../features/settings/FinancePage'));
+// Epic R (T16.12): Settings → Clock-in.
+const AttendancePage = lazyRoute(() => import('../features/settings/AttendancePage'));
 const ToPayPage = lazyRoute(() => import('../features/money/ToPayPage'));
 // T8.10: everyone's own pane — enrolling the phone in their hand (B5).
 const SecurityPage = lazyRoute(() => import('../features/settings/SecurityPage'));
@@ -611,6 +613,14 @@ export function AppRoutes() {
                 element={
                   <RequirePermission anyOf={[PERM.FINANCE_APPROVE, PERM.SETTINGS_MANAGE]}>
                     <FinancePage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="clock-in"
+                element={
+                  <RequirePermission anyOf={[PERM.SETTINGS_MANAGE]}>
+                    <AttendancePage />
                   </RequirePermission>
                 }
               />

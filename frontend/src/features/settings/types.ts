@@ -79,6 +79,9 @@ export interface Site {
   county: string;
   latitude: string | null;
   longitude: string | null;
+  /** R13 (§4.18.2): the clock-in area. Local types until schema.d.ts is regenerated (T16.11). */
+  radius_m?: number;
+  has_coordinates?: boolean;
   site_type: string;
   status: string;
   cell_id: string;
@@ -104,8 +107,13 @@ export interface Location {
   parent: number | null;
   name: string;
   code: string;
-  type: 'YARD' | 'STORE' | 'VEHICLE' | 'QUARANTINE';
+  type: 'YARD' | 'STORE' | 'VEHICLE' | 'QUARANTINE' | 'OFFICE';
   vehicle_reg: string;
+  /** R13 (§4.18.2). Set on YARD and OFFICE; null elsewhere. */
+  latitude?: string | null;
+  longitude?: string | null;
+  radius_m?: number;
+  has_coordinates?: boolean;
   is_active: boolean;
   is_system: boolean;
   children?: Location[];
@@ -182,4 +190,10 @@ export interface OrganizationSettingsPayload {
     string,
     { recipients?: string[]; channels?: string[]; enabled?: boolean }
   >;
+}
+
+/** Settings, Clock-in (R13; §4.18.8): `GET/PATCH /attendance/settings`. */
+export interface AttendanceSettings {
+  clock_auto_close_hour: number;
+  clock_accuracy_cap_m: number;
 }
