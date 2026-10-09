@@ -92,6 +92,7 @@ const ProjectDetailPage = lazyRoute(() =>
 const RecordExpensePage = lazyRoute(() => import('../features/money/RecordExpensePage'));
 const RecordPurchasePage = lazyRoute(() => import('../features/money/RecordPurchasePage'));
 const PurchaseDetailPage = lazyRoute(() => import('../features/money/PurchaseDetailPage'));
+const MyTimePage = lazyRoute(() => import('../features/attendance/MyTimePage'));
 const MoneyHomePage = lazyRoute(() => import('../features/money/MoneyHomePage'));
 const RequestAllowancePage = lazyRoute(() => import('../features/money/RequestAllowancePage'));
 const AddCasualPage = lazyRoute(() => import('../features/money/CasualPages'));
@@ -294,6 +295,7 @@ export function AppRoutes() {
             <Route path="expenses/new" element={<RedirectKeepingSearch to="/money/expenses/new" />} />
             {/* Money is for every member: anyone in the field may spend, ask or
               register a casual (R1–R3). Approving is gated elsewhere. */}
+            <Route path="time" element={<MyTimePage />} />
             <Route path="money" element={<MoneyHomePage />} />
             <Route path="money/expenses/new" element={<RecordExpensePage />} />
             <Route path="money/expenses/:id" element={<ExpenseDetailPage />} />

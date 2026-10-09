@@ -31,6 +31,7 @@ import { Banner, Card, Spinner } from '../../components/ui';
 import { Stat } from '../../components/ui/data';
 import type { GateOut } from '../dispatch/types';
 import type { Job } from '../jobs/types';
+import { ClockInCard } from '../attendance/ClockInCard';
 import { FindStock } from './FindStock';
 
 export default function DashboardPage() {
@@ -69,6 +70,9 @@ export default function DashboardPage() {
           <YardPanel />
         </>
       ) : null}
+
+      {/* R13: every member clocks in, role or not. Below Find stock. */}
+      <ClockInCard />
 
       {/* Ordered by immediacy rather than by seniority: whoever is holding
           material has the most time-sensitive question. */}

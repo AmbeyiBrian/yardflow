@@ -59,6 +59,8 @@ const NAV_ITEMS: NavItem[] = [
   // R1–R3: anyone in the field spends, asks for an allowance or registers a
   // casual, so no permission gates it. Lands under More on a phone.
   { to: '/money', label: 'Money', icon: <GlyphCoins /> },
+  // R13: everyone in the field clocks in, so no permission gates it.
+  { to: '/time', label: 'Time', icon: <GlyphClock /> },
   {
     // Everything waiting on one person: gate passes, disposals, and — since
     // O16 — project expenses and closeout costs. A manager who approves only
@@ -519,6 +521,9 @@ function GlyphBoxes() {
 }
 function GlyphCoins() {
   return glyph(<><circle cx="9" cy="9" r="5" /><path d="M14 6.3A5 5 0 0 1 14 15.7M9 7v4M7.5 9h3" /><path d="M5 14.5V18c0 1.1 2 2 4.5 2 2 0 3.700-.5 4.300-1.300" /></>);
+}
+function GlyphClock() {
+  return glyph(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>);
 }
 function GlyphClipboard() {
   return glyph(<><path d="M9 4h6v3H9z" /><path d="M6 6h2v0h8V6h2v15H6z" /><path d="M9 12h6M9 16h4" /></>);
