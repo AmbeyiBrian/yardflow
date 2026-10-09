@@ -403,6 +403,23 @@ class SiteReferenceViewSet(TenantScopedViewSet):
     search_fields = ["value", "label"]
 
 
+class ProjectFilter(filters.FilterSet):
+    """R1: a site's open projects, for the money forms to choose from (§4.17.4)."""
+
+    client = filters.NumberFilter(field_name="client")
+    status = filters.CharFilter(field_name="status")
+    # A method, not ``field_name="sites"``: resolving a relation at import time
+    # would query the tenant manager before any organization is in context.
+    site = filters.NumberFilter(method="filter_site")
+
+    class Meta:
+        model = Project
+        fields = ["client", "status"]
+
+    def filter_site(self, queryset, name, value):  # type: ignore[no-untyped-def]
+        return queryset.filter(sites=value)
+
+
 class ProjectViewSet(TenantScopedViewSet):
     """``/api/v1/projects`` (C7, D14 — optional throughout)."""
 
@@ -420,7 +437,7 @@ class ProjectViewSet(TenantScopedViewSet):
         "close": PERM.PROJECT_VIEW_COST,
         "reopen": PERM.PROJECT_VIEW_MARGIN,
     }
-    filterset_fields = ["client", "status"]
+    filterset_class = ProjectFilter
     # Both references, and the title. The list shows all three, so a person
     # searching for the one they happen to know — usually the client's PO
     # number, because that is what is on the paperwork in front of them — has

@@ -39,6 +39,31 @@ def register() -> None:
             recorded_by=manager,
         )
 
+    def make_casual(organization):
+        from commercials.models import Casual
+
+        return Casual.objects.create(
+            organization=organization,
+            name="Isolation Casual",
+            id_number="ISO-12345678",
+            registered_by=User.objects.filter(organization=organization).first(),
+        )
+
+    def make_allowance_request(organization):
+        from commercials.models import AllowanceRequest, AllowanceType
+
+        project = make_project_expense(organization).project
+        return AllowanceRequest.objects.create(
+            organization=organization,
+            number="AR-ISO-1",
+            type=AllowanceType.OTHER,
+            amount=Decimal("1.00"),
+            from_date=date(2026, 1, 1),
+            to_date=date(2026, 1, 1),
+            project=project,
+            recorded_by=User.objects.filter(organization=organization).first(),
+        )
+
     register_isolation_fixture(
         "expense-category", make_expense_category, payload={"name": "Renamed"}
     )
@@ -46,4 +71,9 @@ def register() -> None:
         "project-expense",
         make_project_expense,
         payload={"description": "Renamed"},
+    )
+    # No PATCH body for allowance requests: the viewset offers none (§4.17.6).
+    register_isolation_fixture("allowance-request", make_allowance_request)
+    register_isolation_fixture(
+        "casual", make_casual, payload={"name": "Renamed"}
     )

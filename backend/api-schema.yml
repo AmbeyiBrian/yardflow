@@ -208,6 +208,384 @@ paths:
               schema:
                 $ref: '#/components/schemas/Organization'
           description: ''
+  /api/v1/allowance-requests:
+    get:
+      operationId: allowance_requests_list
+      description: |-
+        ``/api/v1/allowance-requests`` (R2, R4, R5).
+
+        No PATCH: a wrong amount or date is rejected and sent again, so the R5
+        overlap and limit rules run on what is finally approved.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: mine
+        schema:
+          type: boolean
+        description: Only entries I recorded.
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: payable
+        schema:
+          type: boolean
+        description: Approved and unpaid (needs finance.approve).
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - PAID
+          - PENDING_FINANCE
+          - PENDING_PM
+          - REJECTED
+        description: |-
+          * `PENDING_PM` - Waiting on the project manager
+          * `PENDING_FINANCE` - Waiting on Finance
+          * `APPROVED` - Approved — counts against the project
+          * `PAID` - Paid
+          * `REJECTED` - Rejected
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - FLOAT
+          - NIGHT_OUT
+          - OTHER
+          - TEAM_ALLOWANCE
+          - TRANSPORT
+        description: |-
+          * `FLOAT` - Float
+          * `TRANSPORT` - Transport
+          * `NIGHT_OUT` - Night out
+          * `TEAM_ALLOWANCE` - Team allowance
+          * `OTHER` - Other
+      tags:
+      - allowance-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAllowanceRequestList'
+          description: ''
+    post:
+      operationId: allowance_requests_create
+      description: |-
+        ``/api/v1/allowance-requests`` (R2, R4, R5).
+
+        No PATCH: a wrong amount or date is rejected and sent again, so the R5
+        overlap and limit rules run on what is finally approved.
+      tags:
+      - allowance-requests
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllowanceRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AllowanceRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AllowanceRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllowanceRequest'
+          description: ''
+  /api/v1/allowance-requests/{id}:
+    get:
+      operationId: allowance_requests_retrieve
+      description: |-
+        ``/api/v1/allowance-requests`` (R2, R4, R5).
+
+        No PATCH: a wrong amount or date is rejected and sent again, so the R5
+        overlap and limit rules run on what is finally approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this allowance request.
+        required: true
+      tags:
+      - allowance-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllowanceRequest'
+          description: ''
+  /api/v1/allowance-requests/{id}/close-float:
+    post:
+      operationId: allowance_requests_close_float_create
+      description: |-
+        ``/api/v1/allowance-requests`` (R2, R4, R5).
+
+        No PATCH: a wrong amount or date is rejected and sent again, so the R5
+        overlap and limit rules run on what is finally approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this allowance request.
+        required: true
+      tags:
+      - allowance-requests
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseFloatRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CloseFloatRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CloseFloatRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllowanceRequest'
+          description: ''
+  /api/v1/allowance-requests/{id}/decide:
+    post:
+      operationId: allowance_requests_decide_create
+      description: |-
+        ``/api/v1/allowance-requests`` (R2, R4, R5).
+
+        No PATCH: a wrong amount or date is rejected and sent again, so the R5
+        overlap and limit rules run on what is finally approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this allowance request.
+        required: true
+      tags:
+      - allowance-requests
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllowanceRequest'
+          description: ''
+  /api/v1/allowance-requests/{id}/mark-paid:
+    post:
+      operationId: allowance_requests_mark_paid_create
+      description: |-
+        ``/api/v1/allowance-requests`` (R2, R4, R5).
+
+        No PATCH: a wrong amount or date is rejected and sent again, so the R5
+        overlap and limit rules run on what is finally approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this allowance request.
+        required: true
+      tags:
+      - allowance-requests
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllowanceRequest'
+          description: ''
+  /api/v1/allowance-requests/{id}/resubmit:
+    post:
+      operationId: allowance_requests_resubmit_create
+      description: |-
+        ``/api/v1/allowance-requests`` (R2, R4, R5).
+
+        No PATCH: a wrong amount or date is rejected and sent again, so the R5
+        overlap and limit rules run on what is finally approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this allowance request.
+        required: true
+      tags:
+      - allowance-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllowanceRequest'
+          description: ''
+  /api/v1/allowance-requests/pending:
+    get:
+      operationId: allowance_requests_pending_list
+      description: |-
+        ``/api/v1/allowance-requests`` (R2, R4, R5).
+
+        No PATCH: a wrong amount or date is rejected and sent again, so the R5
+        overlap and limit rules run on what is finally approved.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: mine
+        schema:
+          type: boolean
+        description: Only entries I recorded.
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - PAID
+          - PENDING_FINANCE
+          - PENDING_PM
+          - REJECTED
+        description: |-
+          * `PENDING_PM` - Waiting on the project manager
+          * `PENDING_FINANCE` - Waiting on Finance
+          * `APPROVED` - Approved — counts against the project
+          * `PAID` - Paid
+          * `REJECTED` - Rejected
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - FLOAT
+          - NIGHT_OUT
+          - OTHER
+          - TEAM_ALLOWANCE
+          - TRANSPORT
+        description: |-
+          * `FLOAT` - Float
+          * `TRANSPORT` - Transport
+          * `NIGHT_OUT` - Night out
+          * `TEAM_ALLOWANCE` - Team allowance
+          * `OTHER` - Other
+      tags:
+      - allowance-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAllowanceRequestList'
+          description: ''
   /api/v1/approval-rules:
     get:
       operationId: approval_rules_list
@@ -1305,6 +1683,126 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BoxDetail'
+          description: ''
+  /api/v1/casuals:
+    get:
+      operationId: casuals_list
+      description: '``/api/v1/casuals`` (R3, §4.17.6). Any member registers and reads.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - casuals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCasualList'
+          description: ''
+    post:
+      operationId: casuals_create
+      description: '``/api/v1/casuals`` (R3, §4.17.6). Any member registers and reads.'
+      tags:
+      - casuals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CasualRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CasualRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CasualRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Casual'
+          description: ''
+  /api/v1/casuals/{id}:
+    get:
+      operationId: casuals_retrieve
+      description: '``/api/v1/casuals`` (R3, §4.17.6). Any member registers and reads.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this casual.
+        required: true
+      tags:
+      - casuals
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Casual'
+          description: ''
+    patch:
+      operationId: casuals_partial_update
+      description: '``/api/v1/casuals`` (R3, §4.17.6). Any member registers and reads.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this casual.
+        required: true
+      tags:
+      - casuals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCasualRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCasualRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCasualRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Casual'
           description: ''
   /api/v1/category-custom-fields:
     get:
@@ -3013,7 +3511,7 @@ paths:
   /api/v1/expense-categories:
     get:
       operationId: expense_categories_list
-      description: '``/api/v1/expense-categories`` (O16).'
+      description: '``/api/v1/expense-categories`` (O16, §4.17.2).'
       parameters:
       - name: cursor
         required: false
@@ -3025,6 +3523,18 @@ paths:
         name: is_active
         schema:
           type: boolean
+      - in: query
+        name: kind
+        schema:
+          type: string
+          enum:
+          - CASUAL_LABOUR
+          - FUEL
+          - GENERAL
+        description: |-
+          * `GENERAL` - General
+          * `FUEL` - Fuel — needs the vehicle registration
+          * `CASUAL_LABOUR` - Casual labour — needs the casuals and days
       - name: ordering
         required: false
         in: query
@@ -3056,7 +3566,7 @@ paths:
           description: ''
     post:
       operationId: expense_categories_create
-      description: '``/api/v1/expense-categories`` (O16).'
+      description: '``/api/v1/expense-categories`` (O16, §4.17.2).'
       tags:
       - expense-categories
       requestBody:
@@ -3083,7 +3593,7 @@ paths:
   /api/v1/expense-categories/{id}:
     get:
       operationId: expense_categories_retrieve
-      description: '``/api/v1/expense-categories`` (O16).'
+      description: '``/api/v1/expense-categories`` (O16, §4.17.2).'
       parameters:
       - in: path
         name: id
@@ -3104,7 +3614,7 @@ paths:
           description: ''
     put:
       operationId: expense_categories_update
-      description: '``/api/v1/expense-categories`` (O16).'
+      description: '``/api/v1/expense-categories`` (O16, §4.17.2).'
       parameters:
       - in: path
         name: id
@@ -3137,7 +3647,7 @@ paths:
           description: ''
     patch:
       operationId: expense_categories_partial_update
-      description: '``/api/v1/expense-categories`` (O16).'
+      description: '``/api/v1/expense-categories`` (O16, §4.17.2).'
       parameters:
       - in: path
         name: id
@@ -3169,7 +3679,7 @@ paths:
           description: ''
     delete:
       operationId: expense_categories_destroy
-      description: '``/api/v1/expense-categories`` (O16).'
+      description: '``/api/v1/expense-categories`` (O16, §4.17.2).'
       parameters:
       - in: path
         name: id
@@ -3184,6 +3694,54 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/finance/settings:
+    get:
+      operationId: finance_settings_retrieve
+      description: |-
+        ``/api/v1/finance/settings`` (R4, R5).
+
+        Read by any member (the phone runs the same limits for early warnings,
+        §4.17.8). Written by Finance or a settings manager.
+      tags:
+      - finance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanceSettings'
+          description: ''
+    patch:
+      operationId: finance_settings_partial_update
+      description: |-
+        ``/api/v1/finance/settings`` (R4, R5).
+
+        Read by any member (the phone runs the same limits for early warnings,
+        §4.17.8). Written by Finance or a settings manager.
+      tags:
+      - finance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFinanceSettingsUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFinanceSettingsUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFinanceSettingsUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanceSettingsRead'
+          description: ''
   /api/v1/gate-ins:
     get:
       operationId: gate_ins_list
@@ -5519,10 +6077,10 @@ paths:
     get:
       operationId: project_expenses_list
       description: |-
-        ``/api/v1/project-expenses`` (O16, D29).
+        ``/api/v1/project-expenses`` (O16, D29, R1, R4).
 
         Anyone may record one — a technician at a fuel station is closer to the fact
-        than anybody back at the yard. The manager decides.
+        than anybody back at the yard. Two levels decide it (§4.17.3).
       parameters:
       - in: query
         name: category
@@ -5535,9 +6093,319 @@ paths:
         schema:
           type: string
       - in: query
+        name: float_request
+        schema:
+          type: integer
+      - in: query
         name: job
         schema:
           type: integer
+      - in: query
+        name: mine
+        schema:
+          type: boolean
+        description: Only entries I recorded.
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: payable
+        schema:
+          type: boolean
+        description: Approved and unpaid (needs finance.approve).
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - PAID
+          - PENDING_FINANCE
+          - PENDING_PM
+          - REJECTED
+        description: |-
+          * `PENDING_PM` - Waiting on the project manager
+          * `PENDING_FINANCE` - Waiting on Finance
+          * `APPROVED` - Approved — counts against the project
+          * `PAID` - Paid
+          * `REJECTED` - Rejected
+      tags:
+      - project-expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProjectExpenseList'
+          description: ''
+    post:
+      operationId: project_expenses_create
+      description: |-
+        ``/api/v1/project-expenses`` (O16, D29, R1, R4).
+
+        Anyone may record one — a technician at a fuel station is closer to the fact
+        than anybody back at the yard. Two levels decide it (§4.17.3).
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectExpenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectExpenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectExpenseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/{id}:
+    get:
+      operationId: project_expenses_retrieve
+      description: |-
+        ``/api/v1/project-expenses`` (O16, D29, R1, R4).
+
+        Anyone may record one — a technician at a fuel station is closer to the fact
+        than anybody back at the yard. Two levels decide it (§4.17.3).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+    patch:
+      operationId: project_expenses_partial_update
+      description: Only the recorder, and only until the PM has answered (§4.17.6).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseEditRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseEditRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseEditRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/{id}/decide:
+    post:
+      operationId: project_expenses_decide_create
+      description: 'O16: it reaches project cost only on Finance''s approval (R4).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/{id}/mark-paid:
+    post:
+      operationId: project_expenses_mark_paid_create
+      description: |-
+        ``/api/v1/project-expenses`` (O16, D29, R1, R4).
+
+        Anyone may record one — a technician at a fuel station is closer to the fact
+        than anybody back at the yard. Two levels decide it (§4.17.3).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/{id}/resubmit:
+    post:
+      operationId: project_expenses_resubmit_create
+      description: |-
+        ``/api/v1/project-expenses`` (O16, D29, R1, R4).
+
+        Anyone may record one — a technician at a fuel station is closer to the fact
+        than anybody back at the yard. Two levels decide it (§4.17.3).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/{id}/reverse:
+    post:
+      operationId: project_expenses_reverse_create
+      description: 'O16: corrected by its opposite, never by an edit.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project expense.
+        required: true
+      tags:
+      - project-expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectExpense'
+          description: ''
+  /api/v1/project-expenses/pending:
+    get:
+      operationId: project_expenses_pending_list
+      description: What is waiting on this person, at their level (§4.17.6).
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: integer
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: float_request
+        schema:
+          type: integer
+      - in: query
+        name: job
+        schema:
+          type: integer
+      - in: query
+        name: mine
+        schema:
+          type: boolean
+        description: Only entries I recorded.
       - name: ordering
         required: false
         in: query
@@ -5586,181 +6454,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedProjectExpenseList'
-          description: ''
-    post:
-      operationId: project_expenses_create
-      description: |-
-        ``/api/v1/project-expenses`` (O16, D29).
-
-        Anyone may record one — a technician at a fuel station is closer to the fact
-        than anybody back at the yard. The manager decides.
-      tags:
-      - project-expenses
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProjectExpenseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProjectExpenseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProjectExpenseRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectExpense'
-          description: ''
-  /api/v1/project-expenses/{id}:
-    get:
-      operationId: project_expenses_retrieve
-      description: |-
-        ``/api/v1/project-expenses`` (O16, D29).
-
-        Anyone may record one — a technician at a fuel station is closer to the fact
-        than anybody back at the yard. The manager decides.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project expense.
-        required: true
-      tags:
-      - project-expenses
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectExpense'
-          description: ''
-    patch:
-      operationId: project_expenses_partial_update
-      description: |-
-        ``/api/v1/project-expenses`` (O16, D29).
-
-        Anyone may record one — a technician at a fuel station is closer to the fact
-        than anybody back at the yard. The manager decides.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project expense.
-        required: true
-      tags:
-      - project-expenses
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedProjectExpenseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedProjectExpenseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedProjectExpenseRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectExpense'
-          description: ''
-  /api/v1/project-expenses/{id}/decide:
-    post:
-      operationId: project_expenses_decide_create
-      description: 'O16: it reaches project cost only on approval.'
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project expense.
-        required: true
-      tags:
-      - project-expenses
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DecideExpenseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/DecideExpenseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/DecideExpenseRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectExpense'
-          description: ''
-  /api/v1/project-expenses/{id}/reverse:
-    post:
-      operationId: project_expenses_reverse_create
-      description: 'O16: corrected by its opposite, never by an edit.'
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this project expense.
-        required: true
-      tags:
-      - project-expenses
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReverseExpenseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ReverseExpenseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ReverseExpenseRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectExpense'
-          description: ''
-  /api/v1/project-expenses/pending:
-    get:
-      operationId: project_expenses_pending_retrieve
-      description: What this manager has waiting on them (O16).
-      tags:
-      - project-expenses
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectExpense'
           description: ''
   /api/v1/project-variations:
     get:
@@ -6080,17 +6773,13 @@ paths:
         schema:
           type: string
       - in: query
+        name: site
+        schema:
+          type: number
+      - in: query
         name: status
         schema:
           type: string
-          enum:
-          - CANCELLED
-          - CLOSED
-          - OPEN
-        description: |-
-          * `OPEN` - Open
-          * `CLOSED` - Closed
-          * `CANCELLED` - Cancelled
       tags:
       - projects
       security:
@@ -9138,6 +9827,211 @@ components:
           maxLength: 500
       required:
       - accepted
+    AllowanceRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        number:
+          type: string
+          readOnly: true
+        type:
+          $ref: '#/components/schemas/AllowanceTypeEnum'
+        transport_scope:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/TransportScopeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: The whole request, not per day. Excluding VAT (D24).
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+        days:
+          type: integer
+          readOnly: true
+        daily_amount:
+          type: string
+          readOnly: true
+        site:
+          type: integer
+          nullable: true
+        site_name:
+          type: string
+          readOnly: true
+          default: ''
+        project:
+          type: integer
+          nullable: true
+        project_reference:
+          type: string
+          readOnly: true
+        reason:
+          type: string
+          maxLength: 500
+        recorded_by:
+          type: integer
+          readOnly: true
+        recorded_by_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseStatusEnum'
+          readOnly: true
+        decided_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        decision_reason:
+          type: string
+          readOnly: true
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        paid_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_reference:
+          type: string
+          readOnly: true
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        closed_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        returned_amount:
+          type: string
+          nullable: true
+          readOnly: true
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        open_float_warning:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: |-
+            Another PAID, unclosed float of the same person (R2). Shown to
+            approvers while the request is open; it never blocks.
+          readOnly: true
+        pm_level_skipped:
+          type: boolean
+          readOnly: true
+        spent:
+          type: string
+          readOnly: true
+        balance:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - balance
+      - closed_at
+      - closed_by
+      - created_at
+      - daily_amount
+      - days
+      - decided_at
+      - decided_by
+      - decision_reason
+      - from_date
+      - id
+      - number
+      - open_float_warning
+      - paid_at
+      - paid_by
+      - payment_reference
+      - pm_level_skipped
+      - project_reference
+      - recorded_by
+      - recorded_by_name
+      - returned_amount
+      - site_name
+      - spent
+      - status
+      - to_date
+      - type
+    AllowanceRequestRequest:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/AllowanceTypeEnum'
+        transport_scope:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/TransportScopeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          description: The whole request, not per day. Excluding VAT (D24).
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+        site:
+          type: integer
+          nullable: true
+        project:
+          type: integer
+          nullable: true
+        reason:
+          type: string
+          maxLength: 500
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - amount
+      - from_date
+      - to_date
+      - type
+    AllowanceTypeEnum:
+      enum:
+      - FLOAT
+      - TRANSPORT
+      - NIGHT_OUT
+      - TEAM_ALLOWANCE
+      - OTHER
+      type: string
+      description: |-
+        * `FLOAT` - Float
+        * `TRANSPORT` - Transport
+        * `NIGHT_OUT` - Night out
+        * `TEAM_ALLOWANCE` - Team allowance
+        * `OTHER` - Other
     ApprovalAction:
       type: object
       properties:
@@ -9379,8 +10273,16 @@ components:
           readOnly: true
         kind:
           allOf:
-          - $ref: '#/components/schemas/KindEnum'
+          - $ref: '#/components/schemas/AttachmentKindEnum'
           readOnly: true
+        caption:
+          type: string
+          readOnly: true
+        client_uuid:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         uploaded_by:
           type: integer
           readOnly: true
@@ -9398,6 +10300,8 @@ components:
           format: date-time
           readOnly: true
       required:
+      - caption
+      - client_uuid
       - content_type
       - created_at
       - download_url
@@ -9409,6 +10313,16 @@ components:
       - target_type
       - uploaded_by
       - uploaded_by_name
+    AttachmentKindEnum:
+      enum:
+      - PHOTO
+      - DOCUMENT
+      - SIGNATURE
+      type: string
+      description: |-
+        * `PHOTO` - Photo
+        * `DOCUMENT` - Document
+        * `SIGNATURE` - Signature
     AttachmentTargets:
       type: object
       properties:
@@ -9436,8 +10350,14 @@ components:
           format: binary
         kind:
           allOf:
-          - $ref: '#/components/schemas/KindEnum'
+          - $ref: '#/components/schemas/AttachmentKindEnum'
           default: PHOTO
+        caption:
+          type: string
+          maxLength: 60
+        client_uuid:
+          type: string
+          format: uuid
       required:
       - file
       - target_id
@@ -9730,6 +10650,54 @@ components:
           items:
             type: string
             minLength: 1
+    Casual:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        id_number:
+          type: string
+          maxLength: 40
+        phone:
+          type: string
+          maxLength: 30
+        registered_by:
+          type: integer
+          readOnly: true
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - id
+      - id_number
+      - name
+      - registered_by
+    CasualRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        id_number:
+          type: string
+          minLength: 1
+          maxLength: 40
+        phone:
+          type: string
+          maxLength: 30
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - id_number
+      - name
     CategoryCustomField:
       type: object
       properties:
@@ -9949,6 +10917,15 @@ components:
       required:
       - acknowledged_ref
       - gate_out
+    CloseFloatRequest:
+      type: object
+      properties:
+        returned_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - returned_amount
     CloseJobRequest:
       type: object
       description: 'H5: the override needs a reason, and the reason is the point.'
@@ -10262,7 +11239,7 @@ components:
         * `ACKNOWLEDGED` - Acknowledged
         * `DECLINED` - Declined
         * `CANCELLED` - Cancelled
-    DecideExpenseRequest:
+    DecideRequest:
       type: object
       properties:
         approved:
@@ -11178,6 +12155,48 @@ components:
       required:
       - count
       - items
+    ExpenseCasualLine:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        casual:
+          type: integer
+        casual_name:
+          type: string
+          readOnly: true
+        days:
+          type: integer
+          maximum: 32767
+          minimum: 1
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - casual
+      - casual_name
+      - days
+      - id
+    ExpenseCasualLineRequest:
+      type: object
+      properties:
+        casual:
+          type: integer
+        days:
+          type: integer
+          maximum: 32767
+          minimum: 1
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - casual
+      - days
     ExpenseCategory:
       type: object
       properties:
@@ -11190,6 +12209,8 @@ components:
         code:
           type: string
           maxLength: 30
+        kind:
+          $ref: '#/components/schemas/ExpenseKindEnum'
         is_active:
           type: boolean
       required:
@@ -11205,10 +12226,36 @@ components:
         code:
           type: string
           maxLength: 30
+        kind:
+          $ref: '#/components/schemas/ExpenseKindEnum'
         is_active:
           type: boolean
       required:
       - name
+    ExpenseKindEnum:
+      enum:
+      - GENERAL
+      - FUEL
+      - CASUAL_LABOUR
+      type: string
+      description: |-
+        * `GENERAL` - General
+        * `FUEL` - Fuel — needs the vehicle registration
+        * `CASUAL_LABOUR` - Casual labour — needs the casuals and days
+    ExpenseStatusEnum:
+      enum:
+      - PENDING_PM
+      - PENDING_FINANCE
+      - APPROVED
+      - PAID
+      - REJECTED
+      type: string
+      description: |-
+        * `PENDING_PM` - Waiting on the project manager
+        * `PENDING_FINANCE` - Waiting on Finance
+        * `APPROVED` - Approved — counts against the project
+        * `PAID` - Paid
+        * `REJECTED` - Rejected
     FieldTypeEnum:
       enum:
       - TEXT
@@ -11223,6 +12270,30 @@ components:
         * `DATE` - Date
         * `DROPDOWN` - Dropdown
         * `BOOLEAN` - Yes / no
+    FinanceSettings:
+      type: object
+      properties:
+        allowance_limits:
+          type: object
+          additionalProperties: {}
+        finance_director_role:
+          type: integer
+          nullable: true
+      required:
+      - allowance_limits
+      - finance_director_role
+    FinanceSettingsRead:
+      type: object
+      properties:
+        allowance_limits:
+          type: object
+          additionalProperties: {}
+        finance_director_role:
+          type: integer
+          nullable: true
+      required:
+      - allowance_limits
+      - finance_director_role
     FormatEnum:
       enum:
       - xlsx
@@ -12699,16 +13770,6 @@ components:
         * `AWAITING_CLOSEOUT` - Awaiting closeout
         * `CLOSED` - Closed
         * `CANCELLED` - Cancelled
-    KindEnum:
-      enum:
-      - PHOTO
-      - DOCUMENT
-      - SIGNATURE
-      type: string
-      description: |-
-        * `PHOTO` - Photo
-        * `DOCUMENT` - Document
-        * `SIGNATURE` - Signature
     Location:
       type: object
       properties:
@@ -12827,6 +13888,16 @@ components:
             additionalProperties: {}
       required:
       - results
+    MarkPaidRequest:
+      type: object
+      properties:
+        payment_reference:
+          type: string
+          default: ''
+          maxLength: 100
+        paid_at:
+          type: string
+          format: date-time
     MarkedRead:
       type: object
       properties:
@@ -13103,6 +14174,9 @@ components:
             additionalProperties: {}
       required:
       - events
+    NullEnum:
+      enum:
+      - null
     NumberSeries:
       type: object
       properties:
@@ -13400,6 +14474,25 @@ components:
       description: |-
         * `OWN` - Own stock
         * `CLIENT` - Client-owned (consignment)
+    PaginatedAllowanceRequestList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllowanceRequest'
     PaginatedApprovalRequestList:
       type: object
       required:
@@ -13495,6 +14588,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BoxRow'
+    PaginatedCasualList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Casual'
     PaginatedCategoryCustomFieldList:
       type: object
       required:
@@ -14209,6 +15321,24 @@ components:
         description:
           type: string
           maxLength: 255
+    PatchedCasualRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        id_number:
+          type: string
+          minLength: 1
+          maxLength: 40
+        phone:
+          type: string
+          maxLength: 30
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
     PatchedCategoryCustomFieldRequest:
       type: object
       properties:
@@ -14374,8 +15504,37 @@ components:
         code:
           type: string
           maxLength: 30
+        kind:
+          $ref: '#/components/schemas/ExpenseKindEnum'
         is_active:
           type: boolean
+    PatchedExpenseEditRequest:
+      type: object
+      description: |-
+        What may still change on a pending expense: the words and the photo count.
+
+        Money, project and category are not here: changing them after a PM has seen
+        the entry would let an approved-looking number differ from the one approved.
+        A wrong amount is rejected and sent again (§4.17.3).
+      properties:
+        description:
+          type: string
+          maxLength: 500
+        scope_of_work:
+          type: string
+        photos_expected:
+          type: integer
+          maximum: 32767
+          minimum: 0
+    PatchedFinanceSettingsUpdateRequest:
+      type: object
+      properties:
+        allowance_limits:
+          type: object
+          additionalProperties: {}
+        finance_director_role:
+          type: integer
+          nullable: true
     PatchedGateInRequest:
       type: object
       properties:
@@ -14720,27 +15879,6 @@ components:
           maxLength: 3
         notification_channels: {}
         notification_matrix: {}
-    PatchedProjectExpenseRequest:
-      type: object
-      properties:
-        project:
-          type: integer
-        job:
-          type: integer
-          nullable: true
-        category:
-          type: integer
-        amount:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
-          description: Excluding VAT (D24).
-        incurred_on:
-          type: string
-          format: date
-        description:
-          type: string
-          maxLength: 500
     PatchedProjectRequest:
       type: object
       description: |-
@@ -15146,15 +16284,26 @@ components:
           readOnly: true
         project:
           type: integer
+          nullable: true
         project_reference:
           type: string
           readOnly: true
+        site:
+          type: integer
+          nullable: true
+        site_name:
+          type: string
+          readOnly: true
+          default: ''
         job:
           type: integer
           nullable: true
         category:
           type: integer
         category_name:
+          type: string
+          readOnly: true
+        category_kind:
           type: string
           readOnly: true
         amount:
@@ -15168,6 +16317,31 @@ components:
         description:
           type: string
           maxLength: 500
+        scope_of_work:
+          type: string
+        vehicle_reg:
+          type: string
+          maxLength: 20
+        litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        float_request:
+          type: integer
+          nullable: true
+        photos_expected:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        casual_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseCasualLine'
         recorded_by:
           type: integer
           readOnly: true
@@ -15176,7 +16350,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/ProjectExpenseStatusEnum'
+          - $ref: '#/components/schemas/ExpenseStatusEnum'
           readOnly: true
         decided_by:
           type: integer
@@ -15190,6 +16364,18 @@ components:
         decision_reason:
           type: string
           readOnly: true
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        paid_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_reference:
+          type: string
+          readOnly: true
         reverses:
           type: integer
           readOnly: true
@@ -15200,6 +16386,12 @@ components:
         is_evidenced:
           type: boolean
           readOnly: true
+        evidence_state:
+          type: string
+          readOnly: true
+        pm_level_skipped:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -15207,26 +16399,36 @@ components:
       required:
       - amount
       - category
+      - category_kind
       - category_name
       - created_at
       - decided_at
       - decided_by
       - decision_reason
+      - evidence_state
       - id
       - incurred_on
       - is_evidenced
       - is_reversal
-      - project
+      - paid_at
+      - paid_by
+      - payment_reference
+      - pm_level_skipped
       - project_reference
       - recorded_by
       - recorded_by_name
       - reverses
+      - site_name
       - status
     ProjectExpenseRequest:
       type: object
       properties:
         project:
           type: integer
+          nullable: true
+        site:
+          type: integer
+          nullable: true
         job:
           type: integer
           nullable: true
@@ -15243,25 +16445,35 @@ components:
         description:
           type: string
           maxLength: 500
+        scope_of_work:
+          type: string
+        vehicle_reg:
+          type: string
+          maxLength: 20
+        litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        float_request:
+          type: integer
+          nullable: true
+        photos_expected:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        casual_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseCasualLineRequest'
       required:
       - amount
       - category
       - incurred_on
-      - project
-    ProjectExpenseStatusEnum:
-      enum:
-      - PENDING_PM
-      - PENDING_FINANCE
-      - APPROVED
-      - PAID
-      - REJECTED
-      type: string
-      description: |-
-        * `PENDING_PM` - Waiting on the project manager
-        * `PENDING_FINANCE` - Waiting on Finance
-        * `APPROVED` - Approved — counts against the project
-        * `PAID` - Paid
-        * `REJECTED` - Rejected
     ProjectRequest:
       type: object
       description: |-
@@ -15813,7 +17025,7 @@ components:
       - cutoff
       - retention_months
       - still_open
-    ReverseExpenseRequest:
+    ReverseRequest:
       type: object
       properties:
         reason:
@@ -16850,6 +18062,14 @@ components:
       - item_type
       - quantity
       - to_location
+    TransportScopeEnum:
+      enum:
+      - WITHIN_NAIROBI
+      - OUTSIDE_NAIROBI
+      type: string
+      description: |-
+        * `WITHIN_NAIROBI` - Within Nairobi
+        * `OUTSIDE_NAIROBI` - Outside Nairobi
     UnreadCount:
       type: object
       properties:

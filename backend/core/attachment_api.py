@@ -32,6 +32,9 @@ be added beside this without changing the read contract when something needs it.
 from __future__ import annotations
 
 from django.apps import apps
+from django.db import IntegrityError, transaction
+from django.db.models import CharField, Q
+from django.db.models.functions import Cast
 from django.http import Http404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
@@ -47,6 +50,7 @@ from core.api import TenantScopedViewSet
 from core.api_permissions import OrganizationIsActive
 from core.attachments import max_upload_bytes, store_attachment
 from core.audit import record
+from core.exceptions import DomainError
 from core.models import Attachment, AttachmentKind, AuditAction
 
 #: What may be attached to, and what a user must hold to attach to it.
@@ -69,12 +73,54 @@ ATTACHABLE_TARGETS: dict[str, tuple[str, ...]] = {
     # O16: the receipt behind an expense. Open to anyone who may raise a
     # gate-out or close out a job, because the person who paid for the fuel is
     # the one holding the receipt — and O16 has anybody record an expense.
-    "commercials.ProjectExpense": (
-        PERM.GATE_OUT_REQUEST,
-        PERM.JOB_CLOSEOUT,
-        PERM.PROJECT_VIEW_COST,
-    ),
+    #
+    # R1, §4.17.7: recording is open to every member, so a permission cannot be
+    # the test; the owner rule below is (see ``OWNER_RULED_TARGETS``).
+    "commercials.ProjectExpense": (),
+    # R3: the casual's ID photo, taken by whoever registers them.
+    "commercials.Casual": (),
 }
+
+#: Targets where the **record's own owner** decides, not a permission (§4.17.7).
+#: Their entry in ``ATTACHABLE_TARGETS`` is empty on purpose: any member may
+#: attach, but only to what they recorded, and only while it can still change.
+OWNER_RULED_TARGETS = frozenset({"commercials.ProjectExpense", "commercials.Casual"})
+
+#: Expense statuses in which photos may still be added or removed. After final
+#: approval the evidence is fixed: it is what the approval was given on.
+_EVIDENCE_OPEN_STATUSES = frozenset({"PENDING_PM", "PENDING_FINANCE", "REJECTED"})
+
+
+class AttachmentLocked(DomainError):
+    """The entry was approved, so what it was approved on can no longer change."""
+
+    code = "ATTACHMENT_LOCKED"
+    status_code = 409
+    default_message = (
+        "This entry is approved, so its photos can no longer be added or removed."
+    )
+
+
+def _can_attach_to(held, target_type: str) -> bool:  # type: ignore[no-untyped-def]
+    """Whether a user's permissions allow attaching to this kind of record at all."""
+    if target_type in OWNER_RULED_TARGETS:
+        return True
+    return any(held.has(codename) for codename in ATTACHABLE_TARGETS[target_type])
+
+
+def _owner_of(target) -> int | None:  # type: ignore[no-untyped-def]
+    """Who recorded or registered an owner-ruled record."""
+    if target._meta.label == "commercials.Casual":
+        return target.registered_by_id  # type: ignore[no-any-return]
+    return target.recorded_by_id  # type: ignore[no-any-return]
+
+
+def _require_evidence_open(target) -> None:  # type: ignore[no-untyped-def]
+    """Photos on an expense are fixed once it is approved or paid (§4.17.7)."""
+    if target._meta.label == "commercials.ProjectExpense" and (
+        target.status not in _EVIDENCE_OPEN_STATUSES
+    ):
+        raise AttachmentLocked()
 
 #: N-7 keeps these unreadable without a signed link; this keeps the store to the
 #: kinds of file the requirements describe. An upload endpoint that accepts
@@ -132,6 +178,8 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "content_type",
             "size",
             "kind",
+            "caption",
+            "client_uuid",
             "uploaded_by",
             "uploaded_by_name",
             "download_url",
@@ -153,6 +201,11 @@ class AttachmentUploadSerializer(serializers.Serializer):
     kind = serializers.ChoiceField(
         choices=AttachmentKind.choices, default=AttachmentKind.PHOTO
     )
+    # R6: what the photo shows, chosen on the phone (Receipt / Fuel pump / ...).
+    caption = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    # R6: a repeat of one client_uuid returns the attachment it made, so a photo
+    # whose response was lost on a bad connection lands once, not twice.
+    client_uuid = serializers.UUIDField(required=False)
 
     def validate_file(self, value):  # type: ignore[no-untyped-def]
         if value.size > max_upload_bytes():
@@ -193,6 +246,7 @@ class AttachmentViewSet(TenantScopedViewSet):
         queryset = super().get_queryset()
         target_type = self.request.query_params.get("target_type")
         target_id = self.request.query_params.get("target_id")
+        queryset = self._without_unseen_id_photos(queryset)
         if target_type and target_id:
             return queryset.filter(target_type=target_type, target_id=str(target_id))
         if self.action == "list":
@@ -202,11 +256,41 @@ class AttachmentViewSet(TenantScopedViewSet):
             return queryset.none()
         return queryset
 
+    def _without_unseen_id_photos(self, queryset):  # type: ignore[no-untyped-def]
+        """A casual's ID photo is for Finance and whoever registered them (§4.17.7).
+
+        Applied to every route (list, retrieve, ``url``), so a photo that is
+        filtered out of the list cannot be fetched by id either: it is a 404.
+        """
+        if resolve_permissions(self.request.user).has(PERM.FINANCE_APPROVE):
+            return queryset
+        from commercials.models import Casual
+
+        registered = (
+            Casual.objects.filter(registered_by=self.request.user)
+            .annotate(key=Cast("pk", output_field=CharField()))
+            .values("key")
+        )
+        return queryset.exclude(
+            Q(target_type="commercials.Casual") & ~Q(target_id__in=registered)
+        )
+
+    def _require_owner(self, target) -> None:  # type: ignore[no-untyped-def]
+        """The recorder (or registrar) only, and only while the entry can change."""
+        if target._meta.label not in OWNER_RULED_TARGETS:
+            return
+        if _owner_of(target) != self.request.user.pk:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied(
+                "Only the person who recorded this can add photos to it."
+            )
+        _require_evidence_open(target)
+
     def _require_permission_for(self, target_type: str) -> None:
         """Attaching takes the permission that produces the document."""
-        needed = ATTACHABLE_TARGETS[target_type]
         held = resolve_permissions(self.request.user)
-        if not any(held.has(codename) for codename in needed):
+        if not _can_attach_to(held, target_type):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied(
@@ -234,12 +318,32 @@ class AttachmentViewSet(TenantScopedViewSet):
         target = _resolve_target(data["target_type"], data["target_id"])
         self._require_permission_for(data["target_type"])
 
-        attachment = store_attachment(
-            target=target,
-            uploaded_file=data["file"],
-            kind=data["kind"],
-            uploaded_by=request.user,
-        )
+        client_uuid = data.get("client_uuid")
+        if client_uuid is not None:
+            replay = self._replay(client_uuid, target, request.user)
+            if replay is not None:
+                return Response(AttachmentSerializer(replay).data, status=status.HTTP_200_OK)
+
+        self._require_owner(target)
+
+        try:
+            with transaction.atomic():
+                attachment = store_attachment(
+                    target=target,
+                    uploaded_file=data["file"],
+                    kind=data["kind"],
+                    uploaded_by=request.user,
+                )
+                attachment.caption = data.get("caption", "")
+                attachment.client_uuid = client_uuid
+                attachment.save(update_fields=["caption", "client_uuid"])
+        except IntegrityError:
+            # Two sends of one client_uuid raced past the check above; the unique
+            # constraint kept one, and the other is simply a replay.
+            replay = self._replay(client_uuid, target, request.user) if client_uuid else None
+            if replay is None:
+                raise
+            return Response(AttachmentSerializer(replay).data, status=status.HTTP_200_OK)
         record(
             AuditAction.ATTACHMENT_ADDED,
             actor=request.user,
@@ -252,6 +356,27 @@ class AttachmentViewSet(TenantScopedViewSet):
         return Response(
             AttachmentSerializer(attachment).data, status=status.HTTP_201_CREATED
         )
+
+    @staticmethod
+    def _replay(client_uuid, target, user):  # type: ignore[no-untyped-def]
+        """The attachment this ``client_uuid`` already made, if it is the same upload.
+
+        The same uuid on a different record or from a different person is not a
+        replay but a clash, and is refused rather than returning somebody else's
+        file.
+        """
+        existing = Attachment.objects.filter(client_uuid=client_uuid).first()
+        if existing is None:
+            return None
+        if (
+            existing.target_type != target._meta.label
+            or existing.target_id != str(target.pk)
+            or existing.uploaded_by_id != user.pk
+        ):
+            raise serializers.ValidationError(
+                {"client_uuid": ["This upload id was already used for another file."]}
+            )
+        return existing
 
     @extend_schema(
         responses={
@@ -294,6 +419,13 @@ class AttachmentViewSet(TenantScopedViewSet):
             raise PermissionDenied(
                 "Only the person who uploaded a file can remove it."
             )
+        # §4.17.7: nobody removes evidence from an approved or paid expense.
+        if instance.target_type == "commercials.ProjectExpense":
+            from commercials.models import ProjectExpense
+
+            expense = ProjectExpense.objects.filter(pk=instance.target_id).first()
+            if expense is not None:
+                _require_evidence_open(expense)
         record(
             AuditAction.ATTACHMENT_REMOVED,
             actor=self.request.user,
@@ -333,8 +465,8 @@ class AttachmentTargetsView(APIView):
                 "max_bytes": max_upload_bytes(),
                 "content_types": sorted(ALLOWED_CONTENT_TYPES),
                 "targets": {
-                    label: any(held.has(codename) for codename in needed)
-                    for label, needed in sorted(ATTACHABLE_TARGETS.items())
+                    label: _can_attach_to(held, label)
+                    for label in sorted(ATTACHABLE_TARGETS)
                 },
             }
         )

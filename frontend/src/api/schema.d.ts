@@ -74,6 +74,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/allowance-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/allowance-requests`` (R2, R4, R5).
+         *
+         *     No PATCH: a wrong amount or date is rejected and sent again, so the R5
+         *     overlap and limit rules run on what is finally approved.
+         */
+        get: operations["allowance_requests_list"];
+        put?: never;
+        /**
+         * @description ``/api/v1/allowance-requests`` (R2, R4, R5).
+         *
+         *     No PATCH: a wrong amount or date is rejected and sent again, so the R5
+         *     overlap and limit rules run on what is finally approved.
+         */
+        post: operations["allowance_requests_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/allowance-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/allowance-requests`` (R2, R4, R5).
+         *
+         *     No PATCH: a wrong amount or date is rejected and sent again, so the R5
+         *     overlap and limit rules run on what is finally approved.
+         */
+        get: operations["allowance_requests_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/allowance-requests/{id}/close-float": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/allowance-requests`` (R2, R4, R5).
+         *
+         *     No PATCH: a wrong amount or date is rejected and sent again, so the R5
+         *     overlap and limit rules run on what is finally approved.
+         */
+        post: operations["allowance_requests_close_float_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/allowance-requests/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/allowance-requests`` (R2, R4, R5).
+         *
+         *     No PATCH: a wrong amount or date is rejected and sent again, so the R5
+         *     overlap and limit rules run on what is finally approved.
+         */
+        post: operations["allowance_requests_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/allowance-requests/{id}/mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/allowance-requests`` (R2, R4, R5).
+         *
+         *     No PATCH: a wrong amount or date is rejected and sent again, so the R5
+         *     overlap and limit rules run on what is finally approved.
+         */
+        post: operations["allowance_requests_mark_paid_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/allowance-requests/{id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/allowance-requests`` (R2, R4, R5).
+         *
+         *     No PATCH: a wrong amount or date is rejected and sent again, so the R5
+         *     overlap and limit rules run on what is finally approved.
+         */
+        post: operations["allowance_requests_resubmit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/allowance-requests/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/allowance-requests`` (R2, R4, R5).
+         *
+         *     No PATCH: a wrong amount or date is rejected and sent again, so the R5
+         *     overlap and limit rules run on what is finally approved.
+         */
+        get: operations["allowance_requests_pending_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/approval-rules": {
         parameters: {
             query?: never;
@@ -618,6 +778,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/casuals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/casuals`` (R3, §4.17.6). Any member registers and reads. */
+        get: operations["casuals_list"];
+        put?: never;
+        /** @description ``/api/v1/casuals`` (R3, §4.17.6). Any member registers and reads. */
+        post: operations["casuals_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/casuals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/casuals`` (R3, §4.17.6). Any member registers and reads. */
+        get: operations["casuals_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description ``/api/v1/casuals`` (R3, §4.17.6). Any member registers and reads. */
+        patch: operations["casuals_partial_update"];
         trace?: never;
     };
     "/api/v1/category-custom-fields": {
@@ -1283,10 +1479,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description ``/api/v1/expense-categories`` (O16). */
+        /** @description ``/api/v1/expense-categories`` (O16, §4.17.2). */
         get: operations["expense_categories_list"];
         put?: never;
-        /** @description ``/api/v1/expense-categories`` (O16). */
+        /** @description ``/api/v1/expense-categories`` (O16, §4.17.2). */
         post: operations["expense_categories_create"];
         delete?: never;
         options?: never;
@@ -1301,17 +1497,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description ``/api/v1/expense-categories`` (O16). */
+        /** @description ``/api/v1/expense-categories`` (O16, §4.17.2). */
         get: operations["expense_categories_retrieve"];
-        /** @description ``/api/v1/expense-categories`` (O16). */
+        /** @description ``/api/v1/expense-categories`` (O16, §4.17.2). */
         put: operations["expense_categories_update"];
         post?: never;
-        /** @description ``/api/v1/expense-categories`` (O16). */
+        /** @description ``/api/v1/expense-categories`` (O16, §4.17.2). */
         delete: operations["expense_categories_destroy"];
         options?: never;
         head?: never;
-        /** @description ``/api/v1/expense-categories`` (O16). */
+        /** @description ``/api/v1/expense-categories`` (O16, §4.17.2). */
         patch: operations["expense_categories_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/finance/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/finance/settings`` (R4, R5).
+         *
+         *     Read by any member (the phone runs the same limits for early warnings,
+         *     §4.17.8). Written by Finance or a settings manager.
+         */
+        get: operations["finance_settings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description ``/api/v1/finance/settings`` (R4, R5).
+         *
+         *     Read by any member (the phone runs the same limits for early warnings,
+         *     §4.17.8). Written by Finance or a settings manager.
+         */
+        patch: operations["finance_settings_partial_update"];
         trace?: never;
     };
     "/api/v1/gate-ins": {
@@ -2261,18 +2485,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description ``/api/v1/project-expenses`` (O16, D29).
+         * @description ``/api/v1/project-expenses`` (O16, D29, R1, R4).
          *
          *     Anyone may record one — a technician at a fuel station is closer to the fact
-         *     than anybody back at the yard. The manager decides.
+         *     than anybody back at the yard. Two levels decide it (§4.17.3).
          */
         get: operations["project_expenses_list"];
         put?: never;
         /**
-         * @description ``/api/v1/project-expenses`` (O16, D29).
+         * @description ``/api/v1/project-expenses`` (O16, D29, R1, R4).
          *
          *     Anyone may record one — a technician at a fuel station is closer to the fact
-         *     than anybody back at the yard. The manager decides.
+         *     than anybody back at the yard. Two levels decide it (§4.17.3).
          */
         post: operations["project_expenses_create"];
         delete?: never;
@@ -2289,10 +2513,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description ``/api/v1/project-expenses`` (O16, D29).
+         * @description ``/api/v1/project-expenses`` (O16, D29, R1, R4).
          *
          *     Anyone may record one — a technician at a fuel station is closer to the fact
-         *     than anybody back at the yard. The manager decides.
+         *     than anybody back at the yard. Two levels decide it (§4.17.3).
          */
         get: operations["project_expenses_retrieve"];
         put?: never;
@@ -2300,12 +2524,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /**
-         * @description ``/api/v1/project-expenses`` (O16, D29).
-         *
-         *     Anyone may record one — a technician at a fuel station is closer to the fact
-         *     than anybody back at the yard. The manager decides.
-         */
+        /** @description Only the recorder, and only until the PM has answered (§4.17.6). */
         patch: operations["project_expenses_partial_update"];
         trace?: never;
     };
@@ -2318,8 +2537,52 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description O16: it reaches project cost only on approval. */
+        /** @description O16: it reaches project cost only on Finance's approval (R4). */
         post: operations["project_expenses_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-expenses/{id}/mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/project-expenses`` (O16, D29, R1, R4).
+         *
+         *     Anyone may record one — a technician at a fuel station is closer to the fact
+         *     than anybody back at the yard. Two levels decide it (§4.17.3).
+         */
+        post: operations["project_expenses_mark_paid_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-expenses/{id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``/api/v1/project-expenses`` (O16, D29, R1, R4).
+         *
+         *     Anyone may record one — a technician at a fuel station is closer to the fact
+         *     than anybody back at the yard. Two levels decide it (§4.17.3).
+         */
+        post: operations["project_expenses_resubmit_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2350,8 +2613,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What this manager has waiting on them (O16). */
-        get: operations["project_expenses_pending_retrieve"];
+        /** @description What is waiting on this person, at their level (§4.17.6). */
+        get: operations["project_expenses_pending_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3954,6 +4217,85 @@ export interface components {
             accepted: boolean;
             reason?: string;
         };
+        AllowanceRequest: {
+            readonly id: number;
+            readonly number: string;
+            type: components["schemas"]["AllowanceTypeEnum"];
+            transport_scope?: (components["schemas"]["TransportScopeEnum"] | components["schemas"]["BlankEnum"] | components["schemas"]["NullEnum"]) | null;
+            /**
+             * Format: decimal
+             * @description The whole request, not per day. Excluding VAT (D24).
+             */
+            amount: string;
+            /** Format: date */
+            from_date: string;
+            /** Format: date */
+            to_date: string;
+            readonly days: number;
+            readonly daily_amount: string;
+            site?: number | null;
+            /** @default  */
+            readonly site_name: string;
+            project?: number | null;
+            readonly project_reference: string;
+            reason?: string;
+            readonly recorded_by: number;
+            readonly recorded_by_name: string;
+            readonly status: components["schemas"]["ExpenseStatusEnum"];
+            readonly decided_by: number | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            readonly decision_reason: string;
+            /** Format: date-time */
+            readonly paid_at: string | null;
+            readonly paid_by: number | null;
+            readonly payment_reference: string;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            readonly closed_by: number | null;
+            readonly returned_amount: string | null;
+            /** Format: uuid */
+            client_uuid?: string | null;
+            /**
+             * @description Another PAID, unclosed float of the same person (R2). Shown to
+             *     approvers while the request is open; it never blocks.
+             */
+            readonly open_float_warning: {
+                [key: string]: string;
+            } | null;
+            readonly pm_level_skipped: boolean;
+            readonly spent: string;
+            readonly balance: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        AllowanceRequestRequest: {
+            type: components["schemas"]["AllowanceTypeEnum"];
+            transport_scope?: (components["schemas"]["TransportScopeEnum"] | components["schemas"]["BlankEnum"] | components["schemas"]["NullEnum"]) | null;
+            /**
+             * Format: decimal
+             * @description The whole request, not per day. Excluding VAT (D24).
+             */
+            amount: string;
+            /** Format: date */
+            from_date: string;
+            /** Format: date */
+            to_date: string;
+            site?: number | null;
+            project?: number | null;
+            reason?: string;
+            /** Format: uuid */
+            client_uuid?: string | null;
+        };
+        /**
+         * @description * `FLOAT` - Float
+         *     * `TRANSPORT` - Transport
+         *     * `NIGHT_OUT` - Night out
+         *     * `TEAM_ALLOWANCE` - Team allowance
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        AllowanceTypeEnum: "FLOAT" | "TRANSPORT" | "NIGHT_OUT" | "TEAM_ALLOWANCE" | "OTHER";
         ApprovalAction: {
             readonly id: number;
             readonly decision: components["schemas"]["ApprovalActionDecisionEnum"];
@@ -4052,7 +4394,10 @@ export interface components {
             readonly filename: string;
             readonly content_type: string;
             readonly size: number;
-            readonly kind: components["schemas"]["KindEnum"];
+            readonly kind: components["schemas"]["AttachmentKindEnum"];
+            readonly caption: string;
+            /** Format: uuid */
+            readonly client_uuid: string | null;
             readonly uploaded_by: number | null;
             /** @default  */
             readonly uploaded_by_name: string;
@@ -4061,6 +4406,13 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `PHOTO` - Photo
+         *     * `DOCUMENT` - Document
+         *     * `SIGNATURE` - Signature
+         * @enum {string}
+         */
+        AttachmentKindEnum: "PHOTO" | "DOCUMENT" | "SIGNATURE";
         AttachmentTargets: {
             targets: {
                 [key: string]: unknown[];
@@ -4073,7 +4425,10 @@ export interface components {
             /** Format: binary */
             file: string;
             /** @default PHOTO */
-            kind: components["schemas"]["KindEnum"];
+            kind: components["schemas"]["AttachmentKindEnum"];
+            caption?: string;
+            /** Format: uuid */
+            client_uuid?: string;
         };
         AttachmentUrl: {
             url: string;
@@ -4182,6 +4537,22 @@ export interface components {
             bulk?: components["schemas"]["BoxBulkTakeRequest"][];
             boxes?: string[];
         };
+        Casual: {
+            readonly id: number;
+            name: string;
+            id_number: string;
+            phone?: string;
+            readonly registered_by: number;
+            /** Format: uuid */
+            client_uuid?: string | null;
+        };
+        CasualRequest: {
+            name: string;
+            id_number: string;
+            phone?: string;
+            /** Format: uuid */
+            client_uuid?: string | null;
+        };
         CategoryCustomField: {
             readonly id: number;
             category: number;
@@ -4259,6 +4630,10 @@ export interface components {
             acknowledged_at?: string;
             acknowledged_by_name?: string;
             notes?: string;
+        };
+        CloseFloatRequest: {
+            /** Format: decimal */
+            returned_amount: string;
         };
         /** @description H5: the override needs a reason, and the reason is the point. */
         CloseJobRequest: {
@@ -4386,7 +4761,7 @@ export interface components {
          * @enum {string}
          */
         CustodyTransferStatusEnum: "PENDING" | "ACKNOWLEDGED" | "DECLINED" | "CANCELLED";
-        DecideExpenseRequest: {
+        DecideRequest: {
             approved: boolean;
             reason?: string;
         };
@@ -4734,17 +5109,49 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        ExpenseCasualLine: {
+            readonly id: number;
+            casual: number;
+            readonly casual_name: string;
+            days: number;
+            /** Format: decimal */
+            amount?: string | null;
+        };
+        ExpenseCasualLineRequest: {
+            casual: number;
+            days: number;
+            /** Format: decimal */
+            amount?: string | null;
+        };
         ExpenseCategory: {
             readonly id: number;
             name: string;
             code?: string;
+            kind?: components["schemas"]["ExpenseKindEnum"];
             is_active?: boolean;
         };
         ExpenseCategoryRequest: {
             name: string;
             code?: string;
+            kind?: components["schemas"]["ExpenseKindEnum"];
             is_active?: boolean;
         };
+        /**
+         * @description * `GENERAL` - General
+         *     * `FUEL` - Fuel — needs the vehicle registration
+         *     * `CASUAL_LABOUR` - Casual labour — needs the casuals and days
+         * @enum {string}
+         */
+        ExpenseKindEnum: "GENERAL" | "FUEL" | "CASUAL_LABOUR";
+        /**
+         * @description * `PENDING_PM` - Waiting on the project manager
+         *     * `PENDING_FINANCE` - Waiting on Finance
+         *     * `APPROVED` - Approved — counts against the project
+         *     * `PAID` - Paid
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        ExpenseStatusEnum: "PENDING_PM" | "PENDING_FINANCE" | "APPROVED" | "PAID" | "REJECTED";
         /**
          * @description * `TEXT` - Text
          *     * `NUMBER` - Number
@@ -4754,6 +5161,18 @@ export interface components {
          * @enum {string}
          */
         FieldTypeEnum: "TEXT" | "NUMBER" | "DATE" | "DROPDOWN" | "BOOLEAN";
+        FinanceSettings: {
+            allowance_limits: {
+                [key: string]: unknown;
+            };
+            finance_director_role: number | null;
+        };
+        FinanceSettingsRead: {
+            allowance_limits: {
+                [key: string]: unknown;
+            };
+            finance_director_role: number | null;
+        };
         /**
          * @description * `xlsx` - xlsx
          *     * `pdf` - pdf
@@ -5336,13 +5755,6 @@ export interface components {
          * @enum {string}
          */
         JobStatusEnum: "OPEN" | "IN_PROGRESS" | "AWAITING_CLOSEOUT" | "CLOSED" | "CANCELLED";
-        /**
-         * @description * `PHOTO` - Photo
-         *     * `DOCUMENT` - Document
-         *     * `SIGNATURE` - Signature
-         * @enum {string}
-         */
-        KindEnum: "PHOTO" | "DOCUMENT" | "SIGNATURE";
         Location: {
             readonly id: number;
             parent?: number | null;
@@ -5394,6 +5806,12 @@ export interface components {
             results: {
                 [key: string]: unknown;
             }[];
+        };
+        MarkPaidRequest: {
+            /** @default  */
+            payment_reference: string;
+            /** Format: date-time */
+            paid_at?: string;
         };
         MarkedRead: {
             marked: number;
@@ -5516,6 +5934,8 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** @enum {unknown} */
+        NullEnum: null;
         NumberSeries: {
             readonly document_type: string;
             readonly label: string;
@@ -5635,6 +6055,19 @@ export interface components {
          * @enum {string}
          */
         OwnerTypeEnum: "OWN" | "CLIENT";
+        PaginatedAllowanceRequestList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["AllowanceRequest"][];
+        };
         PaginatedApprovalRequestList: {
             /**
              * Format: uri
@@ -5699,6 +6132,19 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["BoxRow"][];
+        };
+        PaginatedCasualList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["Casual"][];
         };
         PaginatedCategoryCustomFieldList: {
             /**
@@ -6175,6 +6621,13 @@ export interface components {
             is_active?: boolean;
             description?: string;
         };
+        PatchedCasualRequest: {
+            name?: string;
+            id_number?: string;
+            phone?: string;
+            /** Format: uuid */
+            client_uuid?: string | null;
+        };
         PatchedCategoryCustomFieldRequest: {
             category?: number;
             label?: string;
@@ -6246,7 +6699,26 @@ export interface components {
         PatchedExpenseCategoryRequest: {
             name?: string;
             code?: string;
+            kind?: components["schemas"]["ExpenseKindEnum"];
             is_active?: boolean;
+        };
+        /**
+         * @description What may still change on a pending expense: the words and the photo count.
+         *
+         *     Money, project and category are not here: changing them after a PM has seen
+         *     the entry would let an approved-looking number differ from the one approved.
+         *     A wrong amount is rejected and sent again (§4.17.3).
+         */
+        PatchedExpenseEditRequest: {
+            description?: string;
+            scope_of_work?: string;
+            photos_expected?: number;
+        };
+        PatchedFinanceSettingsUpdateRequest: {
+            allowance_limits?: {
+                [key: string]: unknown;
+            };
+            finance_director_role?: number | null;
         };
         PatchedGateInRequest: {
             source_type?: components["schemas"]["SourceTypeEnum"];
@@ -6396,19 +6868,6 @@ export interface components {
             currency?: string;
             notification_channels?: unknown;
             notification_matrix?: unknown;
-        };
-        PatchedProjectExpenseRequest: {
-            project?: number;
-            job?: number | null;
-            category?: number;
-            /**
-             * Format: decimal
-             * @description Excluding VAT (D24).
-             */
-            amount?: string;
-            /** Format: date */
-            incurred_on?: string;
-            description?: string;
         };
         /**
          * @description Drop fields the requesting user is not permitted to see.
@@ -6619,11 +7078,15 @@ export interface components {
         };
         ProjectExpense: {
             readonly id: number;
-            project: number;
+            project?: number | null;
             readonly project_reference: string;
+            site?: number | null;
+            /** @default  */
+            readonly site_name: string;
             job?: number | null;
             category: number;
             readonly category_name: string;
+            readonly category_kind: string;
             /**
              * Format: decimal
              * @description Excluding VAT (D24).
@@ -6632,21 +7095,37 @@ export interface components {
             /** Format: date */
             incurred_on: string;
             description?: string;
+            scope_of_work?: string;
+            vehicle_reg?: string;
+            /** Format: decimal */
+            litres?: string | null;
+            float_request?: number | null;
+            photos_expected?: number;
+            /** Format: uuid */
+            client_uuid?: string | null;
+            casual_lines?: components["schemas"]["ExpenseCasualLine"][];
             readonly recorded_by: number;
             readonly recorded_by_name: string;
-            readonly status: components["schemas"]["ProjectExpenseStatusEnum"];
+            readonly status: components["schemas"]["ExpenseStatusEnum"];
             readonly decided_by: number | null;
             /** Format: date-time */
             readonly decided_at: string | null;
             readonly decision_reason: string;
+            /** Format: date-time */
+            readonly paid_at: string | null;
+            readonly paid_by: number | null;
+            readonly payment_reference: string;
             readonly reverses: number | null;
             readonly is_reversal: boolean;
             readonly is_evidenced: boolean;
+            readonly evidence_state: string;
+            readonly pm_level_skipped: boolean;
             /** Format: date-time */
             readonly created_at: string;
         };
         ProjectExpenseRequest: {
-            project: number;
+            project?: number | null;
+            site?: number | null;
             job?: number | null;
             category: number;
             /**
@@ -6657,16 +7136,16 @@ export interface components {
             /** Format: date */
             incurred_on: string;
             description?: string;
+            scope_of_work?: string;
+            vehicle_reg?: string;
+            /** Format: decimal */
+            litres?: string | null;
+            float_request?: number | null;
+            photos_expected?: number;
+            /** Format: uuid */
+            client_uuid?: string | null;
+            casual_lines?: components["schemas"]["ExpenseCasualLineRequest"][];
         };
-        /**
-         * @description * `PENDING_PM` - Waiting on the project manager
-         *     * `PENDING_FINANCE` - Waiting on Finance
-         *     * `APPROVED` - Approved — counts against the project
-         *     * `PAID` - Paid
-         *     * `REJECTED` - Rejected
-         * @enum {string}
-         */
-        ProjectExpenseStatusEnum: "PENDING_PM" | "PENDING_FINANCE" | "APPROVED" | "PAID" | "REJECTED";
         /**
          * @description Drop fields the requesting user is not permitted to see.
          *
@@ -6923,7 +7402,7 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
-        ReverseExpenseRequest: {
+        ReverseRequest: {
             reason: string;
         };
         /**
@@ -7350,6 +7829,12 @@ export interface components {
             /** @default  */
             note: string;
         };
+        /**
+         * @description * `WITHIN_NAIROBI` - Within Nairobi
+         *     * `OUTSIDE_NAIROBI` - Outside Nairobi
+         * @enum {string}
+         */
+        TransportScopeEnum: "WITHIN_NAIROBI" | "OUTSIDE_NAIROBI";
         UnreadCount: {
             unread: number;
         };
@@ -7663,6 +8148,257 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Organization"];
+                };
+            };
+        };
+    };
+    allowance_requests_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Only entries I recorded. */
+                mine?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Approved and unpaid (needs finance.approve). */
+                payable?: boolean;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                site?: number;
+                /**
+                 * @description * `PENDING_PM` - Waiting on the project manager
+                 *     * `PENDING_FINANCE` - Waiting on Finance
+                 *     * `APPROVED` - Approved — counts against the project
+                 *     * `PAID` - Paid
+                 *     * `REJECTED` - Rejected
+                 */
+                status?: "APPROVED" | "PAID" | "PENDING_FINANCE" | "PENDING_PM" | "REJECTED";
+                /**
+                 * @description * `FLOAT` - Float
+                 *     * `TRANSPORT` - Transport
+                 *     * `NIGHT_OUT` - Night out
+                 *     * `TEAM_ALLOWANCE` - Team allowance
+                 *     * `OTHER` - Other
+                 */
+                type?: "FLOAT" | "NIGHT_OUT" | "OTHER" | "TEAM_ALLOWANCE" | "TRANSPORT";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAllowanceRequestList"];
+                };
+            };
+        };
+    };
+    allowance_requests_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllowanceRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AllowanceRequestRequest"];
+                "multipart/form-data": components["schemas"]["AllowanceRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowanceRequest"];
+                };
+            };
+        };
+    };
+    allowance_requests_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this allowance request. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowanceRequest"];
+                };
+            };
+        };
+    };
+    allowance_requests_close_float_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this allowance request. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseFloatRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CloseFloatRequest"];
+                "multipart/form-data": components["schemas"]["CloseFloatRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowanceRequest"];
+                };
+            };
+        };
+    };
+    allowance_requests_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this allowance request. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DecideRequest"];
+                "multipart/form-data": components["schemas"]["DecideRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowanceRequest"];
+                };
+            };
+        };
+    };
+    allowance_requests_mark_paid_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this allowance request. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkPaidRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MarkPaidRequest"];
+                "multipart/form-data": components["schemas"]["MarkPaidRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowanceRequest"];
+                };
+            };
+        };
+    };
+    allowance_requests_resubmit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this allowance request. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowanceRequest"];
+                };
+            };
+        };
+    };
+    allowance_requests_pending_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Only entries I recorded. */
+                mine?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                site?: number;
+                /**
+                 * @description * `PENDING_PM` - Waiting on the project manager
+                 *     * `PENDING_FINANCE` - Waiting on Finance
+                 *     * `APPROVED` - Approved — counts against the project
+                 *     * `PAID` - Paid
+                 *     * `REJECTED` - Rejected
+                 */
+                status?: "APPROVED" | "PAID" | "PENDING_FINANCE" | "PENDING_PM" | "REJECTED";
+                /**
+                 * @description * `FLOAT` - Float
+                 *     * `TRANSPORT` - Transport
+                 *     * `NIGHT_OUT` - Night out
+                 *     * `TEAM_ALLOWANCE` - Team allowance
+                 *     * `OTHER` - Other
+                 */
+                type?: "FLOAT" | "NIGHT_OUT" | "OTHER" | "TEAM_ALLOWANCE" | "TRANSPORT";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAllowanceRequestList"];
                 };
             };
         };
@@ -8497,6 +9233,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoxDetail"];
+                };
+            };
+        };
+    };
+    casuals_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedCasualList"];
+                };
+            };
+        };
+    };
+    casuals_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CasualRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CasualRequest"];
+                "multipart/form-data": components["schemas"]["CasualRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Casual"];
+                };
+            };
+        };
+    };
+    casuals_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this casual. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Casual"];
+                };
+            };
+        };
+    };
+    casuals_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this casual. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCasualRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCasualRequest"];
+                "multipart/form-data": components["schemas"]["PatchedCasualRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Casual"];
                 };
             };
         };
@@ -9870,6 +10709,12 @@ export interface operations {
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 is_active?: boolean;
+                /**
+                 * @description * `GENERAL` - General
+                 *     * `FUEL` - Fuel — needs the vehicle registration
+                 *     * `CASUAL_LABOUR` - Casual labour — needs the casuals and days
+                 */
+                kind?: "CASUAL_LABOUR" | "FUEL" | "GENERAL";
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
@@ -10013,6 +10858,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+        };
+    };
+    finance_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceSettings"];
+                };
+            };
+        };
+    };
+    finance_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedFinanceSettingsUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedFinanceSettingsUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedFinanceSettingsUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceSettingsRead"];
                 };
             };
         };
@@ -11911,11 +12800,16 @@ export interface operations {
                 category?: number;
                 /** @description The pagination cursor value. */
                 cursor?: string;
+                float_request?: number;
                 job?: number;
+                /** @description Only entries I recorded. */
+                mine?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
                 page_size?: number;
+                /** @description Approved and unpaid (needs finance.approve). */
+                payable?: boolean;
                 project?: number;
                 /** @description A search term. */
                 search?: string;
@@ -12003,9 +12897,9 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["PatchedProjectExpenseRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectExpenseRequest"];
-                "multipart/form-data": components["schemas"]["PatchedProjectExpenseRequest"];
+                "application/json": components["schemas"]["PatchedExpenseEditRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedExpenseEditRequest"];
+                "multipart/form-data": components["schemas"]["PatchedExpenseEditRequest"];
             };
         };
         responses: {
@@ -12031,11 +12925,61 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DecideExpenseRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DecideExpenseRequest"];
-                "multipart/form-data": components["schemas"]["DecideExpenseRequest"];
+                "application/json": components["schemas"]["DecideRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DecideRequest"];
+                "multipart/form-data": components["schemas"]["DecideRequest"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectExpense"];
+                };
+            };
+        };
+    };
+    project_expenses_mark_paid_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project expense. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkPaidRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MarkPaidRequest"];
+                "multipart/form-data": components["schemas"]["MarkPaidRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectExpense"];
+                };
+            };
+        };
+    };
+    project_expenses_resubmit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project expense. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -12059,9 +13003,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReverseExpenseRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["ReverseExpenseRequest"];
-                "multipart/form-data": components["schemas"]["ReverseExpenseRequest"];
+                "application/json": components["schemas"]["ReverseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReverseRequest"];
+                "multipart/form-data": components["schemas"]["ReverseRequest"];
             };
         };
         responses: {
@@ -12075,9 +13019,32 @@ export interface operations {
             };
         };
     };
-    project_expenses_pending_retrieve: {
+    project_expenses_pending_list: {
         parameters: {
-            query?: never;
+            query?: {
+                category?: number;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                float_request?: number;
+                job?: number;
+                /** @description Only entries I recorded. */
+                mine?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                project?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `PENDING_PM` - Waiting on the project manager
+                 *     * `PENDING_FINANCE` - Waiting on Finance
+                 *     * `APPROVED` - Approved — counts against the project
+                 *     * `PAID` - Paid
+                 *     * `REJECTED` - Rejected
+                 */
+                status?: "APPROVED" | "PAID" | "PENDING_FINANCE" | "PENDING_PM" | "REJECTED";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -12089,7 +13056,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProjectExpense"];
+                    "application/json": components["schemas"]["PaginatedProjectExpenseList"];
                 };
             };
         };
@@ -12321,12 +13288,8 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
-                /**
-                 * @description * `OPEN` - Open
-                 *     * `CLOSED` - Closed
-                 *     * `CANCELLED` - Cancelled
-                 */
-                status?: "CANCELLED" | "CLOSED" | "OPEN";
+                site?: number;
+                status?: string;
             };
             header?: never;
             path?: never;

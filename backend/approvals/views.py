@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from django.core import signing
-from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -13,7 +12,6 @@ from accounts.permissions_registry import PERM
 from approvals.models import (
     ApprovalAction,
     ApprovalRequest,
-    ApprovalRequestStatus,
     ApprovalRule,
 )
 from core.api import TenantScopedViewSet
@@ -286,49 +284,13 @@ class ApprovalRequestViewSet(TenantScopedViewSet):
         they hold directly (R4). A list showing approvals somebody else must
         make is noise, and noise is what stops people reading the list at all.
         """
-        from django.db.models import Exists, OuterRef, Q
+        from approvals.addressing import open_requests_addressed_to
 
-        from accounts.services import resolve_permissions
-
-        open_statuses = (ApprovalRequestStatus.PENDING, ApprovalRequestStatus.ESCALATED)
-        outstanding = self.filter_queryset(self.get_queryset()).filter(
-            status__in=open_statuses
+        # The definition lives in approvals.addressing so the finance entries'
+        # own /pending (§4.17.6) cannot drift from this one.
+        outstanding = open_requests_addressed_to(
+            request.user, self.filter_queryset(self.get_queryset())
         )
-
-        # Narrowed in the database rather than in Python, because the result has
-        # to stay a queryset: cursor pagination orders by a column, and a list
-        # cannot be ordered by one (§6, N-2).
-        now = timezone.now()
-        permissions = resolve_permissions(request.user)
-        role_ids = set(request.user.user_roles.values_list("role_id", flat=True))
-        # F5: a delegation confers the role for a period.
-        role_ids.update(
-            request.user.delegations_received.filter(
-                is_revoked=False, starts_at__lte=now, ends_at__gte=now
-            ).values_list("role_id", flat=True)
-        )
-        # A delegation lends a role, never a named signature or a permission
-        # level (D22), so only permissions held directly are matched.
-        held = permissions.codenames - set(permissions.delegated_from)
-
-        addressed = Q(required_role_id__in=role_ids) | Q(required_user=request.user)
-        if held:
-            addressed |= Q(required_permission__in=held)
-        # B4: a blanket approval permission may act on any *role* level
-        # (`can_approve`), so those stay visible to its holder. A person- or
-        # permission-addressed level is never theirs by that route.
-        if permissions.has(PERM.GATE_OUT_APPROVE):
-            addressed |= Q(required_role__isnull=False)
-
-        # Levels answer in order, so a Finance request is not the caller's
-        # business while the PM is still to answer: it could not be acted on.
-        earlier_open = ApprovalRequest.objects.filter(
-            document_type=OuterRef("document_type"),
-            document_id=OuterRef("document_id"),
-            level__lt=OuterRef("level"),
-            status__in=open_statuses,
-        )
-        outstanding = outstanding.filter(addressed).filter(~Exists(earlier_open))
 
         # Self-approval is deliberately *not* filtered out here. §5.3 refuses it
         # at the moment of approving, and seeing your own request in the queue —

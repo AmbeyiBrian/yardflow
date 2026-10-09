@@ -265,6 +265,12 @@ SPECTACULAR_SETTINGS = {
         "ConditionEnum": "stock.models.Condition.choices",
         "OwnerTypeEnum": "stock.models.OwnerType.choices",
         "CriticalityEnum": "catalogue.models.Criticality.choices",
+        # §4.17: money-out entries share one status set and each field named
+        # "type"/"kind" would otherwise collide with another app's.
+        "ExpenseStatusEnum": "commercials.models.ExpenseStatus.choices",
+        "AllowanceTypeEnum": "commercials.models.AllowanceType.choices",
+        "ExpenseKindEnum": "commercials.models.ExpenseKind.choices",
+        "AttachmentKindEnum": "core.models.AttachmentKind.choices",
     },
 }
 

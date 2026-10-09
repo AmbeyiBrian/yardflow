@@ -47,7 +47,13 @@ from catalogue.views import (
     ItemCategoryViewSet,
     ItemTypeViewSet,
 )
-from commercials.views import ExpenseCategoryViewSet, ProjectExpenseViewSet
+from commercials.finance_api import (
+    AllowanceRequestViewSet,
+    CasualViewSet,
+    ExpenseCategoryViewSet,
+    FinanceSettingsView,
+    ProjectExpenseViewSet,
+)
 from core.attachment_api import AttachmentTargetsView, AttachmentViewSet
 from core.number_series_api import NumberSeriesView
 from core.organization_api import OrganizationProfileView
@@ -260,6 +266,10 @@ router.register(
     "expense-categories", ExpenseCategoryViewSet, basename="expense-category"
 )
 router.register("project-expenses", ProjectExpenseViewSet, basename="project-expense")
+router.register(
+    "allowance-requests", AllowanceRequestViewSet, basename="allowance-request"
+)
+router.register("casuals", CasualViewSet, basename="casual")
 router.register("locations", LocationViewSet, basename="location")
 router.register("stock-nodes", StockNodeViewSet, basename="stock-node")
 
@@ -315,6 +325,7 @@ v1_patterns = [
     path("permissions", PermissionCatalogueView.as_view(), name="permission-catalogue"),
     # C8: one settings object per tenant, so a singleton rather than a collection.
     path("settings", OrganizationSettingsView.as_view(), name="organization-settings"),
+    path("finance/settings", FinanceSettingsView.as_view(), name="finance-settings"),
     # M6: how each document type is numbered, and what the next one will be.
     path("number-series", NumberSeriesView.as_view(), name="number-series"),
     # A4: the company's own details and logo, managed by the company.
