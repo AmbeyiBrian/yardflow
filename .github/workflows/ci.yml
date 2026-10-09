@@ -37,7 +37,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # The same official image, from AWS's public mirror: Docker Hub rate-limits
+        # anonymous pulls, and a shared CI runner hits that limit.
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_DB: yardflow
           POSTGRES_USER: postgres
@@ -51,7 +53,7 @@ jobs:
           --health-retries 10
 
       redis:
-        image: redis:7
+        image: public.ecr.aws/docker/library/redis:7
         ports:
           - 6379:6379
         options: >-

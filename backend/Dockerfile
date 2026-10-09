@@ -16,7 +16,7 @@
 # packaging list the container would run a stale copy of it. Dependencies come
 # from the project metadata; the code comes from the filesystem.
 
-FROM python:3.12-slim-bookworm AS base
+FROM public.ecr.aws/docker/library/python:3.12-slim-bookworm AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

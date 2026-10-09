@@ -11,7 +11,7 @@
 #
 # Build context is the repository root: it needs `frontend/` and `deploy/`.
 
-FROM node:22-alpine AS build
+FROM public.ecr.aws/docker/library/node:22-alpine AS build
 
 WORKDIR /build
 
@@ -23,7 +23,7 @@ COPY frontend/ ./
 RUN npm run build
 
 
-FROM caddy:2-alpine
+FROM public.ecr.aws/docker/library/caddy:2-alpine
 
 # The configuration ships with the image rather than being mounted from the
 # box. It is code — it decides what gets a certificate and what reaches Django —
