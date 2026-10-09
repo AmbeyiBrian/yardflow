@@ -33,8 +33,11 @@ export function photoTarget(operation: QueuedOperation): string | null {
       return 'commercials.ProjectExpense';
     case 'CASUAL':
       return 'commercials.Casual';
+    case 'SITE_PURCHASE':
+      // §4.19.11: receipt photos reuse the stage 1 queue.
+      return 'commercials.SitePurchase';
     default:
-      // An allowance request carries no evidence (§4.17.2).
+      // An allowance request or a supplier carries no photos (§4.17.2, §4.20.8).
       return null;
   }
 }
@@ -114,12 +117,61 @@ export function describeEntry(operation: QueuedOperation, payload: unknown): str
       return `${ALLOWANCE_WORDS[String(body.type)] ?? 'Allowance'} ${kes(body.amount)}`.trim();
     case 'CASUAL':
       return `Casual ${String(body.name ?? '')}`.trim();
+    case 'SUPPLIER':
+      return `Supplier ${String(body.name ?? '')}`.trim();
+    case 'SITE_PURCHASE':
+      return `Purchase ${kes(body.amount ?? purchaseTotal(body.lines))}`.trim();
     default:
       return operation;
   }
 }
 
-export type FinanceKind = 'EXPENSE' | 'ALLOWANCE_REQUEST' | 'CASUAL';
+/** The lines' total, for a queued purchase that carries no `amount` of its own. */
+function purchaseTotal(lines: unknown): number | undefined {
+  if (!Array.isArray(lines) || lines.length === 0) return undefined;
+  const cents = lines.reduce((sum, line) => {
+    const l = line as { quantity?: unknown; unit_price?: unknown };
+    return sum + Math.round(Number(l.quantity) * Number(l.unit_price) * 100);
+  }, 0);
+  return Number.isNaN(cents) ? undefined : cents / 100;
+}
+
+export type FinanceKind =
+  | 'EXPENSE'
+  | 'ALLOWANCE_REQUEST'
+  | 'CASUAL'
+  | 'SUPPLIER'
+  | 'SITE_PURCHASE';
+
+const FINANCE_KIND_SET: ReadonlySet<string> = new Set([
+  'EXPENSE',
+  'ALLOWANCE_REQUEST',
+  'CASUAL',
+  'SUPPLIER',
+  'SITE_PURCHASE',
+]);
+
+/**
+ * Pending rows that must wait because the supplier they name (by
+ * `supplier_client_uuid`) was refused (§4.20.8). Sending them would only be
+ * refused as an unknown supplier; they go once the supplier is fixed and resent.
+ */
+export function heldBehindRefusedSupplier<T extends Pick<QueuedMutation, 'payload'>>(
+  pending: readonly T[],
+  all: readonly Pick<QueuedMutation, 'client_uuid' | 'status' | 'operation'>[],
+): Set<T> {
+  const refused = new Set(
+    all
+      .filter((row) => row.operation === 'SUPPLIER' && row.status === 'REJECTED')
+      .map((row) => row.client_uuid),
+  );
+  return new Set(
+    pending.filter((row) => {
+      const uuid = (row.payload as { supplier_client_uuid?: string } | null)?.supplier_client_uuid;
+      return uuid !== undefined && refused.has(uuid);
+    }),
+  );
+}
 
 export interface QueuedFinanceEntry {
   client_uuid: string;
@@ -157,9 +209,7 @@ export function financeEntries(
   return inCaptureOrder(rows)
     .filter(
       (row) =>
-        (row.operation === 'EXPENSE' ||
-          row.operation === 'ALLOWANCE_REQUEST' ||
-          row.operation === 'CASUAL') &&
+        FINANCE_KIND_SET.has(row.operation) &&
         (row.status === 'PENDING' || row.status === 'REJECTED') &&
         !superseded.has(row.client_uuid),
     )

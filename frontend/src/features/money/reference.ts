@@ -17,9 +17,19 @@ import { useList } from '../../api/hooks';
 import { readReference } from '../../offline/db';
 import { useOffline } from '../../offline/OfflineProvider';
 import type { Project } from '../projects/types';
-import type { Site } from '../settings/types';
+import type { Location, Site } from '../settings/types';
 import { useAssets, type Asset } from '../assets/api';
 import { fuelAssets } from './fuelVehicle';
+import { selectableSuppliers } from '../receiving/supplierPick';
+import type { Supplier as RegisterSupplier } from '../settings/suppliersApi';
+import { useQueuedFinance } from './offline';
+import {
+  mergeSupplierOptions,
+  queuedSupplierOptions,
+  supplierOptions,
+  type BundleSupplier,
+  type SupplierOption,
+} from './suppliersOffline';
 import { useAllowanceRequests, useCasuals, useFinanceSettings } from './api';
 import {
   bundleCategories,
@@ -27,7 +37,11 @@ import {
   bundleLimits,
   bundleOpenProjects,
   bundleSiteProjects,
+  bundleReceivable,
+  bundleVehicles,
+  type BundleLocation,
   type BundleSite,
+  type BundleVehicle,
   type CategoryChoice,
   type FloatChoice,
   type ProjectChoice,
@@ -171,24 +185,79 @@ export function useMoneyLimits(): AllowanceLimits | undefined {
   return online ? network.data?.allowance_limits : bundleLimits(stored.data ?? []);
 }
 
+/** A vehicle for the fuel picker: the register's row, or the bundle's (R14, §4.20.8). */
+export type VehicleChoice = Pick<Asset, 'id' | 'name' | 'tag'>;
+
 /**
  * Vehicles and generators for the fuel picker (R14; design 4.20.10). Online
- * reads the register. Offline there is no list yet: T17.16 adds a `vehicles`
- * table to the bundle and this hook will read it there (the seam); until then
- * the form falls back to the typed registration, so offline fuel still queues.
+ * reads the register. Offline reads the bundle's `vehicles` (§4.20.8); a phone
+ * whose bundle has none falls back to the typed registration, so offline fuel
+ * still queues.
  */
 export function useVehicles(): {
-  vehicles: Asset[];
+  vehicles: VehicleChoice[];
   loading: boolean;
   /** False when this side has no list to offer. */
   available: boolean;
 } {
   const { online } = useOffline();
   const network = useAssets({ status: 'ACTIVE', page_size: 300 });
-  if (!online) return { vehicles: [], loading: false, available: false };
+  const stored = useBundleRows<BundleVehicle>('vehicles', !online);
+  if (!online) {
+    const vehicles = bundleVehicles(stored.data ?? []);
+    return { vehicles, loading: stored.isLoading, available: vehicles.length > 0 };
+  }
   return {
     vehicles: fuelAssets(network.data?.results ?? []),
     loading: network.isLoading,
     available: true,
   };
+}
+
+/**
+ * Suppliers for the gate-in and purchase pickers (R15, §4.20.8): the register
+ * online, the bundle's `suppliers` offline, plus any added on this phone and
+ * still waiting (`q:<uuid>`), so the gate-in can name them before they land.
+ */
+export function useSupplierOptions(): { options: SupplierOption[]; loading: boolean } {
+  const { online } = useOffline();
+  const network = useList<RegisterSupplier>(
+    'suppliers',
+    { page_size: 300, is_active: true },
+    { enabled: online },
+  );
+  const stored = useBundleRows<BundleSupplier>('suppliers', !online);
+  const queued = useQueuedFinance();
+  const options = useMemo(
+    () =>
+      mergeSupplierOptions(
+        supplierOptions(
+          online ? selectableSuppliers(network.data?.results ?? []) : (stored.data ?? []),
+        ),
+        queuedSupplierOptions(queued),
+      ),
+    [online, network.data, stored.data, queued],
+  );
+  return { options, loading: online ? network.isLoading : stored.isLoading };
+}
+
+/**
+ * "Receive into" for an INTO_YARD purchase (§4.19.3): yards and stores, from
+ * the network online and from the bundle's locations offline (§4.19.11).
+ */
+export function useReceivableLocations(): {
+  locations: { id: number; label: string }[];
+  loading: boolean;
+} {
+  const { online } = useOffline();
+  const network = useList<Location>('locations', { page_size: 200 }, { enabled: online });
+  const stored = useBundleRows<BundleLocation>('locations', !online);
+  return online
+    ? {
+        locations: (network.data?.results ?? [])
+          .filter((l) => l.is_active && (l.type === 'YARD' || l.type === 'STORE'))
+          .map((l) => ({ id: l.id, label: `${l.code} · ${l.name}` })),
+        loading: network.isLoading,
+      }
+    : { locations: bundleReceivable(stored.data ?? []), loading: stored.isLoading };
 }

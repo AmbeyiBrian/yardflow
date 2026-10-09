@@ -26,6 +26,8 @@ import {
 } from '../../offline/db';
 import { financeEntries, type QueuedFinanceEntry } from '../../offline/financeQueue';
 import type { AllowanceInput, CasualInput, ExpenseInput } from './api';
+import type { QueuedPurchaseBody } from './purchasesOffline';
+import { supplierBody, type SupplierDraft } from './suppliersOffline';
 
 export type { QueuedFinanceEntry } from '../../offline/financeQueue';
 
@@ -54,6 +56,8 @@ export type QueuedExpenseBody = Omit<ExpenseInput, 'casual_lines' | 'client_uuid
 
 export type QueuedAllowanceBody = Omit<AllowanceInput, 'client_uuid'>;
 export type QueuedCasualBody = Omit<CasualInput, 'client_uuid'>;
+
+export type { QueuedPurchaseBody } from './purchasesOffline';
 
 const NO_STORAGE =
   'This browser cannot store anything offline, and there is no connection. ' +
@@ -107,6 +111,38 @@ export function queueCasual(
 }
 
 /**
+ * Queue a supplier added with no signal (§4.20.8, R15). Returns its
+ * `client_uuid`, which a gate-in or purchase queued after it names as
+ * `supplier_client_uuid`.
+ *
+ * Payload: `{ name, contact_name?, phone?, kra_pin?, client_uuid }`.
+ */
+export function queueSupplier(
+  draft: SupplierDraft,
+  client_uuid: string = newUuid(),
+): Promise<string> {
+  return queueFinance('SUPPLIER', supplierBody(draft), client_uuid, []);
+}
+
+/**
+ * Queue a site purchase with its receipt photos (§4.19.11, R6, R7). Returns its
+ * `client_uuid`.
+ *
+ * Payload: the online `SitePurchaseInput` (`project`, `site`, `purchase_date`,
+ * `destination`, `receive_into`, `lines[]`, `over_budget_reason?`,
+ * `photos_expected`) with `supplier` (server id) or `supplier_client_uuid`, and
+ * `client_uuid`. Photos upload afterwards to `commercials.SitePurchase`.
+ */
+export function queuePurchase(
+  body: QueuedPurchaseBody,
+  photos: PhotoDraft[] = [],
+  client_uuid: string = newUuid(),
+): Promise<string> {
+  const photos_expected = body.photos_expected ?? photos.length;
+  return queueFinance('SITE_PURCHASE', { ...body, photos_expected }, client_uuid, photos);
+}
+
+/**
  * "Fix and resend" on a refused entry (R6): a new `client_uuid` with
  * `supersedes_client_uuid`, which tells the server to resolve the old exception
  * when the new one lands. The old uuid cannot be reused — the server already
@@ -140,6 +176,16 @@ export async function resendCorrected(
     .equals(oldClientUuid)
     .modify({ queue_client_uuid: client_uuid });
   await store.queue.where('client_uuid').equals(oldClientUuid).delete();
+  // §4.20.8: whatever named a resent supplier by its old uuid now names the new
+  // one, so the gate-in or purchase waiting behind it can go.
+  if (old.operation === 'SUPPLIER') {
+    await store.queue.where('status').equals('PENDING').modify((row) => {
+      const payload = row.payload as { supplier_client_uuid?: string } | null;
+      if (payload?.supplier_client_uuid === oldClientUuid) {
+        row.payload = { ...payload, supplier_client_uuid: client_uuid };
+      }
+    });
+  }
   return client_uuid;
 }
 

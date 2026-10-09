@@ -72,6 +72,7 @@ export function EntryCard({
   to?: string;
   title: string;
   meta?: string;
+  /** Blank for an entry with no figure, such as a supplier waiting to send. */
   amount: string;
   status: ExpenseStatus;
   queued?: boolean;
@@ -88,7 +89,7 @@ export function EntryCard({
         {meta ? <p className="truncate text-sm text-slate-500">{meta}</p> : null}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <Money value={amount} />
+        {amount ? <Money value={amount} /> : null}
         <StatusPill status={status} queued={queued} />
       </div>
     </div>
@@ -213,10 +214,21 @@ function ExpensesTab() {
 function PurchasesTab() {
   const query = useSitePurchases({ mine: true, page_size: 50 });
   const resubmit = useResubmitSitePurchase();
+  // R6, §4.19.11, §4.20.8: purchases and suppliers still on this phone.
+  const money = useQueuedMoney();
+  const queued = [...money.suppliers, ...money.purchases];
   const rows = query.data?.results ?? [];
   return (
+    <div className="flex flex-col gap-2">
+      {queued.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {queued.map((card) => (
+            <QueuedEntryCard key={`q${card.client_uuid}`} card={card} />
+          ))}
+        </ul>
+      ) : null}
     <ListState query={query}>
-      {rows.length === 0 ? (
+      {rows.length === 0 && queued.length === 0 ? (
         <EmptyState
           title="No purchases yet."
           hint="Record one when you buy goods for a site."
@@ -260,6 +272,7 @@ function PurchasesTab() {
         </ul>
       )}
     </ListState>
+    </div>
   );
 }
 

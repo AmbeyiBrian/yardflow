@@ -30,7 +30,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import { errorMessage, useAction, useDetail, useList } from '../../api/hooks';
 import { useOffline } from '../../offline/OfflineProvider';
-import { newUuid } from '../../offline/db';
+import { enqueue, newUuid } from '../../offline/db';
 import { submitOrQueue } from '../../offline/sync';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { ItemPicker, type PickedItem } from '../../components/ItemPicker';
@@ -46,8 +46,9 @@ import {
   Spinner,
   Textarea,
 } from '../../components/ui';
-import type { Supplier as RegisterSupplier } from '../settings/suppliersApi';
-import { selectableSuppliers, supplierNameFor, supplierOptionLabel } from './supplierPick';
+import { useSupplierOptions } from '../money/reference';
+import { OfflineSupplierSheet } from '../money/SupplierPages';
+import { gateInSupplierFields, isQueuedSupplier } from '../money/suppliersOffline';
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Client, Location, Site } from '../settings/types';
@@ -283,14 +284,14 @@ export default function GateInCapturePage() {
 
   const { online, refresh } = useOffline();
   // R15 (4.20.5): receive from a register supplier (PENDING allowed, REJECTED
-  // and inactive not). Offline the picker gives way to a typed name.
-  const suppliers = useList<RegisterSupplier>(
-    'suppliers',
-    { page_size: 300, is_active: true },
-    { enabled: online },
-  );
-  const supplierRegister = online;
-  const pickableSuppliers = selectableSuppliers(suppliers.data?.results ?? []);
+  // and inactive not). Offline the picker reads the bundle's suppliers plus any
+  // added on this phone (§4.20.8); a bundle with none gives way to a typed name.
+  const supplierPicks = useSupplierOptions();
+  const [addingSupplier, setAddingSupplier] = useState(false);
+  // A draft already on the server cannot name a supplier that is still on this phone.
+  const pickableSuppliers = supplierPicks.options.filter((o) => !(editingId && o.queued));
+  const supplierRegister = online || pickableSuppliers.length > 0;
+  const supplierOnPhone = isQueuedSupplier(draft.header.supplier ?? '');
   const create = useAction<Record<string, unknown>, { id: number }>({
     resource: 'gate-ins',
   });
@@ -400,8 +401,9 @@ export default function GateInCapturePage() {
     const header = draft.header;
     return {
       source_type: header.source_type,
-      supplier: header.supplier ? Number(header.supplier) : null,
-      supplier_name: header.supplier_name,
+      // §4.20.8: a supplier still on this phone goes as `supplier_client_uuid`,
+      // and the queue replays it before this delivery.
+      ...gateInSupplierFields(header.supplier ?? '', header.supplier_name),
       client: header.client ? Number(header.client) : null,
       returned_by: header.returned_by ? Number(header.returned_by) : null,
       origin_site: header.origin_site ? Number(header.origin_site) : null,
@@ -420,6 +422,11 @@ export default function GateInCapturePage() {
 
   async function saveDraft() {
     setBanner(null);
+    if (supplierOnPhone) {
+      // A server draft cannot name a supplier the server has not seen yet.
+      setBanner('That supplier is still waiting to send. Receive the delivery to save it on this phone, or wait until the supplier has sent.');
+      return;
+    }
     try {
       const saved = await store();
       clearDraft();
@@ -452,11 +459,16 @@ export default function GateInCapturePage() {
       // client_uuid so a later retry cannot double-post it (N2, §8.2). The
       // storekeeper's flow does not change — which is the point: a gate-in they
       // cannot capture is a delivery that goes unrecorded.
-      const outcome = await submitOrQueue('GATE_IN', payload(), async () => {
-        const saved = await store();
-        savedId = saved.id;
-        return post.mutateAsync({ id: saved.id });
-      });
+      const outcome = supplierOnPhone
+        ? await enqueue('GATE_IN', payload()).then((client_uuid) => {
+            if (!client_uuid) throw new Error('This browser cannot store anything offline.');
+            return { queued: true, result: undefined };
+          })
+        : await submitOrQueue('GATE_IN', payload(), async () => {
+            const saved = await store();
+            savedId = saved.id;
+            return post.mutateAsync({ id: saved.id });
+          });
 
       clearDraft();
       if (outcome.queued) {
@@ -583,7 +595,7 @@ export default function GateInCapturePage() {
           </Field>
         ) : (
           <Field label="Supplier" htmlFor="gi-supplier">
-            {supplierRegister ? (
+            {online ? (
               <ControlledReferenceSelect
                 resource="suppliers"
                 id="gi-supplier"
@@ -592,25 +604,42 @@ export default function GateInCapturePage() {
                   // The name rides along for display and back-compat (4.20.5).
                   setHeader({
                     supplier: event.target.value,
-                    supplier_name: supplierNameFor(
-                      pickableSuppliers,
-                      event.target.value,
-                      '',
-                    ),
+                    supplier_name:
+                      pickableSuppliers.find((o) => o.value === event.target.value)?.name ?? '',
                   })
                 }
               >
                 <option value="">Choose…</option>
                 {pickableSuppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplierOptionLabel(supplier)}
+                  <option key={supplier.value} value={supplier.value}>
+                    {supplier.label}
                   </option>
                 ))}
               </ControlledReferenceSelect>
+            ) : supplierRegister ? (
+              // Offline the register's own "Add new" sheet cannot save, so the
+              // plain list is used with the offline add below (§4.20.8).
+              <Select
+                id="gi-supplier"
+                value={draft.header.supplier ?? ''}
+                onChange={(event) =>
+                  setHeader({
+                    supplier: event.target.value,
+                    supplier_name:
+                      pickableSuppliers.find((o) => o.value === event.target.value)?.name ?? '',
+                  })
+                }
+              >
+                <option value="">Choose…</option>
+                {pickableSuppliers.map((supplier) => (
+                  <option key={supplier.value} value={supplier.value}>
+                    {supplier.label}
+                  </option>
+                ))}
+              </Select>
             ) : (
-              // Offline there is no register to read: T17.16 adds the bundle's
-              // suppliers here (the seam). Until then the name is typed, as
-              // before, and the draft still queues (R6).
+              // Offline with no suppliers in the bundle (an older server): the
+              // name is typed, as before, and the draft still queues (R6).
               <Input
                 id="gi-supplier"
                 value={draft.header.supplier_name}
@@ -619,6 +648,16 @@ export default function GateInCapturePage() {
                 }
               />
             )}
+            {!online ? (
+              <Button variant="ghost" onClick={() => setAddingSupplier(true)}>
+                Not on the list? Add a supplier
+              </Button>
+            ) : null}
+            <OfflineSupplierSheet
+              open={addingSupplier}
+              onClose={() => setAddingSupplier(false)}
+              onAdded={(option) => setHeader({ supplier: option.value, supplier_name: option.name })}
+            />
           </Field>
         )}
 

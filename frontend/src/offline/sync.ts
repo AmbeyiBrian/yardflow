@@ -21,6 +21,7 @@
 import { ApiError, api } from '../api/client';
 import {
   ATTENDANCE_OPERATIONS,
+  allQueued,
   FINANCE_OPERATIONS,
   type QueuedOperation,
   clearApplied,
@@ -31,7 +32,7 @@ import {
   saveReference,
   saveReleasable,
 } from './db';
-import { inCaptureOrder } from './financeQueue';
+import { heldBehindRefusedSupplier, inCaptureOrder } from './financeQueue';
 import { drainPhotos } from './photos';
 
 export interface SyncOutcome {
@@ -74,7 +75,11 @@ export async function drainQueue(): Promise<SyncOutcome> {
 async function drainEntries(): Promise<SyncOutcome> {
   // §4.17.8: capture order, so a casual registered offline reaches the server
   // before the expense that names it.
-  const rows = inCaptureOrder(await pending());
+  // §4.20.8: a gate-in or purchase naming a refused supplier waits behind it,
+  // until the supplier is fixed and resent.
+  const waiting = inCaptureOrder(await pending());
+  const held = heldBehindRefusedSupplier(waiting, await allQueued());
+  const rows = waiting.filter((row) => !held.has(row));
   if (rows.length === 0) {
     await clearApplied();
     return { applied: 0, rejected: 0, replayed: 0, idle: true };
@@ -164,6 +169,11 @@ export async function fetchBundle(): Promise<{ ok: boolean; passes: number }> {
       casuals?: unknown[];
       my_floats?: unknown[];
       finance_limits?: Record<string, unknown>;
+      // R15, §4.20.8: active, not REJECTED suppliers (id, name, status) and
+      // ACTIVE vehicles and generators (id, tag, name, type). Optional for an
+      // older server.
+      suppliers?: unknown[];
+      vehicles?: unknown[];
       // R13, §4.18.9: the area the phone checks a clock-in against. `sites` and
       // `locations` carry latitude/longitude/radius_m; `locations` leaves out
       // OFFICE, so those arrive here. Optional for an older server.
@@ -190,6 +200,8 @@ export async function fetchBundle(): Promise<{ ok: boolean; passes: number }> {
       saveReference('casuals', bundle.casuals ?? []),
       saveReference('my_floats', bundle.my_floats ?? []),
       saveReference('finance_limits', [bundle.finance_limits ?? {}]),
+      saveReference('suppliers', bundle.suppliers ?? []),
+      saveReference('vehicles', bundle.vehicles ?? []),
       saveReference('offices', bundle.offices ?? []),
       saveReference('attendance', bundle.attendance ? [bundle.attendance] : []),
     ]);

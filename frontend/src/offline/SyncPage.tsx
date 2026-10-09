@@ -55,12 +55,15 @@ const OPERATION_LABELS: Record<string, string> = {
   EXPENSE: 'Expense',
   ALLOWANCE_REQUEST: 'Allowance request',
   CASUAL: 'Casual registered',
+  // §4.20.8, §4.19.11: a supplier added and a purchase recorded offline.
+  SUPPLIER: 'Supplier added',
+  SITE_PURCHASE: 'Purchase',
   // §4.18.9: attendance captures (R13).
   CLOCK_IN: 'Clock-in',
   CLOCK_OUT: 'Clock-out',
 };
 
-const FINANCE_KINDS = new Set(['EXPENSE', 'ALLOWANCE_REQUEST', 'CASUAL']);
+const FINANCE_KINDS = new Set(['EXPENSE', 'ALLOWANCE_REQUEST', 'CASUAL', 'SUPPLIER', 'SITE_PURCHASE']);
 const ATTENDANCE_KINDS = new Set(['CLOCK_IN', 'CLOCK_OUT']);
 /** Entries that read "<what> — waiting to send / refused / sent" and show the server's code. */
 const STATED_KINDS = new Set([...FINANCE_KINDS, ...ATTENDANCE_KINDS]);

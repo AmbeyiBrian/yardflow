@@ -14,27 +14,29 @@
  * `OVER_BUDGET_REASON_REQUIRED`. It warns, it never blocks: a reason lets it
  * through (§4.19.5).
  *
- * Receipt photos are held as drafts and sent after the purchase exists. Offline
- * queueing is T18.17: it slots in at `queuePurchaseHere` below, as
- * `queueExpense` does on the expense form.
+ * Receipt photos are held as drafts and sent after the purchase exists. With no
+ * signal the purchase and its photos go to the phone's queue together as a
+ * `SITE_PURCHASE` (§4.19.11, R6), as `queueExpense` does on the expense form;
+ * replay never refuses for over-budget, it only flags. A refused one comes back
+ * here through "Fix and resend". A supplier added on this phone is named by
+ * `supplier_client_uuid` (§4.20.8), and then the purchase is queued even online,
+ * because the server cannot know that supplier yet.
  */
 
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ApiError } from '../../api/client';
-import { useList } from '../../api/hooks';
 import { ItemPicker } from '../../components/ItemPicker';
 import { Banner, Button, Card, Field, Input, Select, Spinner, Textarea } from '../../components/ui';
 import { PageHeader } from '../../components/ui/data';
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { newUuid } from '../../offline/db';
 import { useOffline } from '../../offline/OfflineProvider';
-import type { Location } from '../settings/types';
 import { DraftPhotos } from './DraftPhotos';
-import { isNetworkError, sendTo, toUploadItems, uploadItems } from './drafts';
+import { SAVED_ON_PHONE, isNetworkError, sendTo, toUploadItems, uploadItems } from './drafts';
 import { moneyError } from './errors';
-import type { PhotoDraft } from './offline';
+import { queuePurchase, resendCorrected, type PhotoDraft } from './offline';
 import {
   isBlankLine,
   lineTotal,
@@ -43,14 +45,14 @@ import {
   type PurchaseDestination,
   type PurchaseLineDraft,
 } from './purchaseRules';
-import {
-  useBudgetCheck,
-  useCreateSitePurchase,
-  useSuppliers,
-  type SitePurchaseInput,
-} from './purchasesApi';
+import { useBudgetCheck, useCreateSitePurchase } from './purchasesApi';
+import { needsQueue, purchaseBody } from './purchasesOffline';
+import { useQueuedEntry } from './queued';
+import { useReceivableLocations, useSupplierOptions } from './reference';
 import { fromCents } from './rules';
 import { SiteProjectFields, useSiteProject } from './SiteProject';
+import { OfflineSupplierSheet } from './SupplierPages';
+import { supplierValue } from './suppliersOffline';
 
 interface Line extends PurchaseLineDraft {
   key: number;
@@ -68,39 +70,90 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+const text = (value: unknown): string =>
+  value === undefined || value === null ? '' : String(value);
+
 export default function RecordPurchasePage() {
+  const [params] = useSearchParams();
+  const resend = params.get('resend');
+  const { entry, settled } = useQueuedEntry(resend);
+
+  // "Fix and resend" starts from the queued payload, so wait for it (R6).
+  if (resend && !entry) {
+    return (
+      <div className="flex flex-col gap-4">
+        <PageHeader title="Record a purchase" />
+        {settled ? (
+          <Banner tone="info">That entry is no longer on this phone.</Banner>
+        ) : (
+          <Spinner className="text-slate-400" />
+        )}
+      </div>
+    );
+  }
+  return (
+    <PurchaseForm
+      key={entry?.client_uuid ?? 'new'}
+      resendOf={entry?.client_uuid}
+      payload={entry?.payload}
+    />
+  );
+}
+
+function PurchaseForm({
+  resendOf,
+  payload,
+}: {
+  resendOf?: string;
+  payload?: Record<string, unknown>;
+}) {
   const navigate = useNavigate();
   const { online } = useOffline();
-  const place = useSiteProject();
+  const place = useSiteProject(
+    '',
+    payload ? { site: text(payload.site), project: text(payload.project) } : undefined,
+  );
 
-  const [supplier, setSupplier] = useState('');
-  const [date, setDate] = useState(today());
-  const [destination, setDestination] = useState<PurchaseDestination>('USED_AT_SITE');
-  const [receiveInto, setReceiveInto] = useState('');
-  const [lines, setLines] = useState<Line[]>([blank(1)]);
-  const [reason, setReason] = useState('');
+  const [supplier, setSupplier] = useState(payload ? supplierValue(payload) : '');
+  const [date, setDate] = useState(text(payload?.purchase_date) || today());
+  const [destination, setDestination] = useState<PurchaseDestination>(
+    payload?.destination === 'INTO_YARD' ? 'INTO_YARD' : 'USED_AT_SITE',
+  );
+  const [receiveInto, setReceiveInto] = useState(text(payload?.receive_into));
+  const [lines, setLines] = useState<Line[]>(() => {
+    const queued = Array.isArray(payload?.lines)
+      ? (payload.lines as Record<string, unknown>[])
+      : [];
+    return queued.length
+      ? queued.map((l, i) => ({
+          key: i + 1,
+          item_type: text(l.item_type),
+          description: text(l.description),
+          quantity: text(l.quantity) || '1',
+          unit_price: text(l.unit_price),
+        }))
+      : [blank(1)];
+  });
+  const [reason, setReason] = useState(text(payload?.over_budget_reason));
   // R9: shown once the server says it would pass the budget.
-  const [needReason, setNeedReason] = useState(false);
+  const [needReason, setNeedReason] = useState(Boolean(text(payload?.over_budget_reason)));
+  const [addingSupplier, setAddingSupplier] = useState(false);
   const [drafts, setDrafts] = useState<PhotoDraft[]>([]);
   const [banner, setBanner] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   // One uuid per form, so a retry after a dropped response cannot record twice.
   const uuid = useRef(newUuid());
-  const nextKey = useRef(2);
+  const nextKey = useRef(lines.length + 1);
 
-  const suppliers = useSuppliers();
-  const locations = useList<Location>('locations', { page_size: 200 });
+  // Each reads the network online and the offline bundle otherwise (R6, §4.19.11).
+  const suppliers = useSupplierOptions();
+  const receivable = useReceivableLocations().locations;
   const create = useCreateSitePurchase();
   const budgetCheck = useBudgetCheck();
 
   // §4.19.3: supplier active and not REJECTED (PENDING is fine to buy from).
-  const supplierOptions = (suppliers.data?.results ?? []).filter(
-    (s) => s.is_active && s.status !== 'REJECTED',
-  );
-  const receivable = (locations.data?.results ?? []).filter(
-    (l) => l.is_active && (l.type === 'YARD' || l.type === 'STORE'),
-  );
+  const supplierOptions = suppliers.options;
 
   const patchLine = (key: number, patch: Partial<Line>) =>
     setLines((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -116,10 +169,9 @@ export default function RecordPurchasePage() {
     if (place.blocked || Object.keys(found).length) return;
 
     const used = lines.filter((l) => !isBlankLine(l));
-    const body: SitePurchaseInput = {
+    const input = {
       project: Number(place.project),
       site: Number(place.site),
-      supplier: Number(supplier),
       purchase_date: date,
       destination,
       receive_into: destination === 'INTO_YARD' ? Number(receiveInto) : null,
@@ -130,13 +182,15 @@ export default function RecordPurchasePage() {
         unit_price: l.unit_price,
       })),
       over_budget_reason: reason.trim() || undefined,
-      photos_expected: drafts.length,
+      // A resent entry keeps the photos it already has.
+      photos_expected: resendOf ? (Number(payload?.photos_expected) || 0) : drafts.length,
     };
+    const body = purchaseBody(input, supplier);
 
     setBusy(true);
     try {
       // R9: ask before sending, so the reason is not discovered after a round trip.
-      if (online && !reason.trim()) {
+      if (online && !resendOf && !reason.trim()) {
         try {
           const check = await budgetCheck.mutateAsync({
             project: body.project,
@@ -151,9 +205,19 @@ export default function RecordPurchasePage() {
         }
       }
 
-      if (online) {
+      if (resendOf) {
+        await resendCorrected(resendOf, body as Record<string, unknown>);
+        return leaveQueued();
+      }
+      // A supplier still on this phone cannot be named to the server yet, so
+      // the purchase waits behind it in the queue (§4.20.8).
+      if (online && !needsQueue(body)) {
         try {
-          const saved = await create.mutateAsync({ ...body, client_uuid: uuid.current });
+          const saved = await create.mutateAsync({
+            ...body,
+            supplier: Number(body.supplier),
+            client_uuid: uuid.current,
+          });
           const failed = await uploadItems(
             toUploadItems(drafts, newUuid),
             sendTo('commercials.SitePurchase', saved.id),
@@ -173,15 +237,17 @@ export default function RecordPurchasePage() {
           }
         }
       }
-      queuePurchaseHere();
+      await queuePurchase(body, drafts, uuid.current);
+      leaveQueued();
+    } catch (error) {
+      setBanner(error instanceof Error ? error.message : 'That could not be saved.');
     } finally {
       setBusy(false);
     }
   }
 
-  /** T18.17 replaces this with `queuePurchase(body, drafts, uuid.current)` and leaves for Money. */
-  function queuePurchaseHere() {
-    setBanner('There is no signal, and purchases cannot be saved on the phone yet. Try again when you are online.');
+  function leaveQueued() {
+    navigate('/money?tab=purchases', { state: { notice: SAVED_ON_PHONE } });
   }
 
   const total = totalText(lines.filter((l) => !isBlankLine(l)));
@@ -208,13 +274,17 @@ export default function RecordPurchasePage() {
             <Select id="sp-supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)}>
               <option value="">Choose…</option>
               {supplierOptions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.status === 'PENDING' ? ' (awaiting approval)' : ''}
+                <option key={s.value} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </Select>
           </Field>
+          {!online ? (
+            <Button variant="ghost" onClick={() => setAddingSupplier(true)}>
+              Not on the list? Add a supplier
+            </Button>
+          ) : null}
 
           <Field label="Bought on" htmlFor="sp-date">
             <Input id="sp-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -258,7 +328,7 @@ export default function RecordPurchasePage() {
                 <option value="">Choose…</option>
                 {receivable.map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.code} · {l.name}
+                    {l.label}
                   </option>
                 ))}
               </ControlledReferenceSelect>
@@ -363,10 +433,24 @@ export default function RecordPurchasePage() {
           />
 
           <Button block disabled={busy || place.blocked || place.loading} onClick={() => void submit()}>
-            {busy ? <Spinner /> : needReason ? 'Record it with this reason' : 'Record it'}
+            {busy ? (
+              <Spinner />
+            ) : resendOf ? (
+              'Fix and resend'
+            ) : needReason ? (
+              'Record it with this reason'
+            ) : (
+              'Record it'
+            )}
           </Button>
         </form>
       </Card>
+
+      <OfflineSupplierSheet
+        open={addingSupplier}
+        onClose={() => setAddingSupplier(false)}
+        onAdded={(option) => setSupplier(option.value)}
+      />
     </div>
   );
 }

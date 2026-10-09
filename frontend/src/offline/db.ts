@@ -42,6 +42,10 @@ export type QueuedOperation =
   | 'EXPENSE'
   | 'ALLOWANCE_REQUEST'
   | 'CASUAL'
+  // §4.20.8: a supplier added with no signal (R15).
+  | 'SUPPLIER'
+  // §4.19.11: a site purchase, with lines inline and receipt photos after (R7).
+  | 'SITE_PURCHASE'
   // §4.18.9: clock-in and clock-out, the two attendance captures (R13).
   | 'CLOCK_IN'
   | 'CLOCK_OUT';
@@ -51,6 +55,8 @@ export const FINANCE_OPERATIONS: readonly QueuedOperation[] = [
   'EXPENSE',
   'ALLOWANCE_REQUEST',
   'CASUAL',
+  'SUPPLIER',
+  'SITE_PURCHASE',
 ];
 
 /**

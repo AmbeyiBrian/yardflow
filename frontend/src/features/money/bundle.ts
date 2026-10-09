@@ -92,3 +92,30 @@ export function bundleLimits(
   const first = rows[0];
   return first && Object.keys(first).length ? (first as unknown as AllowanceLimits) : undefined;
 }
+
+/** A vehicle or generator as the bundle stores it (§4.20.8). */
+export interface BundleVehicle {
+  id: number;
+  tag: string;
+  name: string;
+  type: string;
+}
+
+/** Only ACTIVE VEHICLE and GENERATOR rows are in the bundle; this keeps the fuel picker honest if one is not. */
+export function bundleVehicles(rows: readonly BundleVehicle[]): BundleVehicle[] {
+  return rows.filter((v) => v.type === 'VEHICLE' || v.type === 'GENERATOR');
+}
+
+/** A location as the bundle stores it: no code, and OFFICE and inactive ones are left out. */
+export interface BundleLocation {
+  id: number;
+  name: string;
+  type: string;
+}
+
+/** Where purchased goods may be received: a yard or a store (§4.19.3). */
+export function bundleReceivable(rows: readonly BundleLocation[]): { id: number; label: string }[] {
+  return rows
+    .filter((l) => l.type === 'YARD' || l.type === 'STORE')
+    .map((l) => ({ id: l.id, label: l.name }));
+}

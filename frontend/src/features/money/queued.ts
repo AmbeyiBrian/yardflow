@@ -63,6 +63,43 @@ export function queuedRequestCards(entries: readonly QueuedFinanceEntry[]): Queu
     );
 }
 
+/** R7, §4.19.11: purchases waiting to send or refused, listed on the Purchases tab. */
+export function queuedPurchaseCards(entries: readonly QueuedFinanceEntry[]): QueuedCard[] {
+  return entries
+    .filter((entry) => entry.kind === 'SITE_PURCHASE')
+    .map((entry) => {
+      const lines = Array.isArray(entry.payload.lines) ? entry.payload.lines : [];
+      const total = lines.reduce((sum: number, line) => {
+        const l = line as { quantity?: unknown; unit_price?: unknown };
+        return sum + Math.round(Number(l.quantity) * Number(l.unit_price) * 100);
+      }, 0);
+      return {
+        ...card(
+          entry,
+          'Purchase',
+          String(entry.payload.purchase_date ?? ''),
+          '/money/purchases/new',
+        ),
+        amount: String(Number.isNaN(total) ? 0 : total / 100),
+      };
+    });
+}
+
+/** R15, §4.20.8: suppliers added on this phone, waiting or refused (duplicate name or PIN). */
+export function queuedSupplierCards(entries: readonly QueuedFinanceEntry[]): QueuedCard[] {
+  return entries
+    .filter((entry) => entry.kind === 'SUPPLIER')
+    .map((entry) => ({
+      ...card(
+        entry,
+        `Supplier ${String(entry.payload.name ?? '')}`.trim(),
+        String(entry.payload.phone ?? ''),
+        '/money/suppliers/new',
+      ),
+      amount: '',
+    }));
+}
+
 export function queuedCasualCards(entries: readonly QueuedFinanceEntry[]): QueuedCard[] {
   return entries
     .filter((entry) => entry.kind === 'CASUAL')
@@ -82,6 +119,8 @@ export function useQueuedMoney() {
     expenses: queuedExpenseCards(entries),
     requests: queuedRequestCards(entries),
     casuals: queuedCasualCards(entries),
+    purchases: queuedPurchaseCards(entries),
+    suppliers: queuedSupplierCards(entries),
   };
 }
 
