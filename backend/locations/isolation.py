@@ -1,5 +1,7 @@
 """Isolation fixtures for the location endpoints (T1.20, A3)."""
 
+from decimal import Decimal
+
 from core.isolation import register_isolation_fixture
 
 
@@ -8,7 +10,11 @@ def register() -> None:
 
     def make_location(organization):
         return Location.objects.create(
-            organization=organization, name="Isolation yard", type=LocationType.YARD
+            organization=organization,
+            name="Isolation yard",
+            type=LocationType.YARD,
+            latitude=Decimal("-1.264000"),
+            longitude=Decimal("36.803000"),
         )
 
     def make_stock_node(organization):

@@ -1,5 +1,7 @@
 """Isolation fixtures for the site register endpoints (T1.20, A3)."""
 
+from decimal import Decimal
+
 from core.isolation import register_isolation_fixture
 
 
@@ -22,6 +24,8 @@ def register() -> None:
             client=make_client(organization),
             internal_ref="ISO-1",
             name="Isolation site",
+            latitude=Decimal("-1.292100"),
+            longitude=Decimal("36.821900"),
         )
 
     def make_site_reference(organization):

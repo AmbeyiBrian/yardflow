@@ -12,6 +12,10 @@ from locations.models import Location, LocationType, NodeType, StockNode
 
 
 def node_for_location(location: Location) -> StockNode:
+    # R13, §4.18.2: refuse rather than quietly create one, so no movement can
+    # ever name an office.
+    if location.type == LocationType.OFFICE:
+        raise ValueError("An office holds no stock, so it has no stock node (R13).")
     node, _ = StockNode.objects.get_or_create(
         organization_id=location.organization_id,
         type=NodeType.LOCATION,
@@ -146,6 +150,10 @@ def seed_locations_and_nodes(organization) -> dict:
     T1.18 requires a new tenant to arrive with "one yard with its quarantine
     location, the system stock nodes". Registered as a seeder so provisioning
     does not need to import this app.
+
+    R13, §4.18.8: "Main yard" starts with no coordinates for a new tenant; the
+    owner sets them in Settings (a prompt shows until they do). A guessed point
+    would let people clock in at the wrong place without anyone noticing.
     """
     yard = Location.objects.filter(
         organization=organization, type=LocationType.YARD

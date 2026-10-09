@@ -67,6 +67,8 @@ class SiteSerializer(serializers.ModelSerializer):
             "county",
             "latitude",
             "longitude",
+            "radius_m",
+            "area_history",
             "site_type",
             "status",
             "cell_id",
@@ -74,6 +76,7 @@ class SiteSerializer(serializers.ModelSerializer):
             "notes",
             "references",
         )
+        read_only_fields = ("area_history",)
 
 
 class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer):

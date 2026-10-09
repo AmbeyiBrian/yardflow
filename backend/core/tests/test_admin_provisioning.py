@@ -215,6 +215,8 @@ class TestEditingSettingsFromTheAdmin:
                 settings_row.approval_escalation_hours
             ),
             "settings-0-retention_months": str(settings_row.retention_months),
+            "settings-0-clock_auto_close_hour": str(settings_row.clock_auto_close_hour),
+            "settings-0-clock_accuracy_cap_m": str(settings_row.clock_accuracy_cap_m),
             "settings-0-timezone": settings_row.timezone,
             "settings-0-currency": settings_row.currency,
             "settings-0-notification_channels": "{}",

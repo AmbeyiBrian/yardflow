@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import uuid
 
-from django.core.validators import RegexValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 
 from core.tenancy import TenantModel
@@ -218,6 +218,16 @@ class OrganizationSettings(models.Model):
     # R5: daily min/max by allowance type; a null bound is no bound.
     allowance_limits = models.JSONField(default=default_allowance_limits, blank=True)
 
+    # --- Clock-in (Epic R, §4.18.2, R13) -----------------------------------
+    # An open session is closed at this hour (local time) if nobody clocked out.
+    clock_auto_close_hour = models.PositiveSmallIntegerField(
+        default=18, validators=[MaxValueValidator(23)]
+    )
+    # A fix vaguer than this cannot pass the area check: a 2 km "fix" must not.
+    clock_accuracy_cap_m = models.PositiveIntegerField(
+        default=100, validators=[MinValueValidator(1)]
+    )
+
     # --- Documents and retention -----------------------------------------
     # M4: posted documents are immutable. Corrections are reversals, not edits.
     allow_document_amendment = models.BooleanField(default=False)
@@ -248,6 +258,17 @@ class OrganizationSettings(models.Model):
 
     class Meta:
         verbose_name_plural = "organization settings"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(clock_auto_close_hour__gte=0)
+                & models.Q(clock_auto_close_hour__lte=23),
+                name="clock_auto_close_hour_0_to_23",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(clock_accuracy_cap_m__gte=1),
+                name="clock_accuracy_cap_positive",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"Settings for {self.organization.name}"

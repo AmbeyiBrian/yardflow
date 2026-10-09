@@ -11,6 +11,7 @@ bespoke reports that can disagree with each other.
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
 
@@ -25,6 +26,9 @@ class LocationType(models.TextChoices):
     VEHICLE = "VEHICLE", "Vehicle"
     # J1: a system location. Quarantined stock never appears as available.
     QUARANTINE = "QUARANTINE", "Quarantine"
+    # R13, §4.18.2: an office is somewhere people clock in, not somewhere stock
+    # sits. It never gets a StockNode and is left out of stock pickers.
+    OFFICE = "OFFICE", "Office"
 
 
 class Location(TenantModel, TimeStampedModel):
@@ -52,6 +56,21 @@ class Location(TenantModel, TimeStampedModel):
     # can be found again without matching on its name (J1).
     is_system = models.BooleanField(default=False)
 
+    # R13, §4.18.2: where clock-in is checked. Null on legacy rows and system
+    # rows; the "required" rule lives in the serializers (§4.18.8), not here,
+    # because `save` runs full_clean and would break deactivating those rows.
+    latitude: models.DecimalField = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    longitude: models.DecimalField = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    radius_m: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=200, validators=[MinValueValidator(20), MaxValueValidator(2000)]
+    )
+    # R13, §4.18.4: newest first, at most 10 of {lat, lng, radius_m, valid_until}.
+    area_history: models.JSONField = models.JSONField(default=list, blank=True)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -71,6 +90,25 @@ class Location(TenantModel, TimeStampedModel):
             models.CheckConstraint(
                 condition=~Q(type=LocationType.VEHICLE) | ~Q(vehicle_reg=""),
                 name="a_vehicle_has_a_registration",
+            ),
+            # R13, §4.18.2: same rules as network.Site.
+            models.CheckConstraint(
+                condition=Q(latitude__isnull=True) | (Q(latitude__gte=-90) & Q(latitude__lte=90)),
+                name="location_latitude_in_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(longitude__isnull=True)
+                | (Q(longitude__gte=-180) & Q(longitude__lte=180)),
+                name="location_longitude_in_range",
+            ),
+            models.CheckConstraint(
+                condition=(Q(latitude__isnull=True) & Q(longitude__isnull=True))
+                | (Q(latitude__isnull=False) & Q(longitude__isnull=False)),
+                name="location_coordinates_both_or_neither",
+            ),
+            models.CheckConstraint(
+                condition=Q(radius_m__gte=20) & Q(radius_m__lte=2000),
+                name="location_radius_between_20_and_2000_m",
             ),
         ]
         ordering = ("name",)

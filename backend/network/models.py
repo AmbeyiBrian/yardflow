@@ -16,7 +16,7 @@ import re
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
 
@@ -117,6 +117,15 @@ class Site(TenantModel, TimeStampedModel):
     county = models.CharField(max_length=100, blank=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    # R13, §4.18.2: how close counts as "at the site" for clock-in. The size of a
+    # compound varies, so each place carries its own; 20 m is the smallest area a
+    # phone's GPS can honestly resolve and 2 km the largest a compound can be.
+    radius_m: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=200, validators=[MinValueValidator(20), MaxValueValidator(2000)]
+    )
+    # R13, §4.18.4: newest first, at most 10 of {lat, lng, radius_m, valid_until}.
+    # Lets the server recognise the area an offline phone legitimately held.
+    area_history: models.JSONField = models.JSONField(default=list, blank=True)
 
     site_type = models.CharField(
         max_length=20, choices=SiteType.choices, default=SiteType.OTHER
@@ -138,6 +147,26 @@ class Site(TenantModel, TimeStampedModel):
             models.UniqueConstraint(
                 fields=["organization", "internal_ref"],
                 name="uniq_site_internal_ref_per_org",
+            ),
+            # R13, §4.18.2: a site may have no coordinates (older rows), but never
+            # half of a pair or a point off the globe.
+            models.CheckConstraint(
+                condition=Q(latitude__isnull=True) | (Q(latitude__gte=-90) & Q(latitude__lte=90)),
+                name="site_latitude_in_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(longitude__isnull=True)
+                | (Q(longitude__gte=-180) & Q(longitude__lte=180)),
+                name="site_longitude_in_range",
+            ),
+            models.CheckConstraint(
+                condition=(Q(latitude__isnull=True) & Q(longitude__isnull=True))
+                | (Q(latitude__isnull=False) & Q(longitude__isnull=False)),
+                name="site_coordinates_both_or_neither",
+            ),
+            models.CheckConstraint(
+                condition=Q(radius_m__gte=20) & Q(radius_m__lte=2000),
+                name="site_radius_between_20_and_2000_m",
             ),
         ]
         ordering = ("internal_ref",)

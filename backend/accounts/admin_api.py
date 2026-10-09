@@ -677,6 +677,9 @@ SETTINGS_FIELDS = (
     "retention_months",
     "timezone",
     "currency",
+    # R13: clock-in tuning.
+    "clock_auto_close_hour",
+    "clock_accuracy_cap_m",
     # L2: the tenant decides who hears what, and through which channels. Editable
     # behind `settings.manage` like everything else on this endpoint — the first
     # build locked these two, which took the decision away from the Owner and

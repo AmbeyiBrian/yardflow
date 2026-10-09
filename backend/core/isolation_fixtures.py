@@ -5,6 +5,8 @@ signed download URL, so a 200 here would hand out a working link to another
 organization's evidence, not merely confirm that a row exists.
 """
 
+from decimal import Decimal
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from core.isolation import register_isolation_fixture
@@ -30,6 +32,8 @@ def register() -> None:
                 client=client,
                 name="Isolation site",
                 internal_ref="ISO-ATT-1",
+                latitude=Decimal("-1.292100"),
+                longitude=Decimal("36.821900"),
             )
         )
         job = Job.objects.filter(organization=organization).first() or (

@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
 from core.api import TenantScopedViewSet
-from locations.models import Location, StockNode
+from locations.models import Location, LocationType, StockNode
 
 
 class LocationSerializer(serializers.ModelSerializer):
@@ -27,10 +27,15 @@ class LocationSerializer(serializers.ModelSerializer):
             "vehicle_reg",
             "is_active",
             "is_system",
+            "latitude",
+            "longitude",
+            "radius_m",
+            "area_history",
             "children",
             "node_id",
         )
-        read_only_fields = ("is_system",)
+        # area_history is written by the area-change service (§4.18.4), never by a client.
+        read_only_fields = ("is_system", "area_history")
 
     def get_children(self, location: Location) -> list[dict]:
         return [
@@ -79,6 +84,15 @@ class LocationViewSet(TenantScopedViewSet):
     filterset_fields = ["type", "parent", "is_active"]
     search_fields = ["name", "code", "vehicle_reg"]
     ordering_fields = ["name", "type"]
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        """R13, §4.18.2: an office is not a stock location, so the stock pickers
+        (which list locations unfiltered) never see one. Asking for
+        ``?type=OFFICE`` still returns them, for Settings to manage."""
+        queryset = super().get_queryset()
+        if self.request.query_params.get("type") != LocationType.OFFICE:
+            queryset = queryset.exclude(type=LocationType.OFFICE)
+        return queryset
 
     def perform_destroy(self, instance):  # type: ignore[no-untyped-def]
         """C4: a location holding stock is deactivated, never deleted."""

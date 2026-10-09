@@ -5410,6 +5410,7 @@ paths:
         schema:
           type: string
           enum:
+          - OFFICE
           - QUARANTINE
           - STORE
           - VEHICLE
@@ -5419,6 +5420,7 @@ paths:
           * `STORE` - Store within a yard
           * `VEHICLE` - Vehicle
           * `QUARANTINE` - Quarantine
+          * `OFFICE` - Office
       tags:
       - locations
       security:
@@ -13795,6 +13797,22 @@ components:
         is_system:
           type: boolean
           readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        radius_m:
+          type: integer
+          maximum: 2000
+          minimum: 20
+        area_history:
+          readOnly: true
         children:
           type: array
           items:
@@ -13808,6 +13826,7 @@ components:
             (§3.1).
           readOnly: true
       required:
+      - area_history
       - children
       - id
       - is_system
@@ -13834,6 +13853,20 @@ components:
           maxLength: 30
         is_active:
           type: boolean
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        radius_m:
+          type: integer
+          maximum: 2000
+          minimum: 20
       required:
       - name
       - type
@@ -13843,12 +13876,14 @@ components:
       - STORE
       - VEHICLE
       - QUARANTINE
+      - OFFICE
       type: string
       description: |-
         * `YARD` - Yard
         * `STORE` - Store within a yard
         * `VEHICLE` - Vehicle
         * `QUARANTINE` - Quarantine
+        * `OFFICE` - Office
     LoginRequest:
       type: object
       description: |-
@@ -14437,6 +14472,14 @@ components:
         currency:
           type: string
           maxLength: 3
+        clock_auto_close_hour:
+          type: integer
+          maximum: 23
+          minimum: 0
+        clock_accuracy_cap_m:
+          type: integer
+          maximum: 2147483647
+          minimum: 1
         notification_channels: {}
         notification_matrix: {}
     OrganizationStatusEnum:
@@ -15756,6 +15799,20 @@ components:
           maxLength: 30
         is_active:
           type: boolean
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        radius_m:
+          type: integer
+          maximum: 2000
+          minimum: 20
     PatchedNumberSeriesRequest:
       type: object
       properties:
@@ -15877,6 +15934,14 @@ components:
           type: string
           minLength: 1
           maxLength: 3
+        clock_auto_close_hour:
+          type: integer
+          maximum: 23
+          minimum: 0
+        clock_accuracy_cap_m:
+          type: integer
+          maximum: 2147483647
+          minimum: 1
         notification_channels: {}
         notification_matrix: {}
     PatchedProjectRequest:
@@ -16043,6 +16108,10 @@ components:
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
           nullable: true
+        radius_m:
+          type: integer
+          maximum: 2000
+          minimum: 20
         site_type:
           $ref: '#/components/schemas/SiteTypeEnum'
         status:
@@ -17242,6 +17311,12 @@ components:
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
           nullable: true
+        radius_m:
+          type: integer
+          maximum: 2000
+          minimum: 20
+        area_history:
+          readOnly: true
         site_type:
           $ref: '#/components/schemas/SiteTypeEnum'
         status:
@@ -17260,6 +17335,7 @@ components:
             $ref: '#/components/schemas/SiteReference'
           readOnly: true
       required:
+      - area_history
       - client
       - client_name
       - id
@@ -17334,6 +17410,10 @@ components:
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
           nullable: true
+        radius_m:
+          type: integer
+          maximum: 2000
+          minimum: 20
         site_type:
           $ref: '#/components/schemas/SiteTypeEnum'
         status:

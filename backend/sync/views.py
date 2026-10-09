@@ -330,7 +330,7 @@ class OfflineBundleView(APIView):
         from catalogue.models import ItemType
         from dispatch.box_paths import BOX_PREFETCH, box_path
         from dispatch.models import RELEASABLE_STATUSES, GateOut
-        from locations.models import Location
+        from locations.models import Location, LocationType
         from network.models import Client, Project, ProjectStatus, Site
 
         item_types = [
@@ -350,7 +350,7 @@ class OfflineBundleView(APIView):
 
         locations = [
             {"id": row.pk, "name": row.name, "type": row.type}
-            for row in Location.objects.filter(is_active=True)
+            for row in Location.objects.filter(is_active=True).exclude(type=LocationType.OFFICE)
         ]
         clients = [{"id": row.pk, "name": row.name} for row in Client.objects.all()]
         # R1: a phone picks the project when a site has more than one open. One

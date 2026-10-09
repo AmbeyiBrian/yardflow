@@ -1,5 +1,7 @@
 """Test factories for the site register (design §14)."""
 
+from decimal import Decimal
+
 import factory
 from factory.django import DjangoModelFactory
 
@@ -20,6 +22,9 @@ class SiteFactory(DjangoModelFactory):
     client = factory.SubFactory(ClientFactory)
     internal_ref = factory.Sequence(lambda n: f"SLV-{1000 + n}")
     name = factory.Sequence(lambda n: f"Site {n}")
+    # R13: a site can be clocked at only with coordinates (Nairobi CBD).
+    latitude = Decimal("-1.292100")
+    longitude = Decimal("36.821900")
 
 
 class SiteReferenceFactory(DjangoModelFactory):

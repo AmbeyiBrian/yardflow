@@ -17,6 +17,10 @@ def create_location_node(sender, instance, created, **kwargs):
     if not created:
         return
 
+    # R13, §4.18.2: an office is clocked into, never stocked.
+    if instance.type == LocationType.OFFICE:
+        return
+
     from locations.nodes import ensure_yard_quarantine, node_for_location
 
     node_for_location(instance)

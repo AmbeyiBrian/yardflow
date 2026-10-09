@@ -1,5 +1,7 @@
 """Test factories for locations (design §14)."""
 
+from decimal import Decimal
+
 import factory
 from factory.django import DjangoModelFactory
 
@@ -14,6 +16,21 @@ class YardFactory(DjangoModelFactory):
 
     name = factory.Sequence(lambda n: f"Yard {n}")
     type = LocationType.YARD
+    # R13: a yard is clockable, so tests get a real place (Westlands, Nairobi).
+    latitude = Decimal("-1.264000")
+    longitude = Decimal("36.803000")
+
+
+class OfficeFactory(DjangoModelFactory):
+    """An office (R13): clockable, never stocked, so it has no StockNode."""
+
+    class Meta:
+        model = Location
+
+    name = factory.Sequence(lambda n: f"Office {n}")
+    type = LocationType.OFFICE
+    latitude = Decimal("-1.286000")
+    longitude = Decimal("36.817000")
 
 
 class StoreFactory(DjangoModelFactory):
