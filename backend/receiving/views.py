@@ -26,7 +26,9 @@ from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
 from core.api import TenantScopedViewSet
+from core.exceptions import DomainError
 from core.idempotency import already_created
+from network.models import SupplierStatus
 from receiving.models import (
     DocumentStatus,
     GateIn,
@@ -196,6 +198,24 @@ class GateInLineSerializer(serializers.ModelSerializer):
         )
 
 
+class SupplierNotUsableOnGateIn(DomainError):
+    code = "SUPPLIER_NOT_USABLE_ON_GATE_IN"
+    status_code = 400
+    default_message = (
+        "That supplier is inactive or was rejected, so it cannot be named on a delivery."
+    )
+
+
+def _check_supplier_usable(supplier) -> None:  # type: ignore[no-untyped-def]
+    """Active and not REJECTED; PENDING is fine (R15). Not a payment check."""
+    if not supplier.is_active or supplier.status == SupplierStatus.REJECTED:
+        raise SupplierNotUsableOnGateIn(
+            f"{supplier.name} is {'rejected' if supplier.is_active else 'inactive'}, "
+            "so it cannot be named on a new delivery.",
+            field_errors={"supplier": ["Pick a supplier that is active and not rejected."]},
+        )
+
+
 class GateInSerializer(serializers.ModelSerializer):
     lines = GateInLineSerializer(many=True, required=False)
     boxes = GateInBoxSerializer(many=True, required=False, source="gate_in_boxes")
@@ -208,9 +228,28 @@ class GateInSerializer(serializers.ModelSerializer):
         source="origin_site.internal_ref", read_only=True, default=""
     )
     for_site_name = serializers.CharField(source="for_site.name", read_only=True, default="")
+    #: R15: PENDING is said on the document, since it is not yet a checked business.
+    supplier_status = serializers.CharField(source="supplier.status", read_only=True, default="")
 
     def validate_for_site(self, site):  # type: ignore[no-untyped-def]
         return _check_for_site(site)
+
+    def validate(self, attrs):  # type: ignore[no-untyped-def]
+        """R15 (4.20.5): a register supplier names the delivery.
+
+        ``supplier_name`` is filled from it, so search, exports and old
+        documents read as before. A supplier that is inactive or REJECTED is
+        refused on a *new* gate-in; a draft being edited keeps one it already
+        names. Text-only (``supplier_name`` alone) is still accepted.
+        """
+        attrs = super().validate(attrs)
+        supplier = attrs.get("supplier")
+        if supplier is not None:
+            already = self.instance is not None and self.instance.supplier_id == supplier.pk
+            if not already:
+                _check_supplier_usable(supplier)
+            attrs["supplier_name"] = supplier.name
+        return attrs
 
     class Meta:
         model = GateIn
@@ -219,6 +258,8 @@ class GateInSerializer(serializers.ModelSerializer):
             "number",
             "status",
             "source_type",
+            "supplier",
+            "supplier_status",
             "supplier_name",
             "client",
             "client_name",
@@ -337,6 +378,7 @@ class GateInViewSet(TenantScopedViewSet):
         "origin_site",
         "for_site",
         "posted_by",
+        "supplier",
     )
     prefetch_related = (
         "lines",
@@ -346,7 +388,14 @@ class GateInViewSet(TenantScopedViewSet):
         "lines__reels",
         "gate_in_boxes",
     )
-    filterset_fields = ["status", "source_type", "client", "to_location", "origin_site"]
+    filterset_fields = [
+        "status",
+        "source_type",
+        "client",
+        "supplier",
+        "to_location",
+        "origin_site",
+    ]
     search_fields = [
         "number",
         "supplier_name",

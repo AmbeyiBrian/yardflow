@@ -39,6 +39,10 @@ class PermissionGatedFieldsMixin:
     #: {permission codename: (field names it unlocks, ...)}
     permission_gated_fields: dict[str, tuple[str, ...]] = {}
 
+    #: [(codenames, field names)]: shown when the caller holds *any* of the
+    #: codenames, withheld otherwise (e.g. an asset's cost, design 4.20.7).
+    permission_gated_any_of: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = ()
+
     def to_representation(self, instance):  # type: ignore[no-untyped-def]
         data = super().to_representation(instance)  # type: ignore[misc]
         for name in self._withheld_field_names():
@@ -46,7 +50,7 @@ class PermissionGatedFieldsMixin:
         return data
 
     def _withheld_field_names(self) -> Iterable[str]:
-        if not self.permission_gated_fields:
+        if not self.permission_gated_fields and not self.permission_gated_any_of:
             return ()
 
         request = self.context.get("request")  # type: ignore[attr-defined]
@@ -61,11 +65,17 @@ class PermissionGatedFieldsMixin:
         for codename, field_names in self.permission_gated_fields.items():
             if not permissions.has(codename):
                 withheld.extend(field_names)
+        for codenames, field_names in self.permission_gated_any_of:
+            if not any(permissions.has(c) for c in codenames):
+                withheld.extend(field_names)
         return withheld
 
     def _all_gated_field_names(self) -> list[str]:
         return [
             name
-            for field_names in self.permission_gated_fields.values()
+            for field_names in (
+                *self.permission_gated_fields.values(),
+                *(fields for _, fields in self.permission_gated_any_of),
+            )
             for name in field_names
         ]

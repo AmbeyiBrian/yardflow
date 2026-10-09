@@ -382,6 +382,7 @@ def _tenant_object(model, payload: dict, key: str, *, required: bool = False):
 
 def _apply_expense(payload: dict, *, submitted_by=None, request=None):
     """An expense captured with no signal (R1, R6, §4.17.8)."""
+    from assets.models import Asset
     from commercials.finance import CasualLineInput, record_expense
     from commercials.models import AllowanceRequest, Casual, ExpenseCategory
     from jobs.models import Job
@@ -424,6 +425,7 @@ def _apply_expense(payload: dict, *, submitted_by=None, request=None):
         description=payload.get("description") or "",
         scope_of_work=payload.get("scope_of_work") or "",
         vehicle_reg=payload.get("vehicle_reg") or "",
+        vehicle=_tenant_object(Asset, payload, "vehicle"),
         litres=_decimal(payload, "litres"),
         float_request=_tenant_object(AllowanceRequest, payload, "float_request"),
         photos_expected=_int_id(payload.get("photos_expected") or 0, "photos_expected"),

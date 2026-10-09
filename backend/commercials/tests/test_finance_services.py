@@ -31,6 +31,7 @@ from commercials.finance import (
     FinanceSelfApproval,
     FloatBackedNotPayable,
     FloatNotOpen,
+    FuelVehicleRequired,
     PaymentReferenceRequired,
     ProjectAmbiguous,
     ProjectNotOpen,
@@ -412,7 +413,7 @@ class TestRecordExpense:
     def test_fuel_needs_the_vehicle_registration(
         self, tenant, project, site, tech, fuel, finance_user
     ):
-        with pytest.raises(FinanceInputInvalid) as caught:
+        with pytest.raises(FuelVehicleRequired) as caught:
             spend(tech, fuel, site)
         assert "vehicle_reg" in caught.value.field_errors
 

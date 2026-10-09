@@ -972,6 +972,424 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedApprovalRequestList'
           description: ''
+  /api/v1/assets:
+    get:
+      operationId: assets_list
+      description: 'The register. Never deleted: close it instead (§4.20.2).'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: holder
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - CLOSED
+        description: |-
+          * `ACTIVE` - Active
+          * `CLOSED` - Closed
+      - in: query
+        name: supplier
+        schema:
+          type: integer
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - EQUIPMENT
+          - GENERATOR
+          - OTHER
+          - TOOL
+          - VEHICLE
+        description: |-
+          * `VEHICLE` - Vehicle
+          * `GENERATOR` - Generator
+          * `TOOL` - Tool
+          * `EQUIPMENT` - Equipment
+          * `OTHER` - Other
+      tags:
+      - assets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAssetList'
+          description: ''
+    post:
+      operationId: assets_create
+      description: 'The register. Never deleted: close it instead (§4.20.2).'
+      tags:
+      - assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssetRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+          description: ''
+  /api/v1/assets/{id}:
+    get:
+      operationId: assets_retrieve
+      description: 'The register. Never deleted: close it instead (§4.20.2).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this asset.
+        required: true
+      tags:
+      - assets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+          description: ''
+    patch:
+      operationId: assets_partial_update
+      description: 'The register. Never deleted: close it instead (§4.20.2).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this asset.
+        required: true
+      tags:
+      - assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAssetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAssetRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+          description: ''
+  /api/v1/assets/{id}/close:
+    post:
+      operationId: assets_close_create
+      description: Sold or written off; frozen afterwards (§4.20.4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this asset.
+        required: true
+      tags:
+      - assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCloseInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssetCloseInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssetCloseInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+          description: ''
+  /api/v1/assets/{id}/fuel:
+    get:
+      operationId: assets_fuel_retrieve
+      description: Litres, spend, fills and spend per litre; pending apart (§4.20.4).
+      parameters:
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: First day, YYYY-MM-DD.
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this asset.
+        required: true
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: Last day, YYYY-MM-DD.
+      tags:
+      - assets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetFuel'
+          description: ''
+  /api/v1/assets/{id}/handover:
+    post:
+      operationId: assets_handover_create
+      description: 'Give it on, or back to the yard (``to_holder: null``).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this asset.
+        required: true
+      tags:
+      - assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetHandOverInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssetHandOverInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssetHandOverInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetHandover'
+          description: ''
+  /api/v1/assets/{id}/handovers:
+    get:
+      operationId: assets_handovers_list
+      description: Every holder, newest first (R14).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: holder
+        schema:
+          type: integer
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this asset.
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - CLOSED
+        description: |-
+          * `ACTIVE` - Active
+          * `CLOSED` - Closed
+      - in: query
+        name: supplier
+        schema:
+          type: integer
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - EQUIPMENT
+          - GENERATOR
+          - OTHER
+          - TOOL
+          - VEHICLE
+        description: |-
+          * `VEHICLE` - Vehicle
+          * `GENERATOR` - Generator
+          * `TOOL` - Tool
+          * `EQUIPMENT` - Equipment
+          * `OTHER` - Other
+      tags:
+      - assets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAssetHandoverList'
+          description: ''
+  /api/v1/assets/fuel-summary:
+    get:
+      operationId: assets_fuel_summary_list
+      description: Vehicles ranked by fuel spend, for the owner (§4.20.6).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: from
+        schema:
+          type: string
+        description: First day, YYYY-MM-DD.
+      - in: query
+        name: holder
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - CLOSED
+        description: |-
+          * `ACTIVE` - Active
+          * `CLOSED` - Closed
+      - in: query
+        name: supplier
+        schema:
+          type: integer
+      - in: query
+        name: to
+        schema:
+          type: string
+        description: Last day, YYYY-MM-DD.
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - EQUIPMENT
+          - GENERATOR
+          - OTHER
+          - TOOL
+          - VEHICLE
+        description: |-
+          * `VEHICLE` - Vehicle
+          * `GENERATOR` - Generator
+          * `TOOL` - Tool
+          * `EQUIPMENT` - Equipment
+          * `OTHER` - Other
+      tags:
+      - assets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAssetFuelSummaryList'
+          description: ''
   /api/v1/attachment-targets:
     get:
       operationId: attachment_targets_retrieve
@@ -3810,6 +4228,10 @@ paths:
           * `POSTED` - Posted
           * `VOID` - Void
       - in: query
+        name: supplier
+        schema:
+          type: integer
+      - in: query
         name: to_location
         schema:
           type: integer
@@ -6531,6 +6953,10 @@ paths:
           * `APPROVED` - Approved — counts against the project
           * `PAID` - Paid
           * `REJECTED` - Rejected
+      - in: query
+        name: vehicle
+        schema:
+          type: integer
       tags:
       - project-expenses
       security:
@@ -6827,6 +7253,10 @@ paths:
           * `APPROVED` - Approved — counts against the project
           * `PAID` - Paid
           * `REJECTED` - Rejected
+      - in: query
+        name: vehicle
+        schema:
+          type: integer
       tags:
       - project-expenses
       security:
@@ -11501,6 +11931,326 @@ components:
         assertion:
           type: object
           additionalProperties: {}
+    Asset:
+      type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        type:
+          $ref: '#/components/schemas/AssetTypeEnum'
+        name:
+          type: string
+          maxLength: 200
+        tag:
+          type: string
+          maxLength: 40
+        purchase_date:
+          type: string
+          format: date
+          nullable: true
+        supplier:
+          type: integer
+          nullable: true
+        supplier_name:
+          type: string
+          readOnly: true
+          default: ''
+        cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        purchase_terms:
+          type: string
+        make:
+          type: string
+          maxLength: 80
+        model:
+          type: string
+          maxLength: 80
+        insurance_expires_on:
+          type: string
+          format: date
+          nullable: true
+        inspection_expires_on:
+          type: string
+          format: date
+          nullable: true
+        holder:
+          type: integer
+          nullable: true
+        holder_name:
+          type: string
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AssetStatusEnum'
+          readOnly: true
+        closed_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        closed_reason:
+          allOf:
+          - $ref: '#/components/schemas/ClosedReasonEnum'
+          readOnly: true
+        closed_note:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - closed_note
+      - closed_on
+      - closed_reason
+      - created_at
+      - holder_name
+      - id
+      - name
+      - status
+      - supplier_name
+      - type
+    AssetCloseInputRequest:
+      type: object
+      description: '``{closed_on, closed_reason, closed_note?}``.'
+      properties:
+        closed_on:
+          type: string
+          format: date
+        closed_reason:
+          $ref: '#/components/schemas/ClosedReasonEnum'
+        closed_note:
+          type: string
+      required:
+      - closed_on
+      - closed_reason
+    AssetFuel:
+      type: object
+      description: '``GET /assets/{id}/fuel`` (§4.20.4).'
+      properties:
+        litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        spend:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        fill_count:
+          type: integer
+        spend_per_litre:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        pending_spend:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - fill_count
+      - litres
+      - pending_spend
+      - spend
+      - spend_per_litre
+    AssetFuelSummary:
+      type: object
+      description: One ranked row of ``GET /assets/fuel-summary``.
+      properties:
+        litres:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        spend:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        fill_count:
+          type: integer
+        spend_per_litre:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        pending_spend:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        id:
+          type: integer
+        name:
+          type: string
+        tag:
+          type: string
+        type:
+          type: string
+      required:
+      - fill_count
+      - id
+      - litres
+      - name
+      - pending_spend
+      - spend
+      - spend_per_litre
+      - tag
+      - type
+    AssetHandOverInputRequest:
+      type: object
+      description: '``{to_holder|null, note?, handed_over_on?}``.'
+      properties:
+        to_holder:
+          type: integer
+          nullable: true
+        note:
+          type: string
+          maxLength: 500
+        handed_over_on:
+          type: string
+          format: date
+      required:
+      - to_holder
+    AssetHandover:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        from_holder:
+          type: integer
+          readOnly: true
+          nullable: true
+        from_holder_name:
+          type: string
+          readOnly: true
+          nullable: true
+        to_holder:
+          type: integer
+          readOnly: true
+          nullable: true
+        to_holder_name:
+          type: string
+          readOnly: true
+          nullable: true
+        handed_over_by:
+          type: integer
+          readOnly: true
+        handed_over_by_name:
+          type: string
+          readOnly: true
+        handed_over_on:
+          type: string
+          format: date
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+      required:
+      - from_holder
+      - from_holder_name
+      - handed_over_by
+      - handed_over_by_name
+      - handed_over_on
+      - id
+      - note
+      - to_holder
+      - to_holder_name
+    AssetRequest:
+      type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
+      properties:
+        type:
+          $ref: '#/components/schemas/AssetTypeEnum'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        tag:
+          type: string
+          maxLength: 40
+        purchase_date:
+          type: string
+          format: date
+          nullable: true
+        supplier:
+          type: integer
+          nullable: true
+        cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        purchase_terms:
+          type: string
+        make:
+          type: string
+          maxLength: 80
+        model:
+          type: string
+          maxLength: 80
+        insurance_expires_on:
+          type: string
+          format: date
+          nullable: true
+        inspection_expires_on:
+          type: string
+          format: date
+          nullable: true
+        holder:
+          type: integer
+          nullable: true
+      required:
+      - name
+      - type
+    AssetStatusEnum:
+      enum:
+      - ACTIVE
+      - CLOSED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `CLOSED` - Closed
+    AssetTypeEnum:
+      enum:
+      - VEHICLE
+      - GENERATOR
+      - TOOL
+      - EQUIPMENT
+      - OTHER
+      type: string
+      description: |-
+        * `VEHICLE` - Vehicle
+        * `GENERATOR` - Generator
+        * `TOOL` - Tool
+        * `EQUIPMENT` - Equipment
+        * `OTHER` - Other
     AttachPoRequest:
       type: object
       description: '``POST /projects/{id}/attach-po`` (R12, §4.19.8).'
@@ -12220,6 +12970,14 @@ components:
         reason:
           type: string
           maxLength: 500
+    ClosedReasonEnum:
+      enum:
+      - SOLD
+      - WRITTEN_OFF
+      type: string
+      description: |-
+        * `SOLD` - Sold
+        * `WRITTEN_OFF` - Written off
     ConditionEnum:
       enum:
       - NEW
@@ -13604,6 +14362,13 @@ components:
           readOnly: true
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
+        supplier:
+          type: integer
+          nullable: true
+        supplier_status:
+          type: string
+          readOnly: true
+          default: ''
         supplier_name:
           type: string
           maxLength: 200
@@ -13698,6 +14463,7 @@ components:
       - returned_by_name
       - source_type
       - status
+      - supplier_status
       - to_location
       - to_location_name
       - void_reason
@@ -13923,6 +14689,9 @@ components:
       properties:
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
+        supplier:
+          type: integer
+          nullable: true
         supplier_name:
           type: string
           maxLength: 200
@@ -16095,6 +16864,63 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ApprovalRule'
+    PaginatedAssetFuelSummaryList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetFuelSummary'
+    PaginatedAssetHandoverList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetHandover'
+    PaginatedAssetList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Asset'
     PaginatedAttachmentList:
       type: object
       required:
@@ -16980,6 +17806,60 @@ components:
         description:
           type: string
           maxLength: 255
+    PatchedAssetRequest:
+      type: object
+      description: |-
+        Drop fields the requesting user is not permitted to see.
+
+        Subclasses set ``permission_gated_fields`` — a mapping of permission
+        codename to the field names it unlocks.
+
+        With no request in context (a management command, a test building a
+        serializer directly, an export running in Celery) **nothing is dropped**.
+        Those callers have already passed whatever check applies to them, and
+        silently emptying their output would be a bug that only shows up in a
+        report somebody trusted.
+      properties:
+        type:
+          $ref: '#/components/schemas/AssetTypeEnum'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        tag:
+          type: string
+          maxLength: 40
+        purchase_date:
+          type: string
+          format: date
+          nullable: true
+        supplier:
+          type: integer
+          nullable: true
+        cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        purchase_terms:
+          type: string
+        make:
+          type: string
+          maxLength: 80
+        model:
+          type: string
+          maxLength: 80
+        insurance_expires_on:
+          type: string
+          format: date
+          nullable: true
+        inspection_expires_on:
+          type: string
+          format: date
+          nullable: true
+        holder:
+          type: integer
+          nullable: true
     PatchedCasualRequest:
       type: object
       properties:
@@ -17199,6 +18079,9 @@ components:
       properties:
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
+        supplier:
+          type: integer
+          nullable: true
         supplier_name:
           type: string
           maxLength: 200
@@ -18126,6 +19009,13 @@ components:
         vehicle_reg:
           type: string
           maxLength: 20
+        vehicle:
+          type: integer
+          nullable: true
+        vehicle_name:
+          type: string
+          readOnly: true
+          default: ''
         litres:
           type: string
           format: decimal
@@ -18238,6 +19128,7 @@ components:
       - reverses
       - site_name
       - status
+      - vehicle_name
     ProjectExpenseRequest:
       type: object
       properties:
@@ -18268,6 +19159,9 @@ components:
         vehicle_reg:
           type: string
           maxLength: 20
+        vehicle:
+          type: integer
+          nullable: true
         litres:
           type: string
           format: decimal

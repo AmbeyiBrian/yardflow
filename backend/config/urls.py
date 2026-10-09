@@ -42,6 +42,7 @@ from accounts.webauthn_views import (
     RegisterCompleteView,
 )
 from approvals.views import ApprovalRequestViewSet, ApprovalRuleViewSet
+from assets.views import AssetViewSet
 from catalogue.views import (
     CategoryCustomFieldViewSet,
     ItemCategoryViewSet,
@@ -278,6 +279,7 @@ router.register(
 )
 router.register("subcontractors", SubcontractorViewSet, basename="subcontractor")
 router.register("suppliers", SupplierViewSet, basename="supplier")
+router.register("assets", AssetViewSet, basename="asset")
 router.register(
     "expense-categories", ExpenseCategoryViewSet, basename="expense-category"
 )

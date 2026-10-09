@@ -80,6 +80,10 @@ def reverse_expense(
         amount=expense.amount,
         incurred_on=expense.incurred_on,
         description=f"Reversal of expense {expense.pk}: {reason}",
+        # Fuel by vehicle (R14) nets the reversal against the same vehicle.
+        vehicle=expense.vehicle,
+        vehicle_reg=expense.vehicle_reg,
+        litres=expense.litres,
         recorded_by=actor,
         status=ExpenseStatus.APPROVED,
         decided_by=actor,

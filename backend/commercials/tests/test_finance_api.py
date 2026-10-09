@@ -214,7 +214,7 @@ class TestRecordingAnExpense:
         response = api(client, tech).post("project-expenses", expense_body(fuel, site))
 
         assert response.status_code == 400
-        assert error_code(response) == "FINANCE_INPUT_INVALID"
+        assert error_code(response) == "FUEL_VEHICLE_REQUIRED"
         assert "vehicle_reg" in response.json()["error"]["field_errors"]
 
     def test_casual_labour_carries_its_lines_with_names(self, client, tech, fin, site, labour):

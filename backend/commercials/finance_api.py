@@ -284,6 +284,7 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
     site_name = serializers.CharField(source="site.name", read_only=True, default="")
     category_name = serializers.CharField(source="category.name", read_only=True)
     category_kind = serializers.CharField(source="category.kind", read_only=True)
+    vehicle_name = serializers.CharField(source="vehicle.name", read_only=True, default="")
     recorded_by_name = serializers.CharField(source="recorded_by.full_name", read_only=True)
     is_reversal = serializers.SerializerMethodField()
     # O16: shown to the manager rather than used to refuse the record.
@@ -313,6 +314,8 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
             "description",
             "scope_of_work",
             "vehicle_reg",
+            "vehicle",
+            "vehicle_name",
             "litres",
             "float_request",
             "photos_expected",
@@ -357,6 +360,10 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
             "project": {"required": False, "allow_null": True},
             "site": {"required": False, "allow_null": True},
             "client_uuid": {"required": False, "allow_null": True},
+            # R14: the register entry, or the typed registration; the service
+            # insists on one for fuel and fills the other (4.20.4).
+            "vehicle": {"required": False, "allow_null": True},
+            "vehicle_reg": {"required": False, "allow_blank": True},
         }
 
     def get_is_over_budget(self, entry) -> bool:  # type: ignore[no-untyped-def]
@@ -400,6 +407,7 @@ class ProjectExpenseSerializer(serializers.ModelSerializer):
             description=validated_data.get("description", ""),
             scope_of_work=validated_data.get("scope_of_work", ""),
             vehicle_reg=validated_data.get("vehicle_reg", ""),
+            vehicle=validated_data.get("vehicle"),
             litres=validated_data.get("litres"),
             float_request=validated_data.get("float_request"),
             photos_expected=validated_data.get("photos_expected", 0),
@@ -520,10 +528,10 @@ class ProjectExpenseViewSet(_EntryActions, TenantScopedViewSet):
 
     serializer_class = ProjectExpenseSerializer
     model = ProjectExpense
-    select_related = ("project", "site", "job", "category", "recorded_by")
+    select_related = ("project", "site", "job", "category", "recorded_by", "vehicle")
     prefetch_related = ("casual_lines", "casual_lines__casual")
     required_permissions = {"mark_paid": PERM.FINANCE_APPROVE}
-    filterset_fields = ["project", "job", "status", "category", "float_request"]
+    filterset_fields = ["project", "job", "status", "category", "float_request", "vehicle"]
     search_fields = ["description", "scope_of_work", "category__name"]
     ordering_fields = ["incurred_on", "amount", "created_at"]
 

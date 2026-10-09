@@ -54,7 +54,14 @@ class Asset(TenantModel, TimeStampedModel):
     tag_key = models.CharField(max_length=40, blank=True, editable=False)
 
     purchase_date = models.DateField(null=True, blank=True)
-    # T17.4 adds ``supplier`` (-> network.Supplier) once that model is merged.
+    #: Who it was bought from (R15). A register entry, whatever its status.
+    supplier = models.ForeignKey(
+        "network.Supplier",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="assets",
+    )
     cost = models.DecimalField(
         max_digits=14,
         decimal_places=2,

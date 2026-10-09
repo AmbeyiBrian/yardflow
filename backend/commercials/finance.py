@@ -391,6 +391,53 @@ class CasualLineInput:
     amount: Decimal | None = None
 
 
+class FuelVehicleRequired(DomainError):
+    code = "FUEL_VEHICLE_REQUIRED"
+    status_code = 400
+    default_message = "Fuel needs the vehicle: pick one from the register or type its registration."
+
+
+class FuelVehicleMismatch(DomainError):
+    code = "FUEL_VEHICLE_MISMATCH"
+    status_code = 400
+    default_message = "The registration typed is not the registration of the vehicle picked."
+
+
+def _fuel_vehicle(category, vehicle, vehicle_reg: str) -> str:  # type: ignore[no-untyped-def]
+    """Settle a fuel expense's vehicle and return the ``vehicle_reg`` to store (R14, §4.20.4).
+
+    A FUEL expense names exactly one of an open VEHICLE or GENERATOR from the
+    register, or a typed registration "not on the register". A typed
+    registration that restates the picked vehicle's tag is tolerated (old
+    clients send both); a different one is a mismatch. Old payloads sending
+    only ``vehicle_reg`` still work, so queued expenses replay.
+    """
+    from assets.models import AssetStatus, AssetType
+    from assets.services import AssetClosed
+
+    typed = (vehicle_reg or "").strip()
+    if vehicle is not None:
+        vehicle.refresh_from_db()  # a closed-since view must not take fuel
+    if category.kind != ExpenseKind.FUEL:
+        if vehicle is not None:
+            raise _invalid("vehicle", "Only a fuel expense names a vehicle.")
+        return typed
+    if vehicle is None:
+        if not typed:
+            message = FuelVehicleRequired.default_message
+            raise FuelVehicleRequired(field_errors={"vehicle_reg": [message]})
+        return typed
+    if vehicle.type not in (AssetType.VEHICLE, AssetType.GENERATOR):
+        raise _invalid("vehicle", "Fuel goes into a vehicle or a generator.")
+    if vehicle.status == AssetStatus.CLOSED:
+        raise AssetClosed(field_errors={"vehicle": ["That asset is closed."]})
+    if typed and vehicle.normalise_tag(typed) != vehicle.tag_key:
+        message = FuelVehicleMismatch.default_message
+        raise FuelVehicleMismatch(field_errors={"vehicle_reg": [message]})
+    max_length = ProjectExpense._meta.get_field("vehicle_reg").max_length or 20
+    return (vehicle.tag or "")[:max_length]
+
+
 def record_expense(
     *,
     actor,  # type: ignore[no-untyped-def]
@@ -403,6 +450,7 @@ def record_expense(
     description: str = "",
     scope_of_work: str = "",
     vehicle_reg: str = "",
+    vehicle=None,  # type: ignore[no-untyped-def]
     litres: Decimal | None = None,
     float_request: AllowanceRequest | None = None,
     photos_expected: int = 0,
@@ -428,9 +476,7 @@ def record_expense(
     if amount is None or amount <= 0:
         raise _invalid("amount", "The amount must be more than zero.")
 
-    vehicle_reg = vehicle_reg.strip()
-    if category.kind == ExpenseKind.FUEL and not vehicle_reg:
-        raise _invalid("vehicle_reg", "Fuel needs the vehicle registration.")
+    vehicle_reg = _fuel_vehicle(category, vehicle, vehicle_reg)
     if category.kind == ExpenseKind.CASUAL_LABOUR:
         if not lines:
             raise _invalid(
@@ -471,6 +517,7 @@ def record_expense(
                 description=description,
                 scope_of_work=scope_of_work,
                 vehicle_reg=vehicle_reg,
+                vehicle=vehicle,
                 litres=litres,
                 float_request=float_request,
                 photos_expected=photos_expected,
