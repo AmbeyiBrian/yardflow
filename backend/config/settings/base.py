@@ -273,6 +273,8 @@ SPECTACULAR_SETTINGS = {
         "AllowanceTypeEnum": "commercials.models.AllowanceType.choices",
         "ExpenseKindEnum": "commercials.models.ExpenseKind.choices",
         "AttachmentKindEnum": "core.models.AttachmentKind.choices",
+        # R11: "condition" is also a stock field (ConditionEnum above).
+        "MilestoneConditionEnum": "commercials.models.MilestoneCondition.choices",
     },
 }
 

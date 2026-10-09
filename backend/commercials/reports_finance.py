@@ -378,3 +378,88 @@ def _month_of(value):
     if hasattr(value, "date"):
         value = value.date()
     return value.replace(day=1)
+
+
+@register
+class PoPaymentsReport(Report):
+    """R11: what each PO is worth, what was invoiced and what the client has paid."""
+
+    slug = "po-payments"
+    title = "PO payments"
+    category = "Finance"
+    description = (
+        "One row per purchase order: its value, what has been invoiced, what has "
+        "been received, what is still outstanding, and the next milestone with its "
+        "state. Overdue means invoiced, unpaid and past the PO's payment terms "
+        "counted from the latest invoice."
+    )
+    requirement = "R11"
+    required_permission = PERM.FINANCE_APPROVE
+    can_be_large = False
+
+    filters = (
+        STATUS_FILTER,
+        Filter("client", "Client", kind="reference", resource="clients"),
+        MANAGER_FILTER,
+        Filter(
+            "overdue",
+            "Overdue",
+            kind="choice",
+            choices=(("yes", "Overdue only"),),
+        ),
+    )
+
+    columns = (
+        text("reference", "PO", width=16),
+        text("client_name", "Client", width=22),
+        text("manager_name", "Manager", width=20, wide_only=True),
+        text("status", "Status", width=12, wide_only=True),
+        money("value", "Value"),
+        money("invoiced", "Invoiced"),
+        money("received", "Received"),
+        money("outstanding", "Outstanding"),
+        money("invoiced_unpaid", "Invoiced, unpaid"),
+        text("next_milestone", "Next milestone", width=28),
+        text("next_state", "State", width=12),
+        flag("is_overdue", "Overdue"),
+    )
+
+    def rows(self, params: dict):
+        from django.utils import timezone
+
+        from commercials.milestones import State, states_for_project
+
+        today = timezone.localdate()
+        for project in _projects(params):
+            judged = states_for_project(project, today)
+            invoiced = sum((s.invoiced for _m, s in judged), ZERO)
+            received = sum((s.received for _m, s in judged), ZERO)
+            value = project.current_contract_value or ZERO
+            is_overdue = any(s.state == State.OVERDUE for _m, s in judged)
+            if params.get("overdue") == "yes" and not is_overdue:
+                continue
+            upcoming = next(((m, s) for m, s in judged if s.state != State.PAID), None)
+            yield {
+                "reference": str(project),
+                "client_name": project.client.name,
+                "manager_name": project.manager.full_name if project.manager else "",
+                "status": project.get_status_display(),
+                "value": value,
+                "invoiced": invoiced,
+                "received": received,
+                "outstanding": value - received,
+                "invoiced_unpaid": invoiced - received,
+                "next_milestone": (
+                    f"M{upcoming[0].sequence} {upcoming[0].name}" if upcoming else ""
+                ),
+                "next_state": (
+                    upcoming[1].state.replace("_", " ").capitalize() if upcoming else ""
+                ),
+                "is_overdue": is_overdue,
+            }
+
+    def totals(self, rows):
+        return {
+            key: sum((row[key] for row in rows), ZERO)
+            for key in ("value", "invoiced", "received", "outstanding", "invoiced_unpaid")
+        }

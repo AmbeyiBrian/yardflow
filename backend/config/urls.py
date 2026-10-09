@@ -54,6 +54,11 @@ from commercials.finance_api import (
     FinanceSettingsView,
     ProjectExpenseViewSet,
 )
+from commercials.milestones_api import (
+    MilestoneInvoiceViewSet,
+    MilestoneReceiptViewSet,
+    MilestoneViewSet,
+)
 from core.attachment_api import AttachmentTargetsView, AttachmentViewSet
 from core.number_series_api import NumberSeriesView
 from core.organization_api import OrganizationProfileView
@@ -84,6 +89,7 @@ from jobs.views import (
 from locations.views import LocationViewSet, StockNodeViewSet
 from network.views import (
     ClientViewSet,
+    ProjectSiteViewSet,
     ProjectVariationViewSet,
     ProjectViewSet,
     SiteReferenceViewSet,
@@ -259,6 +265,14 @@ router.register("clients", ClientViewSet, basename="client")
 router.register("sites", SiteViewSet, basename="site")
 router.register("site-references", SiteReferenceViewSet, basename="site-reference")
 router.register("projects", ProjectViewSet, basename="project")
+router.register("project-sites", ProjectSiteViewSet, basename="project-site")
+router.register("milestones", MilestoneViewSet, basename="milestone")
+router.register(
+    "milestone-invoices", MilestoneInvoiceViewSet, basename="milestone-invoice"
+)
+router.register(
+    "milestone-receipts", MilestoneReceiptViewSet, basename="milestone-receipt"
+)
 router.register(
     "project-variations", ProjectVariationViewSet, basename="project-variation"
 )

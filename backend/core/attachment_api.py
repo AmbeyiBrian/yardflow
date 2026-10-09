@@ -82,18 +82,51 @@ ATTACHABLE_TARGETS: dict[str, tuple[str, ...]] = {
     # R15, §4.20.7: a supplier's documents (PIN certificate, bank letter). The
     # registrar adds them while it is PENDING or REJECTED; Finance always.
     "network.Supplier": (),
+    # R7-R12, §4.19.9. The three the project's own manager decides are in
+    # ``PROJECT_RULED_TARGETS`` (empty here for the same reason as the owner
+    # rules): the PO, the acceptance certificate and the subcontract.
+    "network.Project": (),
+    "network.ProjectSite": (),
+    "commercials.Subcontract": (),
+    # The invoice behind a subcontract payment and the receipt behind a site
+    # purchase are the recorder's, while the entry can still change.
+    "commercials.SubcontractPayment": (),
+    "commercials.SitePurchase": (),
+    # Finance attaches the invoice document to a milestone invoice it recorded.
+    "commercials.MilestoneInvoice": (PERM.FINANCE_APPROVE,),
 }
 
 #: Targets where the **record's own owner** decides, not a permission (§4.17.7).
 #: Their entry in ``ATTACHABLE_TARGETS`` is empty on purpose: any member may
 #: attach, but only to what they recorded, and only while it can still change.
 OWNER_RULED_TARGETS = frozenset(
-    {"commercials.ProjectExpense", "commercials.Casual", "network.Supplier"}
+    {
+        "commercials.ProjectExpense",
+        "commercials.Casual",
+        "network.Supplier",
+        "commercials.SubcontractPayment",
+        "commercials.SitePurchase",
+    }
 )
 
-#: Expense statuses in which photos may still be added or removed. After final
-#: approval the evidence is fixed: it is what the approval was given on.
+#: Targets decided by **the project's manager** (§4.19.9): "this project's PM"
+#: is a person, not a permission, the same reason ``OWNER_RULED_TARGETS``
+#: exists. Each names the permissions that may also attach, besides the PM.
+PROJECT_RULED_TARGETS: dict[str, tuple[str, ...]] = {
+    "network.Project": (PERM.CATALOGUE_MANAGE, PERM.FINANCE_APPROVE),
+    "network.ProjectSite": (PERM.CATALOGUE_MANAGE,),
+    "commercials.Subcontract": (PERM.FINANCE_APPROVE,),
+}
+
+#: Statuses in which photos may still be added or removed, by kind of entry.
+#: After final approval the evidence is fixed: it is what the approval was given
+#: on. A subcontract payment has no second level, so it has no PENDING_FINANCE.
 _EVIDENCE_OPEN_STATUSES = frozenset({"PENDING_PM", "PENDING_FINANCE", "REJECTED"})
+_EVIDENCE_OPEN_BY_TARGET = {
+    "commercials.ProjectExpense": _EVIDENCE_OPEN_STATUSES,
+    "commercials.SitePurchase": _EVIDENCE_OPEN_STATUSES,
+    "commercials.SubcontractPayment": frozenset({"PENDING_PM", "REJECTED"}),
+}
 
 
 class AttachmentLocked(DomainError):
@@ -108,7 +141,7 @@ class AttachmentLocked(DomainError):
 
 def _can_attach_to(held, target_type: str) -> bool:  # type: ignore[no-untyped-def]
     """Whether a user's permissions allow attaching to this kind of record at all."""
-    if target_type in OWNER_RULED_TARGETS:
+    if target_type in OWNER_RULED_TARGETS or target_type in PROJECT_RULED_TARGETS:
         return True
     return any(held.has(codename) for codename in ATTACHABLE_TARGETS[target_type])
 
@@ -131,11 +164,19 @@ def _require_supplier_documents_open(target, user) -> None:  # type: ignore[no-u
 
 
 def _require_evidence_open(target) -> None:  # type: ignore[no-untyped-def]
-    """Photos on an expense are fixed once it is approved or paid (§4.17.7)."""
-    if target._meta.label == "commercials.ProjectExpense" and (
-        target.status not in _EVIDENCE_OPEN_STATUSES
-    ):
+    """Photos on an expense, purchase or payment are fixed once it is approved or
+    paid (§4.17.7, §4.19.9), and a voided milestone invoice's document with it."""
+    label = target._meta.label
+    open_statuses = _EVIDENCE_OPEN_BY_TARGET.get(label)
+    if open_statuses is not None and target.status not in open_statuses:
         raise AttachmentLocked()
+    if label == "commercials.MilestoneInvoice" and target.voided_at is not None:
+        raise AttachmentLocked("This invoice was voided, so its document is fixed.")
+
+
+def _project_of_target(target):  # type: ignore[no-untyped-def]
+    """The project whose manager rules a project-ruled record."""
+    return target if target._meta.label == "network.Project" else target.project
 
 #: N-7 keeps these unreadable without a signed link; this keeps the store to the
 #: kinds of file the requirements describe. An upload endpoint that accepts
@@ -297,9 +338,30 @@ class AttachmentViewSet(TenantScopedViewSet):
             Q(target_type="commercials.Casual") & ~Q(target_id__in=registered)
         ).exclude(Q(target_type="network.Supplier") & ~Q(target_id__in=added))
 
+    def _require_project_rule(self, target) -> None:  # type: ignore[no-untyped-def]
+        """The project's manager, or a holder of one of the named permissions."""
+        permissions = PROJECT_RULED_TARGETS.get(target._meta.label)
+        if permissions is None:
+            return
+        if _project_of_target(target).manager_id == self.request.user.pk:
+            return
+        held = resolve_permissions(self.request.user)
+        if any(held.has(codename) for codename in permissions):
+            return
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied(
+            "Only this project's manager, or someone with the right to, can attach "
+            "documents to it."
+        )
+
     def _require_owner(self, target) -> None:  # type: ignore[no-untyped-def]
         """The recorder (or registrar) only, and only while the entry can change."""
+        self._require_project_rule(target)
         if target._meta.label not in OWNER_RULED_TARGETS:
+            # Not the recorder's to decide, but a voided invoice's document is
+            # still fixed.
+            _require_evidence_open(target)
             return
         if target._meta.label == "network.Supplier":
             if resolve_permissions(self.request.user).has(PERM.FINANCE_APPROVE):
@@ -453,12 +515,19 @@ class AttachmentViewSet(TenantScopedViewSet):
                 "Only the person who uploaded a file can remove it."
             )
         # §4.17.7: nobody removes evidence from an approved or paid expense.
-        if instance.target_type == "commercials.ProjectExpense":
-            from commercials.models import ProjectExpense
-
-            expense = ProjectExpense.objects.filter(pk=instance.target_id).first()
-            if expense is not None:
-                _require_evidence_open(expense)
+        # §4.19.9: and likewise on a purchase, a subcontract payment or a voided
+        # milestone invoice. The PO, certificate and contract stay removable.
+        if (
+            instance.target_type in _EVIDENCE_OPEN_BY_TARGET
+            or instance.target_type == "commercials.MilestoneInvoice"
+        ):
+            held_target = (
+                apps.get_model(instance.target_type)
+                .objects.filter(pk=instance.target_id)
+                .first()
+            )
+            if held_target is not None:
+                _require_evidence_open(held_target)
         if instance.target_type == "network.Supplier":
             from network.models import Supplier
 

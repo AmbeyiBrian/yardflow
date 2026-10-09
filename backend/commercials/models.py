@@ -1092,9 +1092,13 @@ class ProjectMilestone(TenantModel, TimeStampedModel):
     sequence = models.PositiveSmallIntegerField()
     name = models.CharField(max_length=200)
     share_type = models.CharField(max_length=10, choices=MilestoneShare.choices)
+    #: Null until Finance fills it in: the default milestones are seeded with
+    #: empty shares (§4.19.7). The CHECKs below pass on NULL.
     share_value = models.DecimalField(
         max_digits=14,
         decimal_places=2,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal("0.01"))],
     )
     condition = models.CharField(

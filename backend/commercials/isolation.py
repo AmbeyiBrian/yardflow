@@ -77,3 +77,45 @@ def register() -> None:
     register_isolation_fixture(
         "casual", make_casual, payload={"name": "Renamed"}
     )
+
+    def make_milestone(organization):
+        from commercials.models import MilestoneCondition, MilestoneShare, ProjectMilestone
+
+        project = make_project_expense(organization).project
+        return ProjectMilestone.objects.create(
+            organization=organization,
+            project=project,
+            sequence=1,
+            name="Isolation milestone",
+            share_type=MilestoneShare.PERCENT,
+            share_value=Decimal("50"),
+            condition=MilestoneCondition.NONE,
+        )
+
+    def make_milestone_invoice(organization):
+        from commercials.models import MilestoneInvoice
+
+        return MilestoneInvoice.objects.create(
+            organization=organization,
+            milestone=make_milestone(organization),
+            invoice_number="ISO-INV-1",
+            invoice_date=date(2026, 1, 1),
+            amount=Decimal("1.00"),
+            recorded_by=User.objects.filter(organization=organization).first(),
+        )
+
+    def make_milestone_receipt(organization):
+        from commercials.models import MilestoneReceipt
+
+        return MilestoneReceipt.objects.create(
+            organization=organization,
+            milestone=make_milestone(organization),
+            received_on=date(2026, 1, 1),
+            amount=Decimal("1.00"),
+            recorded_by=User.objects.filter(organization=organization).first(),
+        )
+
+    # Read-only collections: Finance changes them through named actions.
+    register_isolation_fixture("milestone", make_milestone)
+    register_isolation_fixture("milestone-invoice", make_milestone_invoice)
+    register_isolation_fixture("milestone-receipt", make_milestone_receipt)

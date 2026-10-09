@@ -93,3 +93,23 @@ def register() -> None:
         payload={"reference": "ISO-VAR-1"},
     )
     register_isolation_fixture("supplier", make_supplier, payload={"name": "Renamed"})
+
+    def make_project_site(organization):
+        from network.models import ProjectSite
+
+        project = make_project(organization)
+        site = Site.objects.create(
+            organization=organization,
+            client=project.client,
+            internal_ref="ISO-PS-1",
+            name="Isolation project site",
+            latitude=Decimal("-1.292100"),
+            longitude=Decimal("36.821900"),
+        )
+        return ProjectSite.objects.create(
+            organization=organization, project=project, site=site
+        )
+
+    register_isolation_fixture(
+        "project-site", make_project_site, payload={"accepted_on": "2026-01-01"}
+    )

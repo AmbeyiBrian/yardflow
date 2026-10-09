@@ -5612,6 +5612,387 @@ paths:
               schema:
                 $ref: '#/components/schemas/Me'
           description: ''
+  /api/v1/milestone-invoices:
+    get:
+      operationId: milestone_invoices_list
+      description: '``/api/v1/milestone-invoices``; a mistake is voided, never edited.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: milestone
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - milestone-invoices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMilestoneInvoiceList'
+          description: ''
+    post:
+      operationId: milestone_invoices_create
+      description: '``/api/v1/milestone-invoices``; a mistake is voided, never edited.'
+      tags:
+      - milestone-invoices
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneInvoice'
+          description: ''
+  /api/v1/milestone-invoices/{id}:
+    get:
+      operationId: milestone_invoices_retrieve
+      description: '``/api/v1/milestone-invoices``; a mistake is voided, never edited.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this milestone invoice.
+        required: true
+      tags:
+      - milestone-invoices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneInvoice'
+          description: ''
+  /api/v1/milestone-invoices/{id}/void:
+    post:
+      operationId: milestone_invoices_void_create
+      description: '``/api/v1/milestone-invoices``; a mistake is voided, never edited.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this milestone invoice.
+        required: true
+      tags:
+      - milestone-invoices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneInvoice'
+          description: ''
+  /api/v1/milestone-receipts:
+    get:
+      operationId: milestone_receipts_list
+      description: '``/api/v1/milestone-receipts``.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: milestone
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - milestone-receipts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMilestoneReceiptList'
+          description: ''
+    post:
+      operationId: milestone_receipts_create
+      description: '``/api/v1/milestone-receipts``.'
+      tags:
+      - milestone-receipts
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneReceipt'
+          description: ''
+  /api/v1/milestone-receipts/{id}:
+    get:
+      operationId: milestone_receipts_retrieve
+      description: '``/api/v1/milestone-receipts``.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this milestone receipt.
+        required: true
+      tags:
+      - milestone-receipts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneReceipt'
+          description: ''
+  /api/v1/milestone-receipts/{id}/void:
+    post:
+      operationId: milestone_receipts_void_create
+      description: '``/api/v1/milestone-receipts``.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this milestone receipt.
+        required: true
+      tags:
+      - milestone-receipts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneReceipt'
+          description: ''
+  /api/v1/milestones:
+    get:
+      operationId: milestones_list
+      description: '``/api/v1/milestones`` and ``POST /milestones/{id}/invoices``
+        · ``/receipts``.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - milestones
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMilestoneList'
+          description: ''
+    post:
+      operationId: milestones_create
+      description: '``/api/v1/milestones`` and ``POST /milestones/{id}/invoices``
+        · ``/receipts``.'
+      tags:
+      - milestones
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+  /api/v1/milestones/{id}:
+    get:
+      operationId: milestones_retrieve
+      description: '``/api/v1/milestones`` and ``POST /milestones/{id}/invoices``
+        · ``/receipts``.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project milestone.
+        required: true
+      tags:
+      - milestones
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+  /api/v1/milestones/{id}/invoices:
+    post:
+      operationId: milestones_invoices_create
+      description: '``/api/v1/milestones`` and ``POST /milestones/{id}/invoices``
+        · ``/receipts``.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project milestone.
+        required: true
+      tags:
+      - milestones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InvoiceInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InvoiceInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneInvoice'
+          description: ''
+  /api/v1/milestones/{id}/receipts:
+    post:
+      operationId: milestones_receipts_create
+      description: '``/api/v1/milestones`` and ``POST /milestones/{id}/invoices``
+        · ``/receipts``.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project milestone.
+        required: true
+      tags:
+      - milestones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReceiptInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReceiptInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneReceipt'
+          description: ''
   /api/v1/movements:
     get:
       operationId: movements_list
@@ -6457,6 +6838,123 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedProjectExpenseList'
           description: ''
+  /api/v1/project-sites:
+    get:
+      operationId: project_sites_list
+      description: |-
+        ``/api/v1/project-sites`` — a project's sites with their dates (R10, §4.19.6).
+
+        Read for any member; the two dates are typed by the project's manager or
+        someone holding ``catalogue.manage``. Linking and unlinking sites stays on
+        the project (``sites``), so this offers no create or delete.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: integer
+      tags:
+      - project-sites
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProjectSiteList'
+          description: ''
+  /api/v1/project-sites/{id}:
+    get:
+      operationId: project_sites_retrieve
+      description: |-
+        ``/api/v1/project-sites`` — a project's sites with their dates (R10, §4.19.6).
+
+        Read for any member; the two dates are typed by the project's manager or
+        someone holding ``catalogue.manage``. Linking and unlinking sites stays on
+        the project (``sites``), so this offers no create or delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project site.
+        required: true
+      tags:
+      - project-sites
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectSite'
+          description: ''
+    patch:
+      operationId: project_sites_partial_update
+      description: |-
+        ``/api/v1/project-sites`` — a project's sites with their dates (R10, §4.19.6).
+
+        Read for any member; the two dates are typed by the project's manager or
+        someone holding ``catalogue.manage``. Linking and unlinking sites stays on
+        the project (``sites``), so this offers no create or delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project site.
+        required: true
+      tags:
+      - project-sites
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectSiteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectSiteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectSiteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectSite'
+          description: ''
   /api/v1/project-variations:
     get:
       operationId: project_variations_list
@@ -6756,6 +7254,10 @@ paths:
         description: The pagination cursor value.
         schema:
           type: string
+      - in: query
+        name: has_po
+        schema:
+          type: boolean
       - name: ordering
         required: false
         in: query
@@ -6768,6 +7270,16 @@ paths:
         description: Number of results to return per page.
         schema:
           type: integer
+      - in: query
+        name: po
+        schema:
+          type: string
+          enum:
+          - any
+          - none
+        description: |-
+          * `none` - No PO yet
+          * `any` - Has a PO
       - name: search
         required: false
         in: query
@@ -6923,6 +7435,40 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/projects/{id}/attach-po:
+    post:
+      operationId: projects_attach_po_create
+      description: Add the PO to a project working without one, on the same row.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachPoRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttachPoRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttachPoRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
   /api/v1/projects/{id}/budget:
     get:
       operationId: projects_budget_retrieve
@@ -7023,6 +7569,289 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}/milestones:
+    get:
+      operationId: projects_milestones_list
+      description: '``GET`` the project''s milestones with their states; ``POST``
+        adds one.'
+      parameters:
+      - in: query
+        name: client
+        schema:
+          type: integer
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: has_po
+        schema:
+          type: boolean
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: po
+        schema:
+          type: string
+          enum:
+          - any
+          - none
+        description: |-
+          * `none` - No PO yet
+          * `any` - Has a PO
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: number
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMilestoneList'
+          description: ''
+    post:
+      operationId: projects_milestones_create
+      description: '``GET`` the project''s milestones with their states; ``POST``
+        adds one.'
+      parameters:
+      - in: query
+        name: client
+        schema:
+          type: integer
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: has_po
+        schema:
+          type: boolean
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: po
+        schema:
+          type: string
+          enum:
+          - any
+          - none
+        description: |-
+          * `none` - No PO yet
+          * `any` - Has a PO
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: number
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMilestoneList'
+          description: ''
+  /api/v1/projects/{id}/milestones/{milestone_id}:
+    patch:
+      operationId: projects_milestones_partial_update
+      description: '``/api/v1/projects`` (C7, D14 — optional throughout).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      - in: path
+        name: milestone_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMilestoneInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMilestoneInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMilestoneInputRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+    delete:
+      operationId: projects_milestones_destroy
+      description: '``/api/v1/projects`` (C7, D14 — optional throughout).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      - in: path
+        name: milestone_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+  /api/v1/projects/{id}/milestones/defaults:
+    post:
+      operationId: projects_milestones_defaults_create
+      description: Finance's "Add default milestones" (M1 Deposit, M2, M3).
+      parameters:
+      - in: query
+        name: client
+        schema:
+          type: integer
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: has_po
+        schema:
+          type: boolean
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: po
+        schema:
+          type: string
+          enum:
+          - any
+          - none
+        description: |-
+          * `none` - No PO yet
+          * `any` - Has a PO
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: number
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - projects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMilestoneList'
           description: ''
   /api/v1/projects/{id}/performance:
     get:
@@ -9677,10 +10506,13 @@ paths:
           enum:
           - ALLOWANCE_REQUEST
           - CASUAL
+          - CLOCK_IN
+          - CLOCK_OUT
           - EXPENSE
           - GATE_IN
           - GATE_OUT_RELEASE
           - GATE_OUT_REQUEST
+          - SUPPLIER
         description: |-
           * `GATE_IN` - Receive a delivery
           * `GATE_OUT_REQUEST` - Request material
@@ -9688,6 +10520,9 @@ paths:
           * `EXPENSE` - Record an expense
           * `ALLOWANCE_REQUEST` - Request an allowance or float
           * `CASUAL` - Register a casual
+          * `SUPPLIER` - Add a supplier
+          * `CLOCK_IN` - Clock in
+          * `CLOCK_OUT` - Clock out
       - name: ordering
         required: false
         in: query
@@ -10666,6 +11501,41 @@ components:
         assertion:
           type: object
           additionalProperties: {}
+    AttachPoRequest:
+      type: object
+      description: '``POST /projects/{id}/attach-po`` (R12, §4.19.8).'
+      properties:
+        po_number:
+          type: string
+          minLength: 1
+          maxLength: 100
+        po_issue_date:
+          type: string
+          format: date
+        contract_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        cost_budget:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        payment_terms:
+          type: string
+          maxLength: 500
+        payment_terms_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        manager:
+          type: integer
+          nullable: true
+      required:
+      - contract_value
+      - cost_budget
+      - po_issue_date
+      - po_number
     Attachment:
       type: object
       description: What a client reads back. The file itself is never inlined (N-7).
@@ -13571,6 +14441,26 @@ components:
         * `CLOSED` - Closed
         * `CANCELLED` - Cancelled
         * `EXPIRED` - Expired
+    InvoiceInputRequest:
+      type: object
+      properties:
+        milestone:
+          type: integer
+        invoice_number:
+          type: string
+          minLength: 1
+          maxLength: 100
+        invoice_date:
+          type: string
+          format: date
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - amount
+      - invoice_date
+      - invoice_number
     ItemCategory:
       type: object
       properties:
@@ -14432,6 +15322,186 @@ components:
         * `DESTROYED_ON_SITE` - Destroyed on our premises
         * `RETURNED_TO_SUPPLIER` - Returned to the supplier
         * `OTHER` - Other — see the note
+    Milestone:
+      type: object
+      description: 'A milestone as the screen reads it: share, condition and the server''s
+        verdict.'
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        sequence:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        share_type:
+          allOf:
+          - $ref: '#/components/schemas/ShareTypeEnum'
+          readOnly: true
+        share_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        condition:
+          allOf:
+          - $ref: '#/components/schemas/MilestoneConditionEnum'
+          readOnly: true
+        condition_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        met_on:
+          type: string
+          format: date
+          nullable: true
+          readOnly: true
+        invoiced:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        received:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        invoices:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        receipts:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+      required:
+      - amount
+      - condition
+      - condition_date
+      - id
+      - invoiced
+      - invoices
+      - met_on
+      - name
+      - project
+      - receipts
+      - received
+      - sequence
+      - share_type
+      - share_value
+      - state
+    MilestoneConditionEnum:
+      enum:
+      - NONE
+      - ALL_SITES_ACCEPTED
+      - DATE
+      type: string
+      description: |-
+        * `NONE` - Due at once
+        * `ALL_SITES_ACCEPTED` - Due when every site is accepted
+        * `DATE` - Due on a date
+    MilestoneInvoice:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        milestone:
+          type: integer
+          readOnly: true
+        invoice_number:
+          type: string
+          readOnly: true
+        invoice_date:
+          type: string
+          format: date
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        recorded_by:
+          type: integer
+          readOnly: true
+        voided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        void_reason:
+          type: string
+          readOnly: true
+      required:
+      - amount
+      - id
+      - invoice_date
+      - invoice_number
+      - milestone
+      - recorded_by
+      - void_reason
+      - voided_at
+    MilestoneReceipt:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        milestone:
+          type: integer
+          readOnly: true
+        received_on:
+          type: string
+          format: date
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        recorded_by:
+          type: integer
+          readOnly: true
+        voided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        void_reason:
+          type: string
+          readOnly: true
+      required:
+      - amount
+      - id
+      - milestone
+      - received_on
+      - recorded_by
+      - reference
+      - void_reason
+      - voided_at
     Movement:
       type: object
       properties:
@@ -14722,7 +15792,26 @@ components:
         finance_limits:
           type: object
           additionalProperties: {}
+        suppliers:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        vehicles:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        offices:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        attendance:
+          type: object
+          additionalProperties: {}
       required:
+      - attendance
       - casuals
       - clients
       - expense_categories
@@ -14731,9 +15820,12 @@ components:
       - item_types
       - locations
       - my_floats
+      - offices
       - people
       - releasable_gate_outs
       - sites
+      - suppliers
+      - vehicles
     OperationEnum:
       enum:
       - GATE_IN
@@ -14742,6 +15834,9 @@ components:
       - EXPENSE
       - ALLOWANCE_REQUEST
       - CASUAL
+      - SUPPLIER
+      - CLOCK_IN
+      - CLOCK_OUT
       type: string
       description: |-
         * `GATE_IN` - Receive a delivery
@@ -14750,6 +15845,9 @@ components:
         * `EXPENSE` - Record an expense
         * `ALLOWANCE_REQUEST` - Request an allowance or float
         * `CASUAL` - Register a casual
+        * `SUPPLIER` - Add a supplier
+        * `CLOCK_IN` - Clock in
+        * `CLOCK_OUT` - Clock out
     Organization:
       type: object
       description: A tenant as the console sees it.
@@ -15377,6 +16475,63 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Location'
+    PaginatedMilestoneInvoiceList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MilestoneInvoice'
+    PaginatedMilestoneList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Milestone'
+    PaginatedMilestoneReceiptList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MilestoneReceipt'
     PaginatedMovementList:
       type: object
       required:
@@ -15472,6 +16627,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Project'
+    PaginatedProjectSiteList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectSite'
     PaginatedProjectVariationList:
       type: object
       required:
@@ -16255,6 +17429,26 @@ components:
           type: integer
           maximum: 2000
           minimum: 20
+    PatchedMilestoneInputRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        share_type:
+          $ref: '#/components/schemas/ShareTypeEnum'
+        share_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        condition:
+          $ref: '#/components/schemas/MilestoneConditionEnum'
+        condition_date:
+          type: string
+          format: date
+          nullable: true
     PatchedNumberSeriesRequest:
       type: object
       properties:
@@ -16406,6 +17600,18 @@ components:
           type: string
           description: The client's purchase order number. One PO is one project (D21).
           maxLength: 100
+        po_issue_date:
+          type: string
+          format: date
+          nullable: true
+        payment_terms:
+          type: string
+          maxLength: 500
+        payment_terms_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
         title:
           type: string
           maxLength: 200
@@ -16444,6 +17650,22 @@ components:
         close_reason:
           type: string
           maxLength: 500
+    PatchedProjectSiteRequest:
+      type: object
+      description: |-
+        A project's site with its dates and what the yard did for it (R10, §4.19.6).
+
+        ``is_accepted``, ``first_collection_at`` and ``last_dispatch_at`` are
+        derived and read-only; only the two typed dates can be written.
+      properties:
+        mobilised_on:
+          type: string
+          format: date
+          nullable: true
+        accepted_on:
+          type: string
+          format: date
+          nullable: true
     PatchedProjectVariationRequest:
       type: object
       properties:
@@ -16751,6 +17973,23 @@ components:
           type: string
           description: The client's purchase order number. One PO is one project (D21).
           maxLength: 100
+        po_issue_date:
+          type: string
+          format: date
+          nullable: true
+        payment_terms:
+          type: string
+          maxLength: 500
+        payment_terms_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        po_recorded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         title:
           type: string
           maxLength: 200
@@ -16822,6 +18061,10 @@ components:
         close_reason:
           type: string
           maxLength: 500
+        days_without_po:
+          type: integer
+          nullable: true
+          readOnly: true
       required:
       - client
       - client_name
@@ -16829,9 +18072,11 @@ components:
       - closed_with_unreconciled
       - current_contract_value
       - current_cost_budget
+      - days_without_po
       - id
       - manager_name
       - opened_at
+      - po_recorded_at
       - reference
       - site_count
       - status
@@ -17070,6 +18315,18 @@ components:
           type: string
           description: The client's purchase order number. One PO is one project (D21).
           maxLength: 100
+        po_issue_date:
+          type: string
+          format: date
+          nullable: true
+        payment_terms:
+          type: string
+          maxLength: 500
+        payment_terms_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
         title:
           type: string
           maxLength: 200
@@ -17110,6 +18367,59 @@ components:
           maxLength: 500
       required:
       - client
+    ProjectSite:
+      type: object
+      description: |-
+        A project's site with its dates and what the yard did for it (R10, §4.19.6).
+
+        ``is_accepted``, ``first_collection_at`` and ``last_dispatch_at`` are
+        derived and read-only; only the two typed dates can be written.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        site:
+          type: integer
+          readOnly: true
+        site_ref:
+          type: string
+          readOnly: true
+        site_name:
+          type: string
+          readOnly: true
+        mobilised_on:
+          type: string
+          format: date
+          nullable: true
+        accepted_on:
+          type: string
+          format: date
+          nullable: true
+        is_accepted:
+          type: boolean
+          readOnly: true
+        first_collection_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_dispatch_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - first_collection_at
+      - id
+      - is_accepted
+      - last_dispatch_at
+      - project
+      - site
+      - site_name
+      - site_ref
     ProjectStatusEnum:
       enum:
       - OPEN
@@ -17301,6 +18611,25 @@ components:
         reason:
           type: string
           maxLength: 500
+    ReceiptInputRequest:
+      type: object
+      properties:
+        milestone:
+          type: integer
+        received_on:
+          type: string
+          format: date
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        reference:
+          type: string
+          default: ''
+          maxLength: 100
+      required:
+      - amount
+      - received_on
     Reconciliation:
       type: object
       properties:
@@ -17784,6 +19113,14 @@ components:
         * `QUARANTINED` - Quarantined
         * `RETURNED_TO_CLIENT` - Returned to the client
         * `SCRAPPED` - Scrapped
+    ShareTypeEnum:
+      enum:
+      - PERCENT
+      - AMOUNT
+      type: string
+      description: |-
+        * `PERCENT` - Percent of the contract value
+        * `AMOUNT` - Fixed amount
     Site:
       type: object
       properties:
@@ -19061,6 +20398,15 @@ components:
       description: |-
         Named for this endpoint: the schema keys components by class name, and two
         different ``ReasonSerializer`` classes would collide into one wrong shape.
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+      - reason
+    VoidRequest:
+      type: object
       properties:
         reason:
           type: string

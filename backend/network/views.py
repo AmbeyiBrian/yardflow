@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.utils import timezone
 from django_filters import rest_framework as filters
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -11,13 +14,15 @@ from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
 from accounts.services import resolve_permissions
-from commercials.visibility import may_see_project_cost
+from commercials.milestones_api import MilestoneInputSerializer, MilestoneSerializer
+from commercials.visibility import may_see_project_cost, may_see_project_margin
 from core.api import TenantScopedViewSet
 from core.field_permissions import PermissionGatedFieldsMixin
 from network import suppliers as supplier_services
 from network.models import (
     Client,
     Project,
+    ProjectSite,
     ProjectStatus,
     ProjectVariation,
     Site,
@@ -26,6 +31,11 @@ from network.models import (
     Supplier,
     SupplierStatus,
     VariationStatus,
+)
+from network.project_sites import (
+    is_accepted,
+    set_project_sites,
+    with_site_facts,
 )
 
 
@@ -107,6 +117,9 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
         max_digits=14, decimal_places=2, read_only=True
     )
     site_count = serializers.SerializerMethodField()
+    #: R12: how long the project worked without a PO. Only for a project that has
+    #: none, and only for those who hold ``project.view_margin`` (§4.19.8).
+    days_without_po = serializers.SerializerMethodField()
     # DRF makes a many-to-many with a through model read-only. It is declared
     # here so the form keeps writing it; `ProjectSite` rows carry the tenant.
     # The manager itself, not `.all()`: evaluated per request, when a tenant exists.
@@ -122,6 +135,10 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
             "client_name",
             "reference",
             "po_number",
+            "po_issue_date",
+            "payment_terms",
+            "payment_terms_days",
+            "po_recorded_at",
             "title",
             "description",
             "manager",
@@ -139,6 +156,7 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
             "closed_at",
             "closed_with_unreconciled",
             "close_reason",
+            "days_without_po",
         )
         # M6: the reference is allocated from the tenant's PROJECT series, not
         # typed. The client's own name for the work is `po_number`.
@@ -148,29 +166,37 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
             "opened_at",
             "closed_at",
             "closed_with_unreconciled",
+            "po_recorded_at",
         )
 
     def create(self, validated_data: dict) -> Project:
         sites = validated_data.pop("sites", [])
         project = super().create(validated_data)
-        self._link_sites(project, sites)
+        if project.po_number:
+            # §4.19.8: a project created with its PO had it from the start.
+            project.po_recorded_at = project.opened_at
+            project.save(update_fields=["po_recorded_at", "updated_at"])
+        set_project_sites(project, sites)
         return project
 
     def update(self, instance: Project, validated_data: dict) -> Project:
         sites = validated_data.pop("sites", None)
+        had_po = bool(instance.po_number)
         project = super().update(instance, validated_data)
+        if project.po_number and not had_po and project.po_recorded_at is None:
+            project.po_recorded_at = timezone.now()
+            project.save(update_fields=["po_recorded_at", "updated_at"])
         if sites is not None:
-            self._link_sites(project, sites)
+            set_project_sites(project, sites)
         return project
-
-    @staticmethod
-    def _link_sites(project: Project, sites: list) -> None:
-        project.sites.set(
-            sites, through_defaults={"organization_id": project.organization_id}
-        )
 
     def get_site_count(self, project: Project) -> int:
         return project.sites.count()
+
+    def get_days_without_po(self, project: Project) -> int | None:
+        if project.po_number or project.opened_at is None:
+            return None
+        return (timezone.now() - project.opened_at).days
 
     def to_representation(self, instance):  # type: ignore[no-untyped-def]
         data = super().to_representation(instance)
@@ -179,6 +205,8 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
         if not may_see_project_cost(self.context.get("request"), instance):
             data.pop("cost_budget", None)
             data.pop("current_cost_budget", None)
+        if not may_see_project_margin(self.context.get("request")):
+            data.pop("days_without_po", None)
         return data
 
     def validate(self, attrs: dict) -> dict:
@@ -204,6 +232,57 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
         if missing:
             raise serializers.ValidationError(missing)
         return attrs
+
+
+class AttachPoSerializer(serializers.Serializer):
+    """``POST /projects/{id}/attach-po`` (R12, §4.19.8)."""
+
+    po_number = serializers.CharField(max_length=100)
+    po_issue_date = serializers.DateField()
+    contract_value = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0
+    )
+    cost_budget = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0)
+    payment_terms = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    payment_terms_days = serializers.IntegerField(
+        required=False, allow_null=True, min_value=0, max_value=32767
+    )
+    manager = serializers.PrimaryKeyRelatedField(
+        queryset=get_user_model().objects, required=False, allow_null=True
+    )
+
+
+class ProjectSiteSerializer(serializers.ModelSerializer):
+    """A project's site with its dates and what the yard did for it (R10, §4.19.6).
+
+    ``is_accepted``, ``first_collection_at`` and ``last_dispatch_at`` are
+    derived and read-only; only the two typed dates can be written.
+    """
+
+    site_ref = serializers.CharField(source="site.internal_ref", read_only=True)
+    site_name = serializers.CharField(source="site.name", read_only=True)
+    is_accepted = serializers.SerializerMethodField()
+    first_collection_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    last_dispatch_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = ProjectSite
+        fields = (
+            "id",
+            "project",
+            "site",
+            "site_ref",
+            "site_name",
+            "mobilised_on",
+            "accepted_on",
+            "is_accepted",
+            "first_collection_at",
+            "last_dispatch_at",
+        )
+        read_only_fields = ("project", "site")
+
+    def get_is_accepted(self, row: ProjectSite) -> bool:
+        return is_accepted(row.accepted_on, getattr(row, "has_certificate", False))
 
 
 class ProjectVariationSerializer(serializers.ModelSerializer):
@@ -444,6 +523,12 @@ class ProjectFilter(filters.FilterSet):
     # A method, not ``field_name="sites"``: resolving a relation at import time
     # would query the tenant manager before any organization is in context.
     site = filters.NumberFilter(method="filter_site")
+    # R12 (§4.19.8): ``po=none`` is the dashboard's "working without a PO" list,
+    # oldest first in the screen's eyes; ``po=any`` its complement.
+    po = filters.ChoiceFilter(
+        choices=(("none", "No PO yet"), ("any", "Has a PO")), method="filter_po"
+    )
+    has_po = filters.BooleanFilter(method="filter_has_po")
 
     class Meta:
         model = Project
@@ -451,6 +536,21 @@ class ProjectFilter(filters.FilterSet):
 
     def filter_site(self, queryset, name, value):  # type: ignore[no-untyped-def]
         return queryset.filter(sites=value)
+
+    def filter_po(self, queryset, name, value):  # type: ignore[no-untyped-def]
+        if value == "none":
+            # The list of projects still without a PO is the owner's, because it
+            # sits next to figures only they see (§4.19.10).
+            request = self.request
+            if request is not None and not resolve_permissions(request.user).has(
+                PERM.PROJECT_VIEW_MARGIN
+            ):
+                raise PermissionDenied("Only the owner sees which projects have no PO.")
+            return queryset.filter(po_number="")
+        return queryset.exclude(po_number="")
+
+    def filter_has_po(self, queryset, name, value):  # type: ignore[no-untyped-def]
+        return self.filter_po(queryset, name, "any" if value else "none")
 
 
 class ProjectViewSet(TenantScopedViewSet):
@@ -498,6 +598,72 @@ class ProjectViewSet(TenantScopedViewSet):
                     actor=self.request.user,
                     request=self.request,
                 )
+
+    # --- R12, R11: the PO that arrives late, and its milestones (§4.19.7-8) ---
+
+    @extend_schema(request=AttachPoSerializer, responses={200: ProjectSerializer})
+    @action(detail=True, methods=["post"], url_path="attach-po")
+    def attach_po(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """Add the PO to a project working without one, on the same row."""
+        from commercials.po import attach_po
+
+        project = self.get_object()
+        # "This project's PM" is a person, not a permission, so it is checked here.
+        if project.manager_id != request.user.pk and not resolve_permissions(
+            request.user
+        ).has(PERM.CATALOGUE_MANAGE):
+            raise PermissionDenied(
+                "Only this project's manager, or someone who manages the catalogue, "
+                "can attach its PO."
+            )
+        body = AttachPoSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
+        project = attach_po(
+            project,
+            po_number=data["po_number"],
+            po_issue_date=data["po_issue_date"],
+            contract_value=data["contract_value"],
+            cost_budget=data["cost_budget"],
+            payment_terms=data.get("payment_terms", ""),
+            payment_terms_days=data.get("payment_terms_days"),
+            manager=data.get("manager"),
+            actor=request.user,
+            request=request,
+        )
+        return Response(self.get_serializer(project).data)
+
+    @extend_schema(responses={200: MilestoneSerializer(many=True)}, request=None)
+    @action(detail=True, methods=["get", "post"], url_path="milestones")
+    def milestones(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """``GET`` the project's milestones with their states; ``POST`` adds one."""
+        from commercials import milestones_api
+
+        project = self.get_object()
+        if request.method == "POST":
+            return milestones_api.add_project_milestone(request, project)
+        return milestones_api.list_project_milestones(request, project)
+
+    @extend_schema(request=MilestoneInputSerializer, responses={200: MilestoneSerializer})
+    @action(
+        detail=True,
+        methods=["patch", "delete"],
+        url_path=r"milestones/(?P<milestone_id>\d+)",
+    )
+    def milestone_change(self, request, pk=None, milestone_id=None):  # type: ignore[no-untyped-def]
+        from commercials import milestones_api
+
+        return milestones_api.change_project_milestone(
+            request, self.get_object(), int(milestone_id)
+        )
+
+    @extend_schema(request=None, responses={200: MilestoneSerializer(many=True)})
+    @action(detail=True, methods=["post"], url_path="milestones/defaults")
+    def milestone_defaults(self, request, pk=None):  # type: ignore[no-untyped-def]
+        """Finance's "Add default milestones" (M1 Deposit, M2, M3)."""
+        from commercials import milestones_api
+
+        return milestones_api.add_default_project_milestones(request, self.get_object())
 
     @action(detail=True, methods=["get"])
     def performance(self, request, pk=None):  # type: ignore[no-untyped-def]
@@ -777,3 +943,51 @@ class SupplierViewSet(TenantScopedViewSet):
             self.get_object(), actor=request.user, request=request
         )
         return Response({"linked": linked})
+
+
+class ProjectSiteViewSet(TenantScopedViewSet):
+    """``/api/v1/project-sites`` — a project's sites with their dates (R10, §4.19.6).
+
+    Read for any member; the two dates are typed by the project's manager or
+    someone holding ``catalogue.manage``. Linking and unlinking sites stays on
+    the project (``sites``), so this offers no create or delete.
+    """
+
+    serializer_class = ProjectSiteSerializer
+    model = ProjectSite
+    select_related = ("site", "project")
+    http_method_names = ["get", "patch", "head", "options"]
+    filterset_fields = ["project", "site"]
+    ordering_fields = ["id"]
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        return with_site_facts(super().get_queryset()).order_by("site__internal_ref", "id")
+
+    def partial_update(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        from core.audit import record
+        from core.models import AuditAction
+
+        row = self.get_object()
+        if row.project.manager_id != request.user.pk and not resolve_permissions(
+            request.user
+        ).has(PERM.CATALOGUE_MANAGE):
+            raise PermissionDenied(
+                "Only this project's manager, or someone who manages the catalogue, "
+                "can set its site dates."
+            )
+        before = {"mobilised_on": str(row.mobilised_on), "accepted_on": str(row.accepted_on)}
+        # Only the two dates are writable; anything else in the body is ignored.
+        body = ProjectSiteSerializer(row, data=request.data, partial=True)
+        body.is_valid(raise_exception=True)
+        body.save()
+        row = self.get_queryset().get(pk=row.pk)
+        record(
+            AuditAction.DOCUMENT_AMENDED,
+            actor=request.user,
+            target=row,
+            request=request,
+            before=before,
+            after={"mobilised_on": str(row.mobilised_on), "accepted_on": str(row.accepted_on)},
+            note=f"Site dates changed on {row.project} for {row.site}.",
+        )
+        return Response(ProjectSiteSerializer(row, context={"request": request}).data)
