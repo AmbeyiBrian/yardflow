@@ -93,6 +93,7 @@ LOCAL_APPS = [
     "approvals",
     "jobs",
     "custody",
+    "assets",
     "disposition",
     "notifications",
     "commercials",

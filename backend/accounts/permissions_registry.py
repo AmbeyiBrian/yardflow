@@ -76,6 +76,9 @@ class PERM:
     #: allowance limits. One switch for now; paying can be split out later.
     FINANCE_APPROVE = "finance.approve"
 
+    # Assets (Epic R, §4.20.7)
+    ASSET_MANAGE = "asset.manage"
+
     # Configuration
     CATALOGUE_MANAGE = "catalogue.manage"
     SETTINGS_MANAGE = "settings.manage"
@@ -183,6 +186,14 @@ ALL_PERMISSIONS: tuple[PermissionSpec, ...] = (
         "The second approval on expenses and allowance requests, and the act of "
         "marking them paid. Kept apart from project.view_cost so a PM can see "
         "what a project cost without being able to pay anyone (R4).",
+    ),
+    PermissionSpec(
+        PERM.ASSET_MANAGE,
+        "Manage the asset register",
+        "Assets",
+        "Add and close vehicles, generators and tools, hand them over, and see "
+        "what they cost. Everyone can read the register so a fuel entry can "
+        "pick a vehicle (R14).",
     ),
     PermissionSpec(
         PERM.CATALOGUE_MANAGE,

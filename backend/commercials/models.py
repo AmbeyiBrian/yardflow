@@ -434,6 +434,16 @@ class ProjectExpense(StatusGuardMixin, TenantModel, TimeStampedModel):
     # Fuel (R1): the registration is required when the category is FUEL; litres
     # are optional. Enforced in the service, where the category is known.
     vehicle_reg = models.CharField(max_length=20, blank=True)
+    #: R14: the register entry the fuel went into. ``vehicle_reg`` stays: it is
+    #: the typed registration on old rows ("not on the register") and is filled
+    #: from the asset's tag on new ones (§4.20.2).
+    vehicle = models.ForeignKey(
+        "assets.Asset",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="expenses",
+    )
     litres = models.DecimalField(
         max_digits=10,
         decimal_places=2,

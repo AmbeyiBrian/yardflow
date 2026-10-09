@@ -355,13 +355,27 @@ def holdings_of(user) -> list[dict]:
 
 
 def assert_can_deactivate(user) -> None:
-    """B3's edge case: refuse to deactivate someone still holding material."""
+    """B3's edge case: refuse to deactivate someone still holding material.
+
+    "Material" includes a company asset they hold (R14, §4.20.4).
+    """
+    from assets.models import Asset, AssetStatus
+
     holdings = holdings_of(user)
-    if holdings:
+    held_assets = list(
+        Asset.objects.filter(holder=user, status=AssetStatus.ACTIVE).values(
+            "id", "name", "tag"
+        )
+    )
+    if holdings or held_assets:
         raise HolderStillHasMaterial(
-            f"{user} is still holding {len(holdings)} item(s). Have the material "
-            f"returned or handed over to someone else first (B3, I5).",
-            details={"holdings": [
-                {**holding, "quantity": str(holding["quantity"])} for holding in holdings
-            ]},
+            f"{user} is still holding {len(holdings)} item(s) and "
+            f"{len(held_assets)} asset(s). Have them returned or handed over to "
+            f"someone else first (B3, I5, R14).",
+            details={
+                "holdings": [
+                    {**holding, "quantity": str(holding["quantity"])} for holding in holdings
+                ],
+                "assets": [{**asset, "id": str(asset["id"])} for asset in held_assets],
+            },
         )
