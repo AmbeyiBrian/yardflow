@@ -3,7 +3,7 @@
  *
  * A faithful port of `backend/stock/labels.py:read_label`. A label in the yard
  * is rarely just a serial: it can be a gate-pass QR, a vendor's JSON payload, a
- * GS1 barcode, a product URL, a printed `SN:` line or a sheet of several
+ * GS1 barcode, an ISO 15434 (Huawei) label, a product URL, a printed `SN:` line or a sheet of several
  * serials. One function reads whatever was scanned and says what it found, so
  * the storekeeper never has to say which.
  *
@@ -53,6 +53,12 @@ const GS1_FIXED: Record<string, number> = {
 const GS1_SYMBOLOGY = /^\][A-Za-z][0-9A-Za-z]/;
 const GS1_BRACKETED_START = /^\(\p{Nd}{2,4}\)/u;
 const GS1_BRACKETED = /\((\p{Nd}{2,4})\)([^(]*)/gu;
+
+// ISO/IEC 15434 format 06 (E9): header, then GS-separated fields, ended by RS (and EOT).
+const RECORD_SEPARATOR = '\x1e';
+const END_OF_TRANSMISSION = '\x04';
+const ISO15434_HEADER = `[)>${RECORD_SEPARATOR}06${GROUP_SEPARATOR}`;
+const DATA_IDENTIFIER = /^(\d{0,3}[A-Z])([\s\S]*)$/;
 
 // Python's `^`/`$` in MULTILINE mode and `.` only know \n; JavaScript's also
 // count carriage return and the Unicode line and paragraph separators, so the line
@@ -120,7 +126,7 @@ export function readLabel(rawInput: string | null | undefined): LabelReading {
   const token = gatePassToken(text);
   if (token) return { serials: [], boxCode: null, documentToken: token, raw };
 
-  for (const rule of [fromJson, fromGs1, fromUrl, fromLabelled, fromList]) {
+  for (const rule of [fromIso15434, fromJson, fromGs1, fromUrl, fromLabelled, fromList]) {
     const found = rule(text);
     if (found) {
       const serials = unique(found.serials);
@@ -153,12 +159,27 @@ function gatePassToken(text: string): string | null {
   return null;
 }
 
+/** Rule 2: an ISO/IEC 15434 format-06 envelope; the `S` fields are serials (E9).
+ * The header needs its separators, so run-together text never matches and the
+ * fallback keeps it whole. Without an `S` field it falls through. */
+function fromIso15434(text: string): Found {
+  if (!text.startsWith(ISO15434_HEADER)) return null;
+  let body = text.slice(ISO15434_HEADER.length).split(RECORD_SEPARATOR, 1)[0];
+  while (body.endsWith(END_OF_TRANSMISSION)) body = body.slice(0, -1);
+  const serials: string[] = [];
+  for (const field of body.split(GROUP_SEPARATOR)) {
+    const match = DATA_IDENTIFIER.exec(field);
+    if (match && match[1] === 'S') serials.push(match[2]);
+  }
+  return serials.length > 0 ? { serials, boxCode: null } : null;
+}
+
 /** A string or a whole number. Never a boolean, null, float or nested value. */
 function scalar(value: unknown): value is string | number {
   return typeof value === 'string' || (typeof value === 'number' && Number.isInteger(value));
 }
 
-/** Rule 2: an object, or an array of strings or objects. */
+/** Rule 3: an object, or an array of strings or objects. */
 function fromJson(text: string): Found {
   if (text[0] !== '{' && text[0] !== '[') return null;
   let data: unknown;
@@ -189,7 +210,7 @@ function fromJson(text: string): Found {
   return { serials, boxCode };
 }
 
-/** Rule 3: GS1 element strings, with or without brackets (AI 21 serial, 00 SSCC).
+/** Rule 4: GS1 element strings, with or without brackets (AI 21 serial, 00 SSCC).
  * Never guessed from bare digits: only the bracketed form, a symbology
  * identifier or an FNC1 separator say it is GS1. */
 function fromGs1(text: string): Found {
@@ -232,7 +253,7 @@ function walkGs1(body: string): [string, string][] {
   return pairs;
 }
 
-/** Rule 4: a product link carries the serial in a parameter or the last segment. */
+/** Rule 5: a product link carries the serial in a parameter or the last segment. */
 function fromUrl(text: string): Found {
   if (!/^https?:\/\//i.test(text)) return null;
   // urlsplit drops tabs and newlines anywhere in the address.
@@ -262,13 +283,13 @@ function fromUrl(text: string): Found {
   return null;
 }
 
-/** Rule 5: `SN: x` / `S/N x` / `Serial No: x`, one per line. */
+/** Rule 6: `SN: x` / `S/N x` / `Serial No: x`, one per line. */
 function fromLabelled(text: string): Found {
   const serials = [...text.matchAll(LABELLED)].map((m) => m[1]);
   return { serials, boxCode: null };
 }
 
-/** Rule 6: several serials on lines, or split by commas or semicolons. */
+/** Rule 7: several serials on lines, or split by commas or semicolons. */
 function fromList(text: string): Found {
   const tokens = text
     .split(LIST_SPLIT)

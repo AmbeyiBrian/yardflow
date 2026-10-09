@@ -10,6 +10,10 @@ A non-empty label is never discarded: a rule that matches but yields nothing
 falls through, and the last rule returns the raw value as the single serial, so
 the worst case is the behaviour from before this module existed.
 
+A Huawei 2D label is an ISO/IEC 15434 format-06 envelope (E9): ``[)>`` RS ``06`` GS,
+then GS-separated fields that each start with an ANSI MH10.8.2 data identifier. Only
+the ``S`` identifier is a serial; part number, quantity and the rest are ignored.
+
 The browser implements the same rules; both are tested against
 ``stock/tests/data/label_vectors.json``. Change a rule and the vectors together.
 Box codes and gate-pass tokens are only *read* here — resolving them is later work.
@@ -37,6 +41,12 @@ _GS1_SYMBOLOGY = re.compile(r"^\][A-Za-z][0-9A-Za-z]")
 _GS1_BRACKETED_START = re.compile(r"^\(\d{2,4}\)")
 _GS1_BRACKETED = re.compile(r"\((\d{2,4})\)([^(]*)")
 
+# ISO/IEC 15434 format 06 (E9): header, then GS-separated fields, ended by RS (and EOT).
+_RECORD_SEPARATOR = "\x1e"
+_END_OF_TRANSMISSION = "\x04"
+_ISO15434_HEADER = f"[)>{_RECORD_SEPARATOR}06{GROUP_SEPARATOR}"
+_DATA_IDENTIFIER = re.compile(r"^(\d{0,3}[A-Z])(.*)$", re.DOTALL)
+
 _LABELLED = re.compile(
     r"^[ \t]*(?:s/n[ \t]*:?|sn[ \t]*:|serial(?:[ \t]*no)?[ \t]*:)[ \t]*(\S.*?)[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
@@ -63,7 +73,7 @@ def read_label(raw: str) -> LabelReading:
     if token:
         return LabelReading((), None, token, raw)
 
-    for rule in (_from_json, _from_gs1, _from_url, _from_labelled, _from_list):
+    for rule in (_from_iso15434, _from_json, _from_gs1, _from_url, _from_labelled, _from_list):
         found = rule(text)
         if found is not None:
             serials, box_code = found
@@ -93,6 +103,24 @@ def _gate_pass_token(text: str) -> str | None:
     return next((v.strip() for v in values if v.strip()), None)
 
 
+def _from_iso15434(text: str):
+    """Rule 2: an ISO/IEC 15434 format-06 envelope; the ``S`` fields are serials (E9).
+
+    The header needs its separators, so run-together text never matches and the
+    fallback keeps it whole. Without an ``S`` field it falls through.
+    """
+    if not text.startswith(_ISO15434_HEADER):
+        return None
+    body = text[len(_ISO15434_HEADER) :].split(_RECORD_SEPARATOR, 1)[0]
+    body = body.rstrip(_END_OF_TRANSMISSION)
+    serials: list[str] = []
+    for field in body.split(GROUP_SEPARATOR):
+        match = _DATA_IDENTIFIER.match(field)
+        if match and match.group(1) == "S":
+            serials.append(match.group(2))
+    return (serials, None) if serials else None
+
+
 def _scalar(value) -> bool:
     """A string or a whole number. Not a bool: Python counts ``True`` as an int,
     and ``{"sn": true}`` must not become the serial "True"."""
@@ -100,7 +128,7 @@ def _scalar(value) -> bool:
 
 
 def _from_json(text: str):
-    """Rule 2: an object, or an array of strings or objects."""
+    """Rule 3: an object, or an array of strings or objects."""
     if text[0] not in "{[":
         return None
     try:
@@ -126,7 +154,7 @@ def _from_json(text: str):
 
 
 def _from_gs1(text: str):
-    """Rule 3: GS1 element strings, with or without brackets (AI 21 serial, 00 SSCC).
+    """Rule 4: GS1 element strings, with or without brackets (AI 21 serial, 00 SSCC).
 
     Never guessed from bare digits: only bracketed form, a symbology identifier or
     an FNC1 separator say it is GS1.
@@ -163,7 +191,7 @@ def _walk_gs1(body: str) -> list[tuple[str, str]]:
 
 
 def _from_url(text: str):
-    """Rule 4: a product link carries the serial in a parameter or the last segment."""
+    """Rule 5: a product link carries the serial in a parameter or the last segment."""
     if not re.match(r"^https?://", text, re.IGNORECASE):
         return None
     try:
@@ -182,11 +210,11 @@ def _from_url(text: str):
 
 
 def _from_labelled(text: str):
-    """Rule 5: ``SN: x`` / ``S/N x`` / ``Serial No: x``, one per line."""
+    """Rule 6: ``SN: x`` / ``S/N x`` / ``Serial No: x``, one per line."""
     return _LABELLED.findall(text), None
 
 
 def _from_list(text: str):
-    """Rule 6: several serials on lines, or split by commas or semicolons."""
+    """Rule 7: several serials on lines, or split by commas or semicolons."""
     tokens = [t.strip() for t in _LIST_SPLIT.split(text) if t.strip()]
     return (tokens, None) if len(tokens) >= 2 else None

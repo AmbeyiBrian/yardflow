@@ -437,5 +437,51 @@
     ],
     "box_code": null,
     "document_token": null
+  },
+  {
+    "name": "iso 15434 label with one serial",
+    "raw": "[)>\u001e06\u001d1P02313XMA\u001dS2641098217\u001dQ1\u001d10D2541\u001e\u0004",
+    "serials": [
+      "2641098217"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "iso 15434 label with two serials",
+    "raw": "[)>\u001e06\u001d1P02313XMA\u001dS2641098217\u001dS2641098218\u001dQ2\u001e\u0004",
+    "serials": [
+      "2641098217",
+      "2641098218"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "iso 15434 label without a serial falls through",
+    "raw": "[)>\u001e06\u001d1P02313XMA\u001dQ1\u001d10D2541\u001e\u0004",
+    "serials": [
+      "[)>\u001e06\u001d1P02313XMA\u001dQ1\u001d10D2541\u001e\u0004"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "iso 15434 run together without separators is kept whole",
+    "raw": "[)>06S2641098217",
+    "serials": [
+      "[)>06S2641098217"
+    ],
+    "box_code": null,
+    "document_token": null
+  },
+  {
+    "name": "iso 15434 trailing EOT after the final separator",
+    "raw": "[)>\u001e06\u001dS2641098217\u001e\u0004",
+    "serials": [
+      "2641098217"
+    ],
+    "box_code": null,
+    "document_token": null
   }
 ]
