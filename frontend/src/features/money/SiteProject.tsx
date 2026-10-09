@@ -6,6 +6,9 @@
  * also be chosen directly, with no site, for costs that belong to the PO rather
  * than a place (a permit).
  *
+ * Offline the same choices come from the bundle: sites and each site's open
+ * projects (R6, §4.17.8).
+ *
  * State is derived rather than synchronised: the effective project is computed
  * from the site, its candidates and the pick, so there is no effect to fall out
  * of step with the select.
@@ -13,12 +16,10 @@
 
 import { useState, type ChangeEvent } from 'react';
 
-import { useList } from '../../api/hooks';
 import { Banner, Field, Select } from '../../components/ui';
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
-import type { Project } from '../projects/types';
-import type { Site } from '../settings/types';
-import { candidateProjects } from './rules';
+import type { ProjectChoice } from './bundle';
+import { useMoneySites, useSiteProjects } from './reference';
 
 export interface SiteProjectState {
   site: string;
@@ -29,9 +30,9 @@ export interface SiteProjectState {
   pick: string;
   setPick: (value: string) => void;
   /** Open projects on the site (empty in direct mode). */
-  candidates: Project[];
+  candidates: ProjectChoice[];
   /** All open projects, for direct mode. */
-  allOpen: Project[];
+  allOpen: ProjectChoice[];
   loading: boolean;
   /** The project that will be sent, or '' when none can be. */
   project: string;
@@ -52,28 +53,15 @@ export function useSiteProject(
   );
   const [pick, setPick] = useState(fixedProject || initial?.project || '');
 
-  const forSite = useList<Project>(
-    'projects',
-    { site, status: 'OPEN', page_size: 100 },
-    { enabled: Boolean(site) && !direct },
-  );
-  const open = useList<Project>(
-    'projects',
-    { status: 'OPEN', page_size: 200 },
-    { enabled: direct },
-  );
-
-  const candidates =
-    site && !direct ? candidateProjects(Number(site), forSite.data?.results ?? []) : [];
-  const loading = direct ? open.isLoading : Boolean(site) && forSite.isLoading;
+  // Network when online, the bundle's `open_projects` when not (R6, §4.17.8).
+  const { candidates, allOpen, loading, failed } = useSiteProjects(site, direct);
 
   let project = '';
   if (direct) project = pick;
   else if (candidates.length === 1) project = String(candidates[0].id);
   else if (candidates.length > 1 && candidates.some((c) => String(c.id) === pick)) project = pick;
 
-  const blocked =
-    !direct && Boolean(site) && !forSite.isLoading && !forSite.isError && candidates.length === 0;
+  const blocked = !direct && Boolean(site) && !loading && !failed && candidates.length === 0;
 
   return {
     site,
@@ -83,7 +71,7 @@ export function useSiteProject(
     pick,
     setPick,
     candidates,
-    allOpen: open.data?.results ?? [],
+    allOpen,
     loading,
     project,
     blocked,
@@ -91,7 +79,7 @@ export function useSiteProject(
   };
 }
 
-const label = (p: Project) => `${p.po_number || p.reference} ${p.title ?? ''}`.trim();
+const label = (p: ProjectChoice) => `${p.po_number || p.reference} ${p.title ?? ''}`.trim();
 
 const LINK = 'min-h-[44px] self-start text-sm font-medium text-slate-700 underline';
 
@@ -109,7 +97,7 @@ export function SiteProjectFields({
   /** Allowance requests may name no site at all. */
   siteOptional?: boolean;
 }) {
-  const sites = useList<Site>('sites', { page_size: 300 }, { enabled: !state.direct });
+  const { sites } = useMoneySites(!state.direct);
   const set = (event: ChangeEvent<HTMLSelectElement>) => {
     state.setSite(event.target.value);
     state.setPick('');
@@ -126,7 +114,7 @@ export function SiteProjectFields({
             onChange={set}
           >
             <option value="">{siteOptional ? 'No site' : 'Choose…'}</option>
-            {(sites.data?.results ?? []).map((site) => (
+            {sites.map((site) => (
               <option key={site.id} value={site.id}>
                 {site.internal_ref} {site.name}
               </option>

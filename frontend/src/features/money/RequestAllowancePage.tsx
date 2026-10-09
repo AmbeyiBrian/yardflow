@@ -21,11 +21,12 @@ import { PageHeader } from '../../components/ui/data';
 import { MoneyInput } from '../../components/ui/money';
 import { newUuid } from '../../offline/db';
 import { useOffline } from '../../offline/OfflineProvider';
-import { useAllowanceRequests, useCreateAllowanceRequest, useFinanceSettings } from './api';
+import { useAllowanceRequests, useCreateAllowanceRequest } from './api';
 import { SAVED_ON_PHONE, allowancePrefill, isNetworkError } from './drafts';
 import { moneyError } from './errors';
 import { queueAllowanceRequest, resendCorrected, type QueuedAllowanceBody } from './offline';
 import { useQueuedEntry } from './queued';
+import { useMoneyLimits } from './reference';
 import { checkLimit, daysBetween, findOverlap } from './rules';
 import { SiteProjectFields, useSiteProject } from './SiteProject';
 import type { AllowanceType, TransportScope } from './types';
@@ -97,8 +98,9 @@ function RequestForm({
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
   const uuid = useRef(newUuid());
 
-  const settings = useFinanceSettings();
-  const mine = useAllowanceRequests({ mine: true, page_size: 200 });
+  const limits = useMoneyLimits();
+  // Overlap needs the server's list of my requests; offline there is none to check (R5, R6).
+  const mine = useAllowanceRequests({ mine: true, page_size: 200 }, online);
   const create = useCreateAllowanceRequest();
 
   const form = useForm<Values>({
@@ -122,7 +124,7 @@ function RequestForm({
 
   const days = from && to ? daysBetween(from, to) : 0;
   const datesBackwards = Boolean(from && to) && days < 1;
-  const limit = checkLimit(type, scope || null, amount, days, settings.data?.allowance_limits);
+  const limit = checkLimit(type, scope || null, amount, days, limits);
   const overlap =
     from && to && !datesBackwards
       ? findOverlap({ type, from_date: from, to_date: to }, mine.data?.results ?? [])

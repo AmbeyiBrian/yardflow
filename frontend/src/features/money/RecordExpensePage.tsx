@@ -28,7 +28,7 @@ import { MoneyInput } from '../../components/ui/money';
 import { newUuid } from '../../offline/db';
 import { useOffline } from '../../offline/OfflineProvider';
 import type { Project, ProjectJob } from '../projects/types';
-import { useAllowanceRequests, useCasuals, useCreateExpense } from './api';
+import { useCreateExpense } from './api';
 import { CasualForm } from './CasualPages';
 import { DraftPhotos } from './DraftPhotos';
 import {
@@ -53,9 +53,9 @@ import {
   type QueuedExpenseBody,
 } from './offline';
 import { useQueuedEntry } from './queued';
+import { useMoneyCasuals, useMoneyCategories, useMoneyFloats } from './reference';
 import { fromCents, toCents } from './rules';
 import { SiteProjectFields, useSiteProject } from './SiteProject';
-import type { ExpenseCategory } from './types';
 
 interface Line {
   key: number;
@@ -143,12 +143,10 @@ function ExpenseForm({
   const uuid = useRef(newUuid());
   const nextKey = useRef(prefill ? prefill.lines.length + 1 : 2);
 
-  const categories = useList<ExpenseCategory>('expense-categories', {
-    is_active: true,
-    page_size: 100,
-  });
-  const floats = useAllowanceRequests({ mine: true, type: 'FLOAT', page_size: 100 });
-  const casuals = useCasuals(search);
+  // Each reads the network online and the offline bundle otherwise (R6, §4.17.8).
+  const { categories } = useMoneyCategories();
+  const openFloats = useMoneyFloats();
+  const serverCasuals = useMoneyCasuals(search);
   const queuedEntries = useQueuedFinance();
   const create = useCreateExpense();
 
@@ -166,9 +164,7 @@ function ExpenseForm({
     },
   });
 
-  const category = (categories.data?.results ?? []).find(
-    (c) => String(c.id) === form.watch('category'),
-  );
+  const category = categories.find((c) => String(c.id) === form.watch('category'));
   const kind = category?.kind ?? 'GENERAL';
 
   const arrivedFrom = useDetail<Project>('projects', fixedProject || undefined);
@@ -179,24 +175,16 @@ function ExpenseForm({
     { enabled: Boolean(place.project) },
   );
 
-  const openFloats = (floats.data?.results ?? []).filter(
-    (f) => f.type === 'FLOAT' && f.status === 'PAID' && !f.closed_at,
-  );
-
-  // Server casuals, then those still on this phone (§4.17.8). The reference
-  // bundle carries no casuals list, so offline the picker is what was seen
-  // this visit plus what is queued.
+  // Server casuals (the bundle's list offline), then those still on this phone
+  // (§4.17.8).
   const casualOptions = useMemo(
     () =>
       mergeCasualOptions(
         Object.values(known),
-        (casuals.data?.results ?? []).map((c) => ({
-          value: String(c.id),
-          label: `${c.name} ${c.id_number}`,
-        })),
+        serverCasuals,
         queuedCasualOptions(queuedEntries),
       ),
-    [known, casuals.data, queuedEntries],
+    [known, serverCasuals, queuedEntries],
   );
 
   const patchLine = (key: number, patch: Partial<Line>) =>
@@ -352,7 +340,7 @@ function ExpenseForm({
               {...form.register('category', { required: 'Pick a category.' })}
             >
               <option value="">Choose…</option>
-              {(categories.data?.results ?? []).map((c) => (
+              {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
@@ -488,7 +476,7 @@ function ExpenseForm({
                 <option value="">Not from a float</option>
                 {openFloats.map((f) => (
                   <option key={f.id} value={f.id}>
-                    {f.number} — balance {f.balance ?? f.amount}
+                    {f.number} — balance {f.balance}
                   </option>
                 ))}
               </Select>

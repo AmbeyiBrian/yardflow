@@ -4,6 +4,7 @@ import { ApiError } from '../../api/client';
 import type { QueuedFinanceEntry } from '../../offline/financeQueue';
 import {
   allowancePrefill,
+  bundleCasualOptions,
   casualRef,
   casualValue,
   expensePrefill,
@@ -93,6 +94,28 @@ describe('casual picker', () => {
       [{ value: '1', label: 'b' }, { value: 'q:x', label: 'c' }],
     );
     expect(merged.map((o) => o.label)).toEqual(['a', 'c']);
+  });
+
+  it('searches the bundle casuals by name, masked ID or phone, and lists all when blank', () => {
+    const rows = [
+      { id: 1, name: 'Joseph Otieno', phone: '0712', id_number: '*****678' },
+      { id: 2, name: 'Mary Wanjiru', phone: '0799', id_number: '*****321' },
+    ];
+    expect(bundleCasualOptions(rows, '')).toHaveLength(2);
+    expect(bundleCasualOptions(rows, ' joseph ')).toEqual([
+      { value: '1', label: 'Joseph Otieno *****678' },
+    ]);
+    expect(bundleCasualOptions(rows, '321').map((o) => o.value)).toEqual(['2']);
+    expect(bundleCasualOptions(rows, '0712').map((o) => o.value)).toEqual(['1']);
+    expect(bundleCasualOptions(rows, 'zzz')).toEqual([]);
+  });
+
+  it('keeps bundle casuals ahead of those queued on this phone, without repeats', () => {
+    const merged = mergeCasualOptions(
+      bundleCasualOptions([{ id: 1, name: 'A', id_number: '*12' }], ''),
+      [{ value: 'q:x', label: 'B (waiting to send)' }],
+    );
+    expect(merged.map((o) => o.value)).toEqual(['1', 'q:x']);
   });
 });
 

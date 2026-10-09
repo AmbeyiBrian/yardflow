@@ -108,6 +108,36 @@ export function casualValue(line: QueuedCasualLine): string {
     : String(line.casual ?? '');
 }
 
+/** A casual as the bundle stores it; the ID number is already masked. */
+export interface BundleCasual {
+  id: number;
+  name: string;
+  phone?: string;
+  id_number: string;
+}
+
+/**
+ * The bundle's casuals as picker options, narrowed by what was typed (R6).
+ *
+ * Offline there is no server search, so the same "name or ID" match runs over
+ * the stored list. The ID is masked, so only its visible tail can match.
+ */
+export function bundleCasualOptions(
+  rows: readonly BundleCasual[],
+  search: string,
+): CasualOption[] {
+  const needle = search.trim().toLowerCase();
+  return rows
+    .filter(
+      (c) =>
+        !needle ||
+        c.name.toLowerCase().includes(needle) ||
+        c.id_number.toLowerCase().includes(needle) ||
+        (c.phone ?? '').includes(needle),
+    )
+    .map((c) => ({ value: String(c.id), label: `${c.name} ${c.id_number}` }));
+}
+
 /** Server rows first, then queued ones, without repeating a value. */
 export function mergeCasualOptions(
   ...groups: readonly (readonly CasualOption[])[]

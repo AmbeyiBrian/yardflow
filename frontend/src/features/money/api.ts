@@ -132,8 +132,8 @@ export const usePendingExpenses = (params?: QueryParams) =>
 export const usePendingAllowances = (params?: QueryParams) =>
   useList<AllowanceRequest>(`${REQUESTS}/pending`, params);
 
-export const useAllowanceRequests = (params?: AllowanceParams) =>
-  useList<AllowanceRequest>(REQUESTS, params);
+export const useAllowanceRequests = (params?: AllowanceParams, enabled = true) =>
+  useList<AllowanceRequest>(REQUESTS, params, { enabled });
 
 export const useAllowanceRequest = (id: string | number | undefined) =>
   useDetail<AllowanceRequest>(REQUESTS, id);
@@ -169,11 +169,13 @@ export const useCloseFloat = () =>
     invalidates: BOTH,
   });
 
-export const useCasuals = (search?: string) => useList<Casual>(CASUALS, { search });
+export const useCasuals = (search?: string, enabled = true) =>
+  useList<Casual>(CASUALS, { search }, { enabled });
 
 export const useCreateCasual = () => useAction<CasualInput, Casual>({ resource: CASUALS });
 
-export const useFinanceSettings = () => useResource<FinanceSettings>(SETTINGS);
+export const useFinanceSettings = (enabled = true) =>
+  useResource<FinanceSettings>(SETTINGS, undefined, { enabled });
 
 export const useUpdateFinanceSettings = () =>
   useAction<Partial<FinanceSettings>, FinanceSettings>({
