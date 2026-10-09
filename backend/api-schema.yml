@@ -9128,6 +9128,412 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrganizationSettings'
           description: ''
+  /api/v1/site-purchases:
+    get:
+      operationId: site_purchases_list
+      description: |-
+        ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+        Anyone may record one. PM then Finance decide it; paying is Finance's and is
+        refused while the supplier is not approved.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: destination
+        schema:
+          type: string
+          enum:
+          - INTO_YARD
+          - USED_AT_SITE
+        description: |-
+          * `USED_AT_SITE` - Used at the site
+          * `INTO_YARD` - Brought into the yard
+      - in: query
+        name: mine
+        schema:
+          type: boolean
+        description: Only entries I recorded.
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: payable
+        schema:
+          type: boolean
+        description: Approved and unpaid (needs finance.approve).
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - PAID
+          - PENDING_FINANCE
+          - PENDING_PM
+          - REJECTED
+        description: |-
+          * `PENDING_PM` - Waiting on the project manager
+          * `PENDING_FINANCE` - Waiting on Finance
+          * `APPROVED` - Approved — counts against the project
+          * `PAID` - Paid
+          * `REJECTED` - Rejected
+      - in: query
+        name: supplier
+        schema:
+          type: integer
+      tags:
+      - site-purchases
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSitePurchaseList'
+          description: ''
+    post:
+      operationId: site_purchases_create
+      description: |-
+        ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+        Anyone may record one. PM then Finance decide it; paying is Finance's and is
+        refused while the supplier is not approved.
+      tags:
+      - site-purchases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SitePurchaseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SitePurchaseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SitePurchaseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitePurchase'
+          description: ''
+  /api/v1/site-purchases/{id}:
+    get:
+      operationId: site_purchases_retrieve
+      description: |-
+        ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+        Anyone may record one. PM then Finance decide it; paying is Finance's and is
+        refused while the supplier is not approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this site purchase.
+        required: true
+      tags:
+      - site-purchases
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitePurchase'
+          description: ''
+    patch:
+      operationId: site_purchases_partial_update
+      description: Only the recorder, and only until the PM has answered (§4.19.10).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this site purchase.
+        required: true
+      tags:
+      - site-purchases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSitePurchaseEditRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSitePurchaseEditRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSitePurchaseEditRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitePurchase'
+          description: ''
+  /api/v1/site-purchases/{id}/decide:
+    post:
+      operationId: site_purchases_decide_create
+      description: |-
+        ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+        Anyone may record one. PM then Finance decide it; paying is Finance's and is
+        refused while the supplier is not approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this site purchase.
+        required: true
+      tags:
+      - site-purchases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitePurchase'
+          description: ''
+  /api/v1/site-purchases/{id}/mark-paid:
+    post:
+      operationId: site_purchases_mark_paid_create
+      description: |-
+        ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+        Anyone may record one. PM then Finance decide it; paying is Finance's and is
+        refused while the supplier is not approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this site purchase.
+        required: true
+      tags:
+      - site-purchases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitePurchase'
+          description: ''
+  /api/v1/site-purchases/{id}/resubmit:
+    post:
+      operationId: site_purchases_resubmit_create
+      description: |-
+        ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+        Anyone may record one. PM then Finance decide it; paying is Finance's and is
+        refused while the supplier is not approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this site purchase.
+        required: true
+      tags:
+      - site-purchases
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitePurchase'
+          description: ''
+  /api/v1/site-purchases/{id}/reverse:
+    post:
+      operationId: site_purchases_reverse_create
+      description: |-
+        ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+        Anyone may record one. PM then Finance decide it; paying is Finance's and is
+        refused while the supplier is not approved.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this site purchase.
+        required: true
+      tags:
+      - site-purchases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReverseRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitePurchase'
+          description: ''
+  /api/v1/site-purchases/pending:
+    get:
+      operationId: site_purchases_pending_list
+      description: |-
+        ``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+        Anyone may record one. PM then Finance decide it; paying is Finance's and is
+        refused while the supplier is not approved.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: destination
+        schema:
+          type: string
+          enum:
+          - INTO_YARD
+          - USED_AT_SITE
+        description: |-
+          * `USED_AT_SITE` - Used at the site
+          * `INTO_YARD` - Brought into the yard
+      - in: query
+        name: mine
+        schema:
+          type: boolean
+        description: Only entries I recorded.
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: site
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - PAID
+          - PENDING_FINANCE
+          - PENDING_PM
+          - REJECTED
+        description: |-
+          * `PENDING_PM` - Waiting on the project manager
+          * `PENDING_FINANCE` - Waiting on Finance
+          * `APPROVED` - Approved — counts against the project
+          * `PAID` - Paid
+          * `REJECTED` - Rejected
+      - in: query
+        name: supplier
+        schema:
+          type: integer
+      tags:
+      - site-purchases
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSitePurchaseList'
+          description: ''
   /api/v1/site-references:
     get:
       operationId: site_references_list
@@ -11363,6 +11769,7 @@ paths:
           - GATE_IN
           - GATE_OUT_RELEASE
           - GATE_OUT_REQUEST
+          - SITE_PURCHASE
           - SUPPLIER
         description: |-
           * `GATE_IN` - Receive a delivery
@@ -11374,6 +11781,7 @@ paths:
           * `SUPPLIER` - Add a supplier
           * `CLOCK_IN` - Clock in
           * `CLOCK_OUT` - Clock out
+          * `SITE_PURCHASE` - Record a site purchase
       - name: ordering
         required: false
         in: query
@@ -14226,6 +14634,14 @@ components:
       description: |-
         * `IN_HOUSE` - Delivered by our own crews
         * `SUBCONTRACTED` - Delivered by a subcontractor
+    DestinationEnum:
+      enum:
+      - USED_AT_SITE
+      - INTO_YARD
+      type: string
+      description: |-
+        * `USED_AT_SITE` - Used at the site
+        * `INTO_YARD` - Brought into the yard
     Disposal:
       type: object
       properties:
@@ -15185,6 +15601,9 @@ components:
         supplier_name:
           type: string
           maxLength: 200
+        source_purchase_number:
+          type: string
+          readOnly: true
         client:
           type: integer
           nullable: true
@@ -15274,6 +15693,7 @@ components:
       - posted_by
       - received_at
       - returned_by_name
+      - source_purchase_number
       - source_type
       - status
       - supplier_status
@@ -17471,6 +17891,7 @@ components:
       - SUPPLIER
       - CLOCK_IN
       - CLOCK_OUT
+      - SITE_PURCHASE
       type: string
       description: |-
         * `GATE_IN` - Receive a delivery
@@ -17482,6 +17903,7 @@ components:
         * `SUPPLIER` - Add a supplier
         * `CLOCK_IN` - Clock in
         * `CLOCK_OUT` - Clock out
+        * `SITE_PURCHASE` - Record a site purchase
     Organization:
       type: object
       description: A tenant as the console sees it.
@@ -18451,6 +18873,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Site'
+    PaginatedSitePurchaseList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SitePurchase'
     PaginatedSiteReferenceList:
       type: object
       required:
@@ -19576,6 +20017,14 @@ components:
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
           description: Default cost of a day for this role, excluding VAT. Not pay.
+    PatchedSitePurchaseEditRequest:
+      type: object
+      description: 'What may still change on a pending purchase: the photo count.'
+      properties:
+        photos_expected:
+          type: integer
+          maximum: 32767
+          minimum: 0
     PatchedSiteReferenceRequest:
       type: object
       properties:
@@ -21118,6 +21567,255 @@ components:
       - internal_ref
       - name
       - references
+    SitePurchase:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        number:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          nullable: true
+        project_reference:
+          type: string
+          readOnly: true
+        site:
+          type: integer
+        site_name:
+          type: string
+          readOnly: true
+          default: ''
+        supplier:
+          type: integer
+        supplier_name:
+          type: string
+          readOnly: true
+          default: ''
+        supplier_status:
+          type: string
+          readOnly: true
+          default: ''
+        purchase_date:
+          type: string
+          format: date
+        destination:
+          $ref: '#/components/schemas/DestinationEnum'
+        receive_into:
+          type: integer
+          nullable: true
+        receive_into_name:
+          type: string
+          readOnly: true
+          default: ''
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SitePurchaseLine'
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          description: The sum of the lines, excluding VAT (D24). Set by the service.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseStatusEnum'
+          readOnly: true
+        recorded_by:
+          type: integer
+          readOnly: true
+        recorded_by_name:
+          type: string
+          readOnly: true
+        decided_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        decision_reason:
+          type: string
+          readOnly: true
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        paid_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        payment_reference:
+          type: string
+          readOnly: true
+        reverses:
+          type: integer
+          readOnly: true
+          nullable: true
+        is_reversal:
+          type: boolean
+          readOnly: true
+        gate_in:
+          type: integer
+          readOnly: true
+          nullable: true
+        pm_level_skipped:
+          type: boolean
+          readOnly: true
+        is_over_budget:
+          type: boolean
+          readOnly: true
+        over_budget_by:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        over_budget_reason:
+          type: string
+          maxLength: 500
+        photos_expected:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - decided_at
+      - decided_by
+      - decision_reason
+      - gate_in
+      - id
+      - is_over_budget
+      - is_reversal
+      - lines
+      - number
+      - over_budget_by
+      - paid_at
+      - paid_by
+      - payment_reference
+      - pm_level_skipped
+      - project_reference
+      - purchase_date
+      - receive_into_name
+      - recorded_by
+      - recorded_by_name
+      - reverses
+      - site
+      - site_name
+      - status
+      - supplier
+      - supplier_name
+      - supplier_status
+    SitePurchaseLine:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        item_type:
+          type: integer
+          nullable: true
+        item_type_name:
+          type: string
+          readOnly: true
+          default: ''
+        description:
+          type: string
+          maxLength: 200
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+        uom:
+          type: string
+          readOnly: true
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        line_total:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - item_type_name
+      - line_total
+      - quantity
+      - unit_price
+      - uom
+    SitePurchaseLineRequest:
+      type: object
+      properties:
+        item_type:
+          type: integer
+          nullable: true
+        description:
+          type: string
+          maxLength: 200
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,3})?$
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - quantity
+      - unit_price
+    SitePurchaseRequest:
+      type: object
+      properties:
+        project:
+          type: integer
+          nullable: true
+        site:
+          type: integer
+        supplier:
+          type: integer
+        purchase_date:
+          type: string
+          format: date
+        destination:
+          $ref: '#/components/schemas/DestinationEnum'
+        receive_into:
+          type: integer
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SitePurchaseLineRequest'
+        over_budget_reason:
+          type: string
+          maxLength: 500
+        photos_expected:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        client_uuid:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - lines
+      - purchase_date
+      - site
+      - supplier
     SiteReference:
       type: object
       properties:

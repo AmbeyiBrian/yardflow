@@ -1051,3 +1051,91 @@ def can_amend(gate_in: GateIn) -> bool:
     if gate_in.status == DocumentStatus.DRAFT:
         return True
     return bool(gate_in.organization.settings.allow_document_amendment)
+
+
+# --------------------------------------------------------------------------
+# R7 — the draft delivery an INTO_YARD site purchase makes (§4.19.3)
+# --------------------------------------------------------------------------
+
+
+class YardDeliveryFailed(DomainError):
+    """The draft delivery could not be made, so the approval is not given."""
+
+    code = "YARD_DELIVERY_FAILED"
+    status_code = 409
+    default_message = (
+        "The delivery for this purchase could not be prepared, so it was not approved. "
+        "Check the items and the place it goes into."
+    )
+
+
+def draft_gate_in_for_purchase(purchase, actor=None) -> GateIn:  # type: ignore[no-untyped-def]
+    """The one DRAFT gate-in an approved INTO_YARD purchase makes (§4.19.3).
+
+    Called from ``finance.decide`` inside its transaction, before the purchase is
+    marked approved. The row is locked first, so an approval that is retried or
+    raced finds the link already made and returns it: never two drafts, and the
+    goods are costed once, at issue (``purchase_cost`` leaves INTO_YARD out).
+    The storekeeper opens it as any draft (D8) and posts it.
+
+    A fault that record time should have caught (an item deactivated since)
+    surfaces as ``YARD_DELIVERY_FAILED``; the caller's transaction then undoes
+    the whole approval.
+    """
+    from datetime import datetime, time
+
+    from commercials.models import PurchaseDestination, SitePurchase
+
+    locked = SitePurchase.objects.select_for_update().get(pk=purchase.pk)
+    if locked.destination != PurchaseDestination.INTO_YARD:
+        raise YardDeliveryFailed("This purchase is not going into the yard.")
+    if locked.gate_in_id is not None:
+        purchase.gate_in = locked.gate_in
+        return locked.gate_in  # type: ignore[no-any-return]
+
+    try:
+        with transaction.atomic():
+            gate_in = GateIn.objects.create(
+                source_type=GateInSource.PURCHASE,
+                status=DocumentStatus.DRAFT,
+                supplier=locked.supplier,
+                supplier_name=locked.supplier.name if locked.supplier_id else "",
+                to_location=locked.receive_into,
+                received_at=timezone.make_aware(
+                    datetime.combine(locked.purchase_date, time(9, 0))
+                ),
+                for_site=locked.site,
+                notes=f"From site purchase {locked.number}",
+            )
+            for number, line in enumerate(locked.lines.select_related("item_type"), start=1):
+                if line.item_type is None:
+                    raise YardDeliveryFailed(
+                        "A line has no catalogue item, so it cannot be received into stock."
+                    )
+                GateInLine.objects.create(
+                    gate_in=gate_in,
+                    item_type=line.item_type,
+                    tracking_mode=line.item_type.default_tracking_mode,
+                    uom=line.item_type.uom,
+                    quantity=line.quantity,
+                    condition=Condition.NEW,
+                    owner_type=OwnerType.OWN,
+                    for_site=locked.site,
+                    line_number=number,
+                )
+            purchase.gate_in = gate_in
+            purchase.save(update_fields=["gate_in", "updated_at"])
+    except YardDeliveryFailed:
+        raise
+    except (ValidationError, ValueError, TypeError) as exc:
+        raise YardDeliveryFailed(details={"cause": str(exc)}) from exc
+
+    record(
+        AuditAction.DOCUMENT_POSTED,
+        actor=actor,
+        organization=gate_in.organization_id,
+        target=gate_in,
+        target_label=str(gate_in),
+        note=f"Draft delivery made from site purchase {purchase.number}.",
+    )
+    return gate_in

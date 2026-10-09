@@ -212,13 +212,13 @@ def _apply_gate_in(payload: dict, *, submitted_by=None, request=None):
     return post_gate_in(gate_in, posted_by=submitted_by, request=request)
 
 
-def _gate_in_supplier(payload: dict):
-    """The register entry a queued gate-in names, or ``None`` (§4.20.5, §4.20.8).
+def _named_supplier(payload: dict, *, what: str):
+    """The register entry a queued payload names, or ``None`` (§4.20.5, §4.20.8).
 
-    Pops both keys so the serializer never sees them. A REJECTED or deactivated
-    supplier is refused on a new gate-in; PENDING is fine (R15).
+    Pops both keys so a serializer never sees them. By server id, or by the uuid
+    of one queued in the same batch; one that cannot be found is a refusal.
     """
-    from network.models import Supplier, SupplierStatus
+    from network.models import Supplier
 
     raw_id = payload.pop("supplier", None)
     raw_uuid = payload.pop("supplier_client_uuid", None)
@@ -232,10 +232,24 @@ def _gate_in_supplier(payload: dict):
         ).first()
     if supplier is None:
         raise SyncRefused(
-            "The supplier on this delivery is not on the register. If it was added "
+            f"The supplier on this {what} is not on the register. If it was added "
             "offline, that entry may have been refused; fix it first.",
             details={"field_errors": {"supplier": "Supplier not found."}},
         )
+    return supplier
+
+
+def _gate_in_supplier(payload: dict):
+    """The supplier a queued gate-in names, or ``None``.
+
+    A REJECTED or deactivated supplier is refused on a new gate-in; PENDING is
+    fine (R15).
+    """
+    from network.models import SupplierStatus
+
+    supplier = _named_supplier(payload, what="delivery")
+    if supplier is None:
+        return None
     if not supplier.is_active or supplier.status == SupplierStatus.REJECTED:
         raise SupplierNotUsableOnGateIn(
             f"{supplier.name} cannot be used on a new delivery.",
@@ -459,6 +473,51 @@ def _apply_allowance_request(payload: dict, *, submitted_by=None, request=None):
     )
 
 
+def _apply_site_purchase(payload: dict, *, submitted_by=None, request=None):
+    """Goods bought on site with no signal (R7, R6, §4.19.11).
+
+    Through ``record_site_purchase``, so the project, supplier, destination and
+    approver checks run on replay. The supplier is named by id or by the uuid of
+    one queued earlier in this batch. Over budget never refuses a replay: the
+    overrun is recorded for the approver (§4.19.5).
+    """
+    from catalogue.models import ItemType
+    from commercials.finance import PurchaseLineInput, record_site_purchase
+    from commercials.models import PurchaseDestination
+    from locations.models import Location
+    from network.models import Project, Site
+
+    payload = dict(payload)
+    supplier = _named_supplier(payload, what="purchase")
+    if supplier is None:
+        raise _bad("supplier", "Choose the supplier.")
+    lines = []
+    for raw in payload.get("lines") or []:
+        lines.append(
+            PurchaseLineInput(
+                item_type=_tenant_object(ItemType, raw, "item_type"),
+                description=str(raw.get("description") or ""),
+                quantity=_decimal(raw, "quantity", required=True),
+                unit_price=_decimal(raw, "unit_price", required=True),
+            )
+        )
+    return record_site_purchase(
+        actor=submitted_by,
+        site=_tenant_object(Site, payload, "site", required=True),
+        project=_tenant_object(Project, payload, "project"),
+        supplier=supplier,
+        purchase_date=_date(payload, "purchase_date"),
+        destination=payload.get("destination") or PurchaseDestination.USED_AT_SITE,
+        receive_into=_tenant_object(Location, payload, "receive_into"),
+        lines=lines,
+        photos_expected=_int_id(payload.get("photos_expected") or 0, "photos_expected"),
+        client_uuid=_uuid(payload, "client_uuid"),
+        over_budget_reason=payload.get("over_budget_reason") or "",
+        offline=True,
+        request=request,
+    )
+
+
 def _apply_casual(payload: dict, *, submitted_by=None, request=None):
     """A casual registered on site (R3, R6)."""
     from commercials.finance import register_casual
@@ -616,6 +675,7 @@ _HANDLERS: dict[str, Any] = {
     str(SyncOperation.SUPPLIER): _apply_supplier,
     str(SyncOperation.CLOCK_IN): _apply_clock_in,
     str(SyncOperation.CLOCK_OUT): _apply_clock_out,
+    str(SyncOperation.SITE_PURCHASE): _apply_site_purchase,
 }
 
 #: Handlers that also need the envelope's capture time (R13).

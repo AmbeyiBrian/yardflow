@@ -64,6 +64,28 @@ def register() -> None:
             recorded_by=User.objects.filter(organization=organization).first(),
         )
 
+    def make_site_purchase(organization):
+        from commercials.models import SitePurchase
+        from network.models import Site
+
+        project = make_project_expense(organization).project
+        user = User.objects.filter(organization=organization).first()
+        site = Site.objects.create(
+            organization=organization,
+            client=project.client,
+            internal_ref="ISO-SP-1",
+            name="Isolation Purchase Site",
+        )
+        return SitePurchase.objects.create(
+            organization=organization,
+            number="SP-ISO-1",
+            project=project,
+            site=site,
+            purchase_date=date(2026, 1, 1),
+            amount=Decimal("1.00"),
+            recorded_by=user,
+        )
+
     register_isolation_fixture(
         "expense-category", make_expense_category, payload={"name": "Renamed"}
     )
@@ -153,3 +175,6 @@ def register() -> None:
     )
     # No PATCH for payments: a wrong one is rejected or reversed (O16).
     register_isolation_fixture("subcontract-payment", make_subcontract_payment)
+
+    # PATCH takes the photo count only, and only from the recorder (§4.19.10).
+    register_isolation_fixture("site-purchase", make_site_purchase)

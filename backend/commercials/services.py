@@ -16,10 +16,12 @@ from commercials.models import (
     ExpenseCategory,
     ExpenseStatus,
     ProjectExpense,
+    SitePurchase,
 )
 from core.audit import record
 from core.exceptions import DomainError
 from core.models import AuditAction
+from core.numbering import DocumentType, allocate_number
 
 
 class ExpenseNotDecidable(DomainError):
@@ -100,4 +102,88 @@ def reverse_expense(
         request=request,
         note=f"Reversed expense {expense.pk} on {expense.project}: {reason}",
     )
+    return reversal
+
+
+class SitePurchaseReceived(DomainError):
+    """The goods are already in stock; void that delivery first (§4.19.3)."""
+
+    code = "SITE_PURCHASE_RECEIVED"
+    status_code = 409
+    default_message = (
+        "The goods from this purchase are already received into stock. "
+        "Void that delivery first, then reverse the purchase."
+    )
+
+
+def reverse_purchase(
+    purchase: SitePurchase, *, actor, reason: str, request=None
+) -> SitePurchase:
+    """Undo an approved site purchase by recording its opposite (R7, §4.19.3).
+
+    A reversing row born APPROVED, as ``reverse_expense``. An INTO_YARD purchase
+    is refused while its delivery is POSTED (``SITE_PURCHASE_RECEIVED``); a
+    delivery still in DRAFT is removed with it, so nobody receives goods that
+    were never paid for. The same transaction does both.
+    """
+    from django.db import transaction
+
+    from receiving.models import DocumentStatus
+
+    reason = (reason or "").strip()
+    if purchase.status not in COSTED_STATUSES:
+        raise ExpenseNotDecidable("Only an approved purchase needs reversing.")
+    if purchase.reverses_id:
+        raise ExpenseNotDecidable("A reversal cannot itself be reversed.")
+    if purchase.reversals.exists():
+        raise ExpenseNotDecidable("This purchase has already been reversed.")
+    permissions = resolve_permissions(actor)
+    is_finance = permissions.has(PERM.FINANCE_APPROVE) and not permissions.is_delegated(
+        PERM.FINANCE_APPROVE
+    )
+    if purchase.project.manager_id != actor.pk and not is_finance:
+        raise NotAnApprover(
+            "Only the manager of this project, or Finance, can reverse its purchases."
+        )
+    if not reason:
+        raise ExpenseNotDecidable("Reversing a purchase needs a reason.")
+
+    with transaction.atomic():
+        locked = SitePurchase.objects.select_for_update().get(pk=purchase.pk)
+        gate_in = locked.gate_in
+        if gate_in is not None and gate_in.status == DocumentStatus.POSTED:
+            raise SitePurchaseReceived()
+        if locked.reversals.exists():
+            raise ExpenseNotDecidable("This purchase has already been reversed.")
+
+        reversal = SitePurchase.objects.create(
+            number=allocate_number(DocumentType.SITE_PURCHASE),
+            project=locked.project,
+            site=locked.site,
+            supplier=locked.supplier,
+            purchase_date=locked.purchase_date,
+            destination=locked.destination,
+            receive_into=locked.receive_into,
+            amount=locked.amount,
+            recorded_by=actor,
+            status=ExpenseStatus.APPROVED,
+            decided_by=actor,
+            decided_at=timezone.now(),
+            decision_reason=reason,
+            reverses=locked,
+        )
+        if gate_in is not None and gate_in.status == DocumentStatus.DRAFT:
+            # The link is frozen with the approved row, so it is cut at the
+            # table; the draft then goes (its lines go with it).
+            SitePurchase.objects.filter(pk=locked.pk).update(gate_in=None)
+            gate_in.delete()
+        record(
+            AuditAction.STATUS_CHANGED,
+            actor=actor,
+            organization=locked.organization_id,
+            target=reversal,
+            target_label=str(reversal),
+            request=request,
+            note=f"Reversed purchase {locked.number} on {locked.project}: {reason}",
+        )
     return reversal

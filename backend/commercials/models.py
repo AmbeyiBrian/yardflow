@@ -9,7 +9,7 @@ least be a figure nobody can quietly change.
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -679,7 +679,8 @@ _DECIDED_STATUSES_ONE_LEVEL = (ExpenseStatus.APPROVED, ExpenseStatus.REJECTED)
 
 
 def _round_money(value: Decimal) -> Decimal:
-    return value.quantize(Decimal("0.01"))
+    # Half up, so the server and the phone's whole-cents arithmetic agree.
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 class PurchaseDestination(models.TextChoices):
@@ -692,8 +693,7 @@ class SitePurchase(StatusGuardMixin, TenantModel, TimeStampedModel):
 
     Routed and costed as an expense; an INTO_YARD purchase is also received into
     stock through ``gate_in``. ``amount`` is stored — the sum of the lines, set
-    by the service — so reports and the budget need no join. The supplier FK is
-    added once ``network.Supplier`` exists (T17.1).
+    by the service — so reports and the budget need no join.
     """
 
     GUARD_NOUN = "site purchase"
@@ -704,6 +704,15 @@ class SitePurchase(StatusGuardMixin, TenantModel, TimeStampedModel):
     )
     site = models.ForeignKey(
         "network.Site", on_delete=models.PROTECT, related_name="site_purchases"
+    )
+    # R15: who it was bought from. Nullable only so rows made before the supplier
+    # register existed stay valid; ``record_site_purchase`` always sets it.
+    supplier = models.ForeignKey(
+        "network.Supplier",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="site_purchases",
     )
     purchase_date = models.DateField()
     destination = models.CharField(

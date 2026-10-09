@@ -230,6 +230,10 @@ class GateInSerializer(serializers.ModelSerializer):
     for_site_name = serializers.CharField(source="for_site.name", read_only=True, default="")
     #: R15: PENDING is said on the document, since it is not yet a checked business.
     supplier_status = serializers.CharField(source="supplier.status", read_only=True, default="")
+    # R7: the site purchase that made this draft, when one did (§4.19.3).
+    source_purchase_number = serializers.CharField(
+        source="site_purchase.number", read_only=True, default=None
+    )
 
     def validate_for_site(self, site):  # type: ignore[no-untyped-def]
         return _check_for_site(site)
@@ -261,6 +265,7 @@ class GateInSerializer(serializers.ModelSerializer):
             "supplier",
             "supplier_status",
             "supplier_name",
+            "source_purchase_number",
             "client",
             "client_name",
             "returned_by",
@@ -379,6 +384,7 @@ class GateInViewSet(TenantScopedViewSet):
         "for_site",
         "posted_by",
         "supplier",
+        "site_purchase",
     )
     prefetch_related = (
         "lines",

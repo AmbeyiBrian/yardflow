@@ -49,9 +49,11 @@ from commercials.models import (
     ExpenseCategory,
     ExpenseStatus,
     ProjectExpense,
+    SitePurchase,
+    SitePurchaseLine,
     TransportScope,
 )
-from commercials.services import reverse_expense
+from commercials.services import reverse_expense, reverse_purchase
 from core.api import TenantScopedViewSet
 from core.api_permissions import OrganizationIsActive
 from core.audit import record
@@ -898,6 +900,262 @@ class AllowanceRequestViewSet(_EntryActions, TenantScopedViewSet):
     @action(detail=False, methods=["get"])
     def pending(self, request):  # type: ignore[no-untyped-def]
         return self._pending(request, AllowanceRequest._meta.label)
+
+
+# --------------------------------------------------------------------------
+# Site purchases (R7, R9, R15)
+# --------------------------------------------------------------------------
+
+
+class SitePurchaseLineSerializer(serializers.ModelSerializer):
+    item_type_name = serializers.CharField(source="item_type.name", read_only=True, default="")
+    line_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SitePurchaseLine
+        fields = (
+            "id",
+            "item_type",
+            "item_type_name",
+            "description",
+            "quantity",
+            "uom",
+            "unit_price",
+            "line_total",
+        )
+        read_only_fields = ("uom",)
+        extra_kwargs = {
+            "item_type": {"required": False, "allow_null": True},
+            "description": {"required": False, "allow_blank": True},
+        }
+
+    def get_line_total(self, line: SitePurchaseLine) -> str:
+        return str(line.total)
+
+
+class SitePurchaseSerializer(serializers.ModelSerializer):
+    project_reference = serializers.CharField(source="project.__str__", read_only=True)
+    site_name = serializers.CharField(source="site.name", read_only=True, default="")
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True, default="")
+    supplier_status = serializers.CharField(source="supplier.status", read_only=True, default="")
+    receive_into_name = serializers.CharField(
+        source="receive_into.name", read_only=True, default=""
+    )
+    recorded_by_name = serializers.CharField(source="recorded_by.full_name", read_only=True)
+    lines = SitePurchaseLineSerializer(many=True)
+    pm_level_skipped = serializers.SerializerMethodField()
+    is_over_budget = serializers.SerializerMethodField()
+    is_reversal = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SitePurchase
+        fields = (
+            "id",
+            "number",
+            "project",
+            "project_reference",
+            "site",
+            "site_name",
+            "supplier",
+            "supplier_name",
+            "supplier_status",
+            "purchase_date",
+            "destination",
+            "receive_into",
+            "receive_into_name",
+            "lines",
+            "amount",
+            "status",
+            "recorded_by",
+            "recorded_by_name",
+            "decided_by",
+            "decided_at",
+            "decision_reason",
+            "paid_at",
+            "paid_by",
+            "payment_reference",
+            "reverses",
+            "is_reversal",
+            "gate_in",
+            "pm_level_skipped",
+            "is_over_budget",
+            "over_budget_by",
+            "over_budget_reason",
+            "photos_expected",
+            "client_uuid",
+            "created_at",
+        )
+        read_only_fields = (
+            "number",
+            "amount",
+            "status",
+            "recorded_by",
+            "decided_by",
+            "decided_at",
+            "decision_reason",
+            "paid_at",
+            "paid_by",
+            "payment_reference",
+            "reverses",
+            "gate_in",
+            "over_budget_by",
+        )
+        validators: list[Any] = []
+        extra_kwargs = {
+            "project": {"required": False, "allow_null": True},
+            "receive_into": {"required": False, "allow_null": True},
+            "supplier": {"required": True, "allow_null": False},
+            "client_uuid": {"required": False, "allow_null": True},
+        }
+
+
+    def get_is_over_budget(self, entry) -> bool:  # type: ignore[no-untyped-def]
+        return entry.over_budget_by is not None
+
+    def get_is_reversal(self, entry) -> bool:  # type: ignore[no-untyped-def]
+        return bool(entry.reverses_id)
+
+    def get_pm_level_skipped(self, entry) -> bool:  # type: ignore[no-untyped-def]
+        return _pm_level_skipped(entry)
+
+    def to_representation(self, instance):  # type: ignore[no-untyped-def]
+        return _hide_overrun(super().to_representation(instance), instance, self.context)
+
+    def create(self, validated_data):  # type: ignore[no-untyped-def]
+        request = self.context["request"]
+        lines = [
+            finance.PurchaseLineInput(
+                quantity=item["quantity"],
+                unit_price=item["unit_price"],
+                item_type=item.get("item_type"),
+                description=item.get("description", ""),
+            )
+            for item in validated_data.get("lines", [])
+        ]
+        return finance.record_site_purchase(
+            actor=request.user,
+            site=validated_data.get("site"),
+            project=validated_data.get("project"),
+            supplier=validated_data.get("supplier"),
+            purchase_date=validated_data["purchase_date"],
+            destination=validated_data.get("destination", "USED_AT_SITE"),
+            receive_into=validated_data.get("receive_into"),
+            lines=lines,
+            photos_expected=validated_data.get("photos_expected", 0),
+            client_uuid=validated_data.get("client_uuid"),
+            over_budget_reason=validated_data.get("over_budget_reason", ""),
+            request=request,
+        )
+
+
+class SitePurchaseEditSerializer(serializers.ModelSerializer):
+    """What may still change on a pending purchase: the photo count."""
+
+    class Meta:
+        model = SitePurchase
+        fields = ("photos_expected",)
+
+
+class SitePurchaseViewSet(_EntryActions, TenantScopedViewSet):
+    """``/api/v1/site-purchases`` (R7, R9, R15; §4.19.10).
+
+    Anyone may record one. PM then Finance decide it; paying is Finance's and is
+    refused while the supplier is not approved.
+    """
+
+    serializer_class = SitePurchaseSerializer
+    model = SitePurchase
+    select_related = ("project", "site", "supplier", "receive_into", "recorded_by", "gate_in")
+    prefetch_related = ("lines", "lines__item_type")
+    required_permissions = {"mark_paid": PERM.FINANCE_APPROVE}
+    filterset_fields = ["project", "site", "supplier", "status", "destination"]
+    search_fields = ["number", "supplier__name"]
+    ordering_fields = ["purchase_date", "amount", "created_at"]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        return (
+            super()
+            .get_queryset()
+            .annotate(**_routing_annotations(SitePurchase._meta.label))
+        )
+
+    def filter_queryset(self, queryset):  # type: ignore[no-untyped-def]
+        queryset = _visible_to(super().filter_queryset(queryset), self.request.user)
+        params = self.request.query_params
+        if _truthy(params.get("mine")):
+            queryset = queryset.filter(recorded_by=self.request.user)
+        if _truthy(params.get("payable")):
+            _require_finance(self.request)
+            # A reversal is a correction, not a debt, and a reversed purchase
+            # is owed nothing.
+            queryset = queryset.filter(
+                status=ExpenseStatus.APPROVED,
+                reverses__isnull=True,
+                reversals__isnull=True,
+            )
+        return queryset
+
+    @extend_schema(
+        parameters=[MINE, PAYABLE], responses={200: SitePurchaseSerializer(many=True)}
+    )
+    def list(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(request=SitePurchaseSerializer, responses={201: SitePurchaseSerializer})
+    def create(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        serializer = SitePurchaseSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        purchase = serializer.save()
+        return Response(self.get_serializer(self._fresh(purchase.pk)).data, status=201)
+
+    @extend_schema(request=SitePurchaseEditSerializer, responses={200: SitePurchaseSerializer})
+    def partial_update(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        """Only the recorder, and only until the PM has answered (§4.19.10)."""
+        purchase = self.get_object()
+        if purchase.recorded_by_id != request.user.pk:
+            raise PermissionDeniedError("Only the person who recorded this can change it.")
+        if purchase.status != ExpenseStatus.PENDING_PM:
+            raise finance.FinanceNotDecidable(
+                "This can no longer be edited. Reject and send it again to change it."
+            )
+        serializer = SitePurchaseEditSerializer(purchase, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return self._read(purchase)
+
+    @extend_schema(request=DecideSerializer, responses={200: SitePurchaseSerializer})
+    @action(detail=True, methods=["post"])
+    def decide(self, request, pk=None):  # type: ignore[no-untyped-def]
+        return self._decide(request)
+
+    @extend_schema(request=None, responses={200: SitePurchaseSerializer})
+    @action(detail=True, methods=["post"])
+    def resubmit(self, request, pk=None):  # type: ignore[no-untyped-def]
+        return self._resubmit(request)
+
+    @extend_schema(request=MarkPaidSerializer, responses={200: SitePurchaseSerializer})
+    @action(detail=True, methods=["post"], url_path="mark-paid")
+    def mark_paid(self, request, pk=None):  # type: ignore[no-untyped-def]
+        return self._mark_paid(request)
+
+    @extend_schema(request=ReverseSerializer, responses={201: SitePurchaseSerializer})
+    @action(detail=True, methods=["post"])
+    def reverse(self, request, pk=None):  # type: ignore[no-untyped-def]
+        serializer = ReverseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reversal = reverse_purchase(
+            self.get_object(),
+            actor=request.user,
+            reason=serializer.validated_data["reason"],
+            request=request,
+        )
+        return Response(self.get_serializer(self._fresh(reversal.pk)).data, status=201)
+
+    @extend_schema(parameters=[MINE], responses={200: SitePurchaseSerializer(many=True)})
+    @action(detail=False, methods=["get"])
+    def pending(self, request):  # type: ignore[no-untyped-def]
+        return self._pending(request, SitePurchase._meta.label)
 
 
 # --------------------------------------------------------------------------

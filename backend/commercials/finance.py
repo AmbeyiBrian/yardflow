@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID
 
@@ -33,6 +33,9 @@ from commercials.models import (
     ExpenseKind,
     ExpenseStatus,
     ProjectExpense,
+    PurchaseDestination,
+    SitePurchase,
+    SitePurchaseLine,
     TransportScope,
 )
 from core.audit import client_ip, record
@@ -148,6 +151,24 @@ class OverBudgetReasonRequired(DomainError):
     code = "OVER_BUDGET_REASON_REQUIRED"
     status_code = 400
     default_message = "This is over the project's budget. Say why."
+
+
+class SitePurchaseYardNeedsCatalogue(DomainError):
+    """Goods going into the yard have to be catalogue items to be received (§4.19.3)."""
+
+    code = "SITE_PURCHASE_YARD_NEEDS_CATALOGUE"
+    status_code = 400
+    default_message = (
+        "Goods going into the yard must be catalogue items, so they can be received into stock."
+    )
+
+
+class SupplierNotUsableOnPurchase(DomainError):
+    """A deactivated or rejected supplier cannot be bought from (R15, §4.20.3)."""
+
+    code = "SUPPLIER_NOT_USABLE"
+    status_code = 400
+    default_message = "That supplier is not active, or was rejected, so it cannot be used."
 
 
 class RejectionReasonRequired(DomainError):
@@ -266,7 +287,7 @@ def _require_other_approver(recorder) -> None:  # type: ignore[no-untyped-def]
         raise FinanceNoOtherApprover()
 
 
-def _route(entry: ProjectExpense | AllowanceRequest, actor) -> None:  # type: ignore[no-untyped-def]
+def _route(entry: ProjectExpense | AllowanceRequest | SitePurchase, actor) -> None:  # type: ignore[no-untyped-def]
     """Create the approval requests and set the status they imply.
 
     A skipped PM level leaves only the level-2 request, so the entry starts at
@@ -549,6 +570,156 @@ def record_expense(
 
 
 # --------------------------------------------------------------------------
+# Recording a site purchase (R7, §4.19.3)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PurchaseLineInput:
+    """One thing bought: a catalogue item or free text, a quantity and a price."""
+
+    quantity: Decimal
+    unit_price: Decimal
+    item_type: Any = None  # catalogue.ItemType | None
+    description: str = ""
+
+
+def _round_line(quantity: Decimal, unit_price: Decimal) -> Decimal:
+    return (quantity * unit_price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _check_supplier_recordable(supplier) -> None:  # type: ignore[no-untyped-def]
+    """Active and not REJECTED; PENDING may be bought from, never paid (R15)."""
+    from network.models import SupplierStatus
+
+    if supplier is None:
+        raise _invalid("supplier", "Choose the supplier.")
+    if not supplier.is_active or supplier.status == SupplierStatus.REJECTED:
+        raise SupplierNotUsableOnPurchase(
+            f"{supplier.name} cannot be used: it is inactive or was rejected.",
+            field_errors={"supplier": ["Not usable."]},
+        )
+
+
+def record_site_purchase(
+    *,
+    actor,  # type: ignore[no-untyped-def]
+    site,  # type: ignore[no-untyped-def]
+    supplier,  # type: ignore[no-untyped-def]
+    purchase_date: date,
+    lines: Iterable[PurchaseLineInput],
+    destination: str = PurchaseDestination.USED_AT_SITE,
+    receive_into=None,  # type: ignore[no-untyped-def]
+    project=None,  # type: ignore[no-untyped-def]
+    photos_expected: int = 0,
+    client_uuid: UUID | None = None,
+    over_budget_reason: str = "",
+    offline: bool = False,
+    request=None,  # type: ignore[no-untyped-def]
+) -> SitePurchase:
+    """Record goods bought on the spot and send them for approval (R7, §4.19.3).
+
+    Same shape as ``record_expense``: idempotent on ``client_uuid`` (R6), the
+    project resolved from the site, a second approver required, the budget
+    checked (never refusing a replay), then routed PM then Finance. An
+    INTO_YARD purchase also needs somewhere to receive it and catalogue items
+    on every line; its draft delivery is made at final approval.
+    """
+    existing = _existing(SitePurchase, client_uuid)
+    if existing is not None:
+        return existing
+
+    if site is None:
+        raise _invalid("site", "Say which site this was bought for.")
+    resolved = resolve_project(site, project)
+    _check_supplier_recordable(supplier)
+    if destination not in PurchaseDestination.values:
+        raise _invalid("destination", "Choose where the goods are going.")
+    if purchase_date is None:
+        raise _invalid("purchase_date", "Enter the date of the purchase.")
+
+    items = list(lines)
+    if not items:
+        raise _invalid("lines", "Add at least one line.")
+    for item in items:
+        if item.quantity is None or item.quantity <= 0:
+            raise _invalid("lines", "Each line needs a quantity above zero.")
+        if item.unit_price is None or item.unit_price < 0:
+            raise _invalid("lines", "A unit price cannot be below zero.")
+        if item.unit_price != item.unit_price.quantize(Decimal("0.01")):
+            raise _invalid("lines", "A unit price has at most two decimal places.")
+        if item.quantity != item.quantity.quantize(Decimal("0.001")):
+            raise _invalid("lines", "A quantity has at most three decimal places.")
+        if item.item_type is None and not (item.description or "").strip():
+            raise _invalid("lines", "Each line needs an item or a description.")
+
+    if destination == PurchaseDestination.INTO_YARD:
+        from locations.models import LocationType
+
+        if receive_into is None:
+            raise _invalid("receive_into", "Which yard or store will it be received into?")
+        if receive_into.type not in (LocationType.YARD, LocationType.STORE):
+            raise _invalid("receive_into", "Choose a yard or a store.")
+        if any(item.item_type is None for item in items):
+            raise SitePurchaseYardNeedsCatalogue(
+                field_errors={"lines": [str(SitePurchaseYardNeedsCatalogue.default_message)]}
+            )
+    else:
+        receive_into = None
+
+    amount = sum((_round_line(i.quantity, i.unit_price) for i in items), Decimal("0.00"))
+    if amount <= 0:
+        raise _invalid("lines", "The purchase must come to more than zero.")
+
+    _require_other_approver(actor)
+    over_by, over_reason = over_budget_check(
+        resolved, amount, reason=over_budget_reason, offline=offline, request=request
+    )
+
+    try:
+        with transaction.atomic():
+            purchase = SitePurchase.objects.create(
+                number=allocate_number(DocumentType.SITE_PURCHASE),
+                project=resolved,
+                site=site,
+                supplier=supplier,
+                purchase_date=purchase_date,
+                destination=destination,
+                receive_into=receive_into,
+                amount=amount,
+                recorded_by=actor,
+                photos_expected=photos_expected,
+                client_uuid=client_uuid,
+                over_budget_by=over_by,
+                over_budget_reason=over_reason,
+            )
+            for item in items:
+                SitePurchaseLine.objects.create(
+                    purchase=purchase,
+                    item_type=item.item_type,
+                    description=(item.description or "").strip(),
+                    quantity=item.quantity,
+                    uom=item.item_type.uom if item.item_type is not None else "",
+                    unit_price=item.unit_price,
+                )
+            _route(purchase, actor)
+            _audit(
+                AuditAction.DOCUMENT_POSTED,
+                purchase,
+                actor=actor,
+                request=request,
+                note=f"{purchase.number} recorded on {resolved}; "
+                f"now {purchase.get_status_display().lower()}.",
+            )
+    except IntegrityError:
+        replay = _existing(SitePurchase, client_uuid)
+        if replay is None:
+            raise
+        return replay
+    return purchase
+
+
+# --------------------------------------------------------------------------
 # Requesting an allowance (R2, R5)
 # --------------------------------------------------------------------------
 
@@ -702,7 +873,7 @@ def request_allowance(
 # --------------------------------------------------------------------------
 
 
-def decide[Entry: (ProjectExpense, AllowanceRequest)](
+def decide[Entry: (ProjectExpense, AllowanceRequest, SitePurchase)](
     entry: Entry,
     *,
     actor,  # type: ignore[no-untyped-def]
@@ -761,6 +932,18 @@ def decide[Entry: (ProjectExpense, AllowanceRequest)](
                 # Finance level left still passes through it.
                 entry.status = ExpenseStatus.PENDING_FINANCE
                 entry.save()
+            if (
+                isinstance(entry, SitePurchase)
+                and entry.destination == PurchaseDestination.INTO_YARD
+                and entry.reverses_id is None
+            ):
+                # R7: the goods are expected, so the storekeeper gets a draft.
+                # Made before the status changes (an approved purchase is
+                # frozen) and inside this transaction, so a failure leaves the
+                # purchase unapproved (YARD_DELIVERY_FAILED).
+                from receiving.services import draft_gate_in_for_purchase
+
+                draft_gate_in_for_purchase(entry, actor)
             entry.status = ExpenseStatus.APPROVED
             _stamp_decision(entry, actor, "")
             entry.save()
@@ -777,7 +960,7 @@ def _stamp_decision(entry, actor, reason: str) -> None:  # type: ignore[no-untyp
     entry.decision_reason = reason
 
 
-def resubmit[Entry: (ProjectExpense, AllowanceRequest)](
+def resubmit[Entry: (ProjectExpense, AllowanceRequest, SitePurchase)](
     entry: Entry,
     *,
     actor,  # type: ignore[no-untyped-def]
@@ -809,6 +992,8 @@ def resubmit[Entry: (ProjectExpense, AllowanceRequest)](
                 to_date=entry.to_date,
                 exclude_pk=entry.pk,
             )
+        elif isinstance(entry, SitePurchase):
+            _check_supplier_recordable(entry.supplier)
         elif entry.float_request is not None:
             _check_float(entry.float_request, actor)
 
@@ -829,7 +1014,7 @@ def resubmit[Entry: (ProjectExpense, AllowanceRequest)](
     return entry
 
 
-def mark_paid[Entry: (ProjectExpense, AllowanceRequest)](
+def mark_paid[Entry: (ProjectExpense, AllowanceRequest, SitePurchase)](
     entry: Entry,
     *,
     actor,  # type: ignore[no-untyped-def]
@@ -853,6 +1038,17 @@ def mark_paid[Entry: (ProjectExpense, AllowanceRequest)](
             raise FloatBackedNotPayable()
         if entry.reverses_id is not None:
             raise FinanceNotDecidable("A reversal is not paid.")
+    if isinstance(entry, SitePurchase):
+        if entry.reverses_id is not None:
+            raise FinanceNotDecidable("A reversal is not paid.")
+        if entry.reversals.exists():
+            raise FinanceNotDecidable("This purchase was reversed, so it is not paid.")
+        # R15 (§4.20.3): recording may name a PENDING supplier; paying may not.
+        from network.suppliers import SupplierNotApproved, assert_payable
+
+        if entry.supplier is None:
+            raise SupplierNotApproved()
+        assert_payable(entry.supplier)
 
     with transaction.atomic():
         _require_status(entry, [ExpenseStatus.APPROVED], "paid")

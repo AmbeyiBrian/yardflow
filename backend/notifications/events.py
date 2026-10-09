@@ -89,7 +89,13 @@ def _payload_for(document) -> dict:
 
 
 #: Money out (R4, §4.17.9): the two documents that go through finance approval.
-_FINANCE_TARGETS = frozenset({"commercials.ProjectExpense", "commercials.AllowanceRequest"})
+_FINANCE_TARGETS = frozenset(
+    {
+        "commercials.ProjectExpense",
+        "commercials.AllowanceRequest",
+        "commercials.SitePurchase",
+    }
+)
 
 
 def _kes(amount) -> str:
@@ -100,6 +106,33 @@ def _kes(amount) -> str:
     return f"KES {value:,.0f}" if value == value.to_integral_value() else f"KES {value:,.2f}"
 
 
+def _purchase_payload(entry) -> dict:
+    """A site purchase (R7, §4.19.12): the same shape, plus supplier and destination."""
+    supplier = entry.supplier.name if entry.supplier_id else ""
+    payload: dict = {
+        "kind": "purchase",
+        "number": entry.number,
+        "label": f"{entry.number} {_kes(entry.amount)} · {supplier}".strip(" ·"),
+        "amount": f"{entry.amount:.2f}",
+        "amount_display": _kes(entry.amount),
+        "category": supplier or "site purchase",
+        "supplier": supplier,
+        "destination": entry.destination,
+        "site": entry.site.name if entry.site_id else "",
+        "project": str(entry.project),
+        "recorded_by": entry.recorded_by.full_name or entry.recorded_by.email,
+        "status": entry.status,
+    }
+    if entry.over_budget_by is not None:
+        payload["over_budget_by"] = f"{entry.over_budget_by:.2f}"
+        payload["over_budget_reason"] = entry.over_budget_reason
+    if entry.decision_reason:
+        payload["reason"] = entry.decision_reason
+    if entry.payment_reference:
+        payload["reference"] = entry.payment_reference
+    return payload
+
+
 def _finance_payload(entry) -> dict:
     """What an approver needs to decide, and what a recorder needs to know (§4.17.9).
 
@@ -107,7 +140,10 @@ def _finance_payload(entry) -> dict:
     says what was true when it happened: a rejection reads with the reason it was
     given even if the entry is later amended and sent again.
     """
-    from commercials.models import AllowanceRequest
+    from commercials.models import AllowanceRequest, SitePurchase
+
+    if isinstance(entry, SitePurchase):
+        return _purchase_payload(entry)
 
     is_request = isinstance(entry, AllowanceRequest)
     if is_request:
@@ -634,6 +670,8 @@ def _finance_headline(event: NotificationEvent) -> str:
         return headline
     if payload.get("kind") == "request":
         noun = f"Allowance request {payload['number']}" if payload.get("number") else "Request"
+    elif payload.get("kind") == "purchase":
+        noun = f"Site purchase {payload['number']}" if payload.get("number") else "Site purchase"
     else:
         noun = "Expense"
     what = f"{payload.get('amount_display', '')} {str(payload.get('category', '')).lower()}".strip()

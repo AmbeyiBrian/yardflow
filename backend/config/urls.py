@@ -55,6 +55,7 @@ from commercials.finance_api import (
     ExpenseCategoryViewSet,
     FinanceSettingsView,
     ProjectExpenseViewSet,
+    SitePurchaseViewSet,
 )
 from commercials.milestones_api import (
     MilestoneInvoiceViewSet,
@@ -291,6 +292,7 @@ router.register("project-expenses", ProjectExpenseViewSet, basename="project-exp
 router.register(
     "allowance-requests", AllowanceRequestViewSet, basename="allowance-request"
 )
+router.register("site-purchases", SitePurchaseViewSet, basename="site-purchase")
 router.register("casuals", CasualViewSet, basename="casual")
 router.register("subcontracts", SubcontractViewSet, basename="subcontract")
 router.register(

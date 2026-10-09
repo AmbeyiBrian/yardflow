@@ -48,6 +48,8 @@ class SyncOperation(models.TextChoices):
     # R13, §4.18.9: clocking in and out. Approving and correcting a day are not offline.
     CLOCK_IN = "CLOCK_IN", "Clock in"
     CLOCK_OUT = "CLOCK_OUT", "Clock out"
+    # R7, §4.19.11: goods bought on site; approved and paid online.
+    SITE_PURCHASE = "SITE_PURCHASE", "Record a site purchase"
 
 
 class SubmissionStatus(models.TextChoices):
