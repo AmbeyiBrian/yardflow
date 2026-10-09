@@ -12,17 +12,24 @@
  * be rolled up by party.
  */
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { ApiError } from '../../api/client';
 import { applyFieldErrors, useAction, useList } from '../../api/hooks';
 import { Banner, Button, Field, Select, Spinner, Textarea } from '../../components/ui';
 import { ReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { Sheet } from '../../components/ui/data';
 import { MoneyInput } from '../../components/ui/money';
 import type { Site } from '../settings/types';
+import { committedCents, wouldExceedContract } from './subcontracts';
+import { useSubcontracts } from './subcontractsApi';
 import type { Project, Subcontractor } from './types';
 
 interface JobForm {
+  /** R8/§4.19.4: blank means the server picks, or the job is not under a contract. */
+  subcontract: string;
+  over_contract_reason: string;
   site: string;
   assignee: string;
   description: string;
@@ -64,10 +71,35 @@ export function JobSheet({
       delivery_mode: 'IN_HOUSE',
       subcontractor: '',
       agreed_price: '',
+      subcontract: '',
+      over_contract_reason: '',
     },
   });
+  // §4.19.4: the server said this award passes the contract value.
+  const [serverOver, setServerOver] = useState(false);
 
   const subcontracted = form.watch('delivery_mode') === 'SUBCONTRACTED';
+  const projectId = project ? project.id : form.watch('project') || undefined;
+  const contractorId = form.watch('subcontractor');
+  const contracts = useSubcontracts(projectId, subcontracted);
+  // Only the subcontractor's own active contracts can take the job
+  // (`SUBCONTRACT_MISMATCH` otherwise).
+  const eligible = (contracts.data?.results ?? []).filter(
+    (sc) => String(sc.subcontractor) === contractorId && sc.status === 'ACTIVE',
+  );
+  const chosenContract =
+    eligible.find((sc) => String(sc.id) === form.watch('subcontract')) ??
+    (eligible.length === 1 ? eligible[0] : undefined);
+  const committed = chosenContract?.position?.committed;
+  const overValue =
+    chosenContract !== undefined &&
+    committed !== undefined &&
+    wouldExceedContract(
+      chosenContract.contract_value,
+      committedCents([{ status: 'OPEN', agreed_price: committed }]),
+      form.watch('agreed_price'),
+    );
+  const needsReason = overValue || serverOver;
   const chosenSite = sites.data?.results.find(
     (site) => String(site.id) === form.watch('site'),
   );
@@ -99,11 +131,19 @@ export function JobSheet({
                 delivery_mode: values.delivery_mode,
                 subcontractor: subcontracted ? Number(values.subcontractor) : null,
                 agreed_price: subcontracted ? values.agreed_price : null,
+                subcontract:
+                  subcontracted && values.subcontract ? Number(values.subcontract) : undefined,
+                over_contract_reason:
+                  subcontracted && needsReason ? values.over_contract_reason : undefined,
               });
+              setServerOver(false);
               form.reset();
               onCreated?.();
               onClose();
             } catch (error) {
+              if (error instanceof ApiError && error.code === 'SUBCONTRACT_OVER_VALUE') {
+                setServerOver(true);
+              }
               applyFieldErrors(error, form.setError);
             }
           })}
@@ -210,6 +250,49 @@ export function JobSheet({
                 {...form.register('agreed_price', { required: 'What was agreed?' })}
               />
             </Field>
+
+            {eligible.length > 1 ? (
+              <Field
+                label="Which contract"
+                htmlFor="job-subcontract"
+                hint="More than one active contract with this subcontractor."
+              >
+                <Select
+                  id="job-subcontract"
+                  {...form.register('subcontract', { required: 'Which contract?' })}
+                >
+                  <option value="">Choose…</option>
+                  {eligible.map((sc) => (
+                    <option key={sc.id} value={sc.id}>
+                      {sc.reference}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : eligible.length === 1 ? (
+              <p className="text-xs text-slate-600">Under contract {eligible[0].reference}.</p>
+            ) : contractorId && projectId && !contracts.isLoading ? (
+              <p className="text-xs text-slate-600">Not under a contract.</p>
+            ) : null}
+
+            {needsReason ? (
+              <>
+                <Banner tone="warning">
+                  This award takes the contract past its value. It is allowed, but the project
+                  manager will see why.
+                </Banner>
+                <Field
+                  label="Why is it over the contract value"
+                  htmlFor="job-over-reason"
+                  error={form.formState.errors.over_contract_reason?.message}
+                >
+                  <Textarea
+                    id="job-over-reason"
+                    {...form.register('over_contract_reason', { required: 'Say why.' })}
+                  />
+                </Field>
+              </>
+            ) : null}
           </>
         ) : null}
 

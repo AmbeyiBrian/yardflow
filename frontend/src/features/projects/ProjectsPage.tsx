@@ -338,7 +338,7 @@ export function ProjectDetailPage() {
         {tab === 'sites' ? (
           <SitesPanel projectId={record.id} isManager={record.manager === user?.id} />
         ) : null}
-        {tab === 'subcontracts' ? <SubcontractsPanel projectId={record.id} /> : null}
+        {tab === 'subcontracts' ? <SubcontractsPanel projectId={record.id} isManager={record.manager === user?.id} /> : null}
         {tab === 'milestones' ? <MilestonesPanel projectId={record.id} /> : null}
       </Suspense>
 
