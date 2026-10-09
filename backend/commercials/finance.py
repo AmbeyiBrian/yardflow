@@ -947,6 +947,11 @@ def decide[Entry: (ProjectExpense, AllowanceRequest, SitePurchase)](
             entry.status = ExpenseStatus.APPROVED
             _stamp_decision(entry, actor, "")
             entry.save()
+            # §4.19.12: the storekeepers are told goods are on their way.
+            if isinstance(entry, SitePurchase) and entry.gate_in_id:
+                from notifications.events import emit_yard_delivery_expected
+
+                emit_yard_delivery_expected(entry)
             note = "Approved by Finance."
             action = AuditAction.APPROVED
             _notify(entry, Event.FINANCE_APPROVED)
