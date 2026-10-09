@@ -1622,7 +1622,7 @@ beside it. T16.11 regenerates the schema once and lays the frontend foundation; 
 T16.12 to T16.15 run in parallel, each owning its own files. Router and URL registration lines are the
 only shared touch; the task that lands second resolves them.
 
-- [ ] **T16.1 `[B]` Places and settings: coordinates, radius, OFFICE** — Refs: §4.18.2, §4.18.3, §4.18.8 · R13
+- [x] **T16.1 `[B]` Places and settings: coordinates, radius, OFFICE** — Refs: §4.18.2, §4.18.3, §4.18.8 · R13
   - `Site.radius_m` (default 200, CHECK 20-2000); `Location.latitude`, `longitude`, `radius_m` with the
     range and both-or-neither CHECKs; `LocationType.OFFICE`; `area_history` JSON on both.
   - `OrganizationSettings.clock_auto_close_hour` (default 18) and `clock_accuracy_cap_m` (default 100).
@@ -1632,7 +1632,7 @@ only shared touch; the task that lands second resolves them.
   *Done when:* migrations apply to a copy of production-shaped data, existing sites keep working with no
   coordinates, the stock pickers do not list an OFFICE, and the full backend suite passes.
 
-- [ ] **T16.2 `[B]` Attendance models, RLS and permission** — Refs: §4.18.2, §4.18.8 · R13
+- [x] **T16.2 `[B]` Attendance models, RLS and permission** — Refs: §4.18.2, §4.18.8 · R13
   - New `attendance` app: `WorkSession` (one-open partial UNIQUE, out ≥ in, place XOR CHECK, `added_by`
     and `added_reason` for 4.18.6a), `WorkDay`, `WorkSessionCorrection` (append-only trigger).
   - `enable_rls` migration and `attendance/isolation.py` fixtures; the immutable-once-approved guard.
@@ -1640,7 +1640,7 @@ only shared touch; the task that lands second resolves them.
 
   *Done when:* RLS, isolation, constraint and append-only tests pass and the full backend suite passes.
 
-- [ ] **T16.3 `[B]` Approval engine: work-day slices** — Refs: §4.18.5 (engine changes 1-6), §4.18.1 · R13
+- [x] **T16.3 `[B]` Approval engine: work-day slices** — Refs: §4.18.5 (engine changes 1-6), §4.18.1 · R13
   - `WORK_DAY_DOCUMENT_TYPES`, `_work_day_levels`; `required_levels`/`create_requests` take the slice.
   - `can_approve` self-approval first; `next_pending_request`/`record_decision` take `approval_request`.
   - `open_requests_addressed_to` excludes work days from the gate-out blanket; `_level_approvers`
@@ -1649,7 +1649,7 @@ only shared touch; the task that lands second resolves them.
   *Done when:* each of the six changes is tested, a rejected slice supersedes only itself, gate-out and
   finance routing are unchanged, and the full backend suite passes.
 
-- [ ] **T16.4 `[B]` Geo check, required coordinates, project split** — Refs: §4.18.4, §4.18.8, §4.18.5 step 5 · R13
+- [x] **T16.4 `[B]` Geo check, required coordinates, project split** — Refs: §4.18.4, §4.18.8, §4.18.5 step 5 · R13
   - `core/geo.py` (`haversine_m`, `check_area`) and `shared/area-cases.json`, read by pytest.
   - `CoordinatesMixin` on the site and location serializers and admin (`COORDINATES_REQUIRED`, system
     rows exempt); `has_coordinates` and `?missing_coordinates=true`; `area_history` push on area change.
@@ -1658,7 +1658,7 @@ only shared touch; the task that lands second resolves them.
   *Done when:* the geo fixture cases pass, a save without coordinates is refused except system rows, an
   area edit pushes history (max 10), and `resolve_project` behaves as before.
 
-- [ ] **T16.5 `[B]` Clock-in and clock-out services** — Refs: §4.18.3, §4.18.5, §4.18.4 · R13
+- [x] **T16.5 `[B]` Clock-in and clock-out services** — Refs: §4.18.3, §4.18.5, §4.18.4 · R13
   - `attendance/services.py`: `clock_in` (clockable place, time bounds, area check, offline replay with
     `place_area` and `area_history`, project resolution, close the open session, get-or-create the day) and
     `clock_out` (by `session_client_uuid`, never refused on position, replacing an auto-close).
@@ -1667,7 +1667,7 @@ only shared touch; the task that lands second resolves them.
   *Done when:* the §4.18.13 clock-in, replay (new area, old area flagged, outside both, forged
   `place_area`) and concurrency cases pass.
 
-- [ ] **T16.6 `[B]` Auto-close, day formation and routing** — Refs: §4.18.5 · R13
+- [x] **T16.6 `[B]` Auto-close, day formation and routing** — Refs: §4.18.5 · R13
   - `attendance/sweeps.py`: `close_stale_sessions` at the cutoff itself, `form_days` in the organization's
     timezone; hourly beat entry `attendance-sweep` with per-organization fan-out and guarded steps.
   - `attendance/routing.py::route_day`: group by addressee, own-day rules, parallel slices, idempotent,
@@ -1675,7 +1675,7 @@ only shared touch; the task that lands second resolves them.
 
   *Done when:* auto-close in Nairobi and a second zone, and every `route_day` case in §4.18.13, pass.
 
-- [ ] **T16.7 `[B]` Corrections and the Director-added day** — Refs: §4.18.6, §4.18.6a · R13
+- [x] **T16.7 `[B]` Corrections and the Director-added day** — Refs: §4.18.6, §4.18.6a · R13
   - `attendance/corrections.py::correct_session` (EDIT and ADD, rejected slice only, 30 days, reason,
     originals kept, reopens only that slice to the same addressee, links old and new request).
   - `add_work_day` for `finance_director_role` holders: no position, `closed_by=PERSON`, flagged "added by
@@ -1684,7 +1684,7 @@ only shared touch; the task that lands second resolves them.
   *Done when:* the correction cases (same approver, other slice untouched, window, second round) and the
   Director-add cases (own day refused, approved by the PM or another Director) pass.
 
-- [ ] **T16.8 `[B]` Endpoints and visibility** — Refs: §4.18.7, §4.18.8 · R13
+- [x] **T16.8 `[B]` Endpoints and visibility** — Refs: §4.18.7, §4.18.8 · R13
   - `/work-sessions` (open, clock-in, clock-out, correct), `/work-days` (list scopes, detail, decide, add),
     `/attendance/settings`; "awaiting me" and project filters.
   - Visibility (own, PM slice, `attendance.view_all`, Director); `get_document` and `approvals/pending`
@@ -1693,21 +1693,21 @@ only shared touch; the task that lands second resolves them.
   *Done when:* each endpoint and permission is tested, isolation holds, and no schema regeneration is
   attempted here (T16.11).
 
-- [ ] **T16.9 `[B]` Notifications** — Refs: §4.18.10 · R13
+- [x] **T16.9 `[B]` Notifications** — Refs: §4.18.10 · R13
   `attendance.awaiting_approval` (per slice, "corrected" tag), `attendance.rejected`, `attendance.unrouted`
   in `notifications/matrix.py`.
 
   *Done when:* `LEVEL_APPROVERS` reaches both PMs of a two-PM day, never the person, and each event goes
   to the channels the matrix says.
 
-- [ ] **T16.10 `[B]` Offline sync and bundle** — Refs: §4.18.9 · R6, R13
+- [x] **T16.10 `[B]` Offline sync and bundle** — Refs: §4.18.9 · R6, R13
   - `SyncOperation.CLOCK_IN`/`CLOCK_OUT` and their `_HANDLERS` entries calling the services.
   - `OfflineBundleView`: place coordinates, radius, `has_coordinates` and the `attendance` settings.
 
   *Done when:* replay, refusal as `SyncException`, clock-out by `session_client_uuid`, replay overriding an
   auto-close and approving offline refused all pass.
 
-- [ ] **T16.11 `[F]` Schema regeneration and attendance foundation** — Refs: §4.18.4, §4.18.8, §4.18.11 · R13
+- [x] **T16.11 `[F]` Schema regeneration and attendance foundation** — Refs: §4.18.4, §4.18.8, §4.18.11 · R13
   - Regenerate `backend/api-schema.yml` and `frontend/src/api/schema.d.ts` once, after T16.8 to T16.10.
   - `features/attendance/`: `area.ts` (reads `shared/area-cases.json`), `position.ts`, `nearby.ts`, types,
     hooks; `attendance.view_all` in `frontend/src/auth/permissions.ts`.
@@ -1715,7 +1715,7 @@ only shared touch; the task that lands second resolves them.
   *Done when:* the Vitest area tests pass on the shared fixture, the schema check passes, and the
   typecheck is clean.
 
-- [ ] **T16.12 `[F]` Place sheets and Settings → Clock-in** — Refs: §4.18.11, §4.18.8 · R13
+- [x] **T16.12 `[F]` Place sheets and Settings → Clock-in** — Refs: §4.18.11, §4.18.8 · R13
   - `SiteSheet`/`LocationSheet` in `NetworkPage.tsx` gain an edit mode with latitude, longitude, radius;
     `components/ui/UseMyLocation.tsx`; `quickCreate.tsx` inherits the required coordinates.
   - "No coordinates" badge and filter on the site list; `AttendancePage.tsx` (hour, cap, missing places,
@@ -1724,7 +1724,7 @@ only shared touch; the task that lands second resolves them.
   *Done when:* a site and a location can be created and edited with coordinates against a local backend;
   typecheck, Vitest and build pass.
 
-- [ ] **T16.13 `[F]` Home clock-in card and My time** — Refs: §4.18.11 · R13
+- [x] **T16.13 `[F]` Home clock-in card and My time** — Refs: §4.18.11 · R13
   - Clock-in card (nearest places with distance, open session, elapsed time, refusal wording).
   - `/time` page: own days, Team and Everyone by permission, rejected day with the **Correct** sheet
     (edit or add, required reason); nav entry.
@@ -1732,7 +1732,7 @@ only shared touch; the task that lands second resolves them.
   *Done when:* clock in and out and a correction work against a local backend; typecheck, Vitest and
   build pass.
 
-- [ ] **T16.14 `[F]` Approvals, Days tab and Director add** — Refs: §4.18.11, §4.18.6a, §4.18.7 · R13
+- [x] **T16.14 `[F]` Approvals, Days tab and Director add** — Refs: §4.18.11, §4.18.6a, §4.18.7 · R13
   - `DayApprovals.tsx`: sessions, distances, flags, original beside corrected, earlier rejection
     reason; Approve and Reject (reason required); registered as a tab on the Approvals screen.
   - "Add a day" sheet for Director-role holders, showing "added by the Director" wherever it appears.
@@ -1740,14 +1740,14 @@ only shared touch; the task that lands second resolves them.
   *Done when:* a PM approves or rejects their own slice only; a Director can add a day; typecheck,
   Vitest and build pass.
 
-- [ ] **T16.15 `[F]` Offline capture for clock-in** — Refs: §4.18.9, §4.18.11 · R6, R13
+- [x] **T16.15 `[F]` Offline capture for clock-in** — Refs: §4.18.9, §4.18.11 · R6, R13
   - `ATTENDANCE_OPERATIONS` in `offline/db.ts`, `queued.ts`, `offline.ts`; local open-session reference row.
   - Early refusal from the bundle area; "Waiting to send" and the stays-on-phone refusal.
 
   *Done when:* Vitest on `queued.ts` passes and a clock-in saved offline lands, flagged where the area
   changed.
 
-- [ ] **T16.16 `[E2E]` Phone run** — Refs: §4.18.13 · R13
+- [x] **T16.16 `[E2E]` Phone run** — Refs: §4.18.13 · R13
   *Done when:* the three §4.18.13 scenarios pass with `context.setGeolocation` and the phone suite stays
   green. Then push once and check on Silvertech.
 
@@ -1766,7 +1766,7 @@ notifications T17.9 and sync T17.10 run in parallel. T17.11 regenerates the sche
 frontend tasks T17.12 to T17.14 and T17.16 run in parallel, and T17.15 follows T17.12 because it uses
 the supplier quick-create.
 
-- [ ] **T17.1 `[B]` Supplier model, gate-in FK and history link** — Refs: §4.20.2, §4.20.5 · R15
+- [x] **T17.1 `[B]` Supplier model, gate-in FK and history link** — Refs: §4.20.2, §4.20.5 · R15
   - `network.Supplier` with `name_key`/`kra_pin_key` constraints, `SupplierStatus`, `client_uuid`; RLS and
     `network/isolation.py`; `GateIn.supplier` (PROTECT, null); `delete` raises.
   - `receiving` data migration linking `GateIn.supplier` by `name_key` (a no-op on an empty register; never
@@ -1775,14 +1775,14 @@ the supplier quick-create.
   *Done when:* migrations apply to production-shaped data with and without matching names; RLS and
   isolation pass; the full backend suite passes.
 
-- [ ] **T17.2 `[B]` Assets app, vehicle FK and permission** — Refs: §4.20.2, §4.20.4, §4.20.7 · R14
+- [x] **T17.2 `[B]` Assets app, vehicle FK and permission** — Refs: §4.20.2, §4.20.4, §4.20.7 · R14
   - New `assets` app: `Asset` (tag key unique, vehicle-only fields, CLOSED CHECK, `delete` raises) and
     `AssetHandover` (append-only trigger, both-ends CHECK); `enable_rls` and `assets/isolation.py`.
   - `ProjectExpense.vehicle` (PROTECT, null); `asset.manage` in `accounts/permissions_registry.py`.
 
   *Done when:* constraint, trigger, RLS and isolation tests pass and the full backend suite passes.
 
-- [ ] **T17.3 `[B]` Approval engine: suppliers** — Refs: §4.20.3, §4.20.9 · R15
+- [x] **T17.3 `[B]` Approval engine: suppliers** — Refs: §4.20.3, §4.20.9 · R15
   - `required_levels` supplier branch (one level, `required_permission="finance.approve"`, no PM level);
     `SUPPLIER_DOCUMENT_TYPES` in `can_approve`; `requested_by_id` alias; `approvals/pending` and
     `get_document` for `network.Supplier`.
@@ -1790,7 +1790,7 @@ the supplier quick-create.
   *Done when:* the registrar cannot approve their own entry, holders of `finance.approve` see it in
   pending, existing finance and gate-out routing is unchanged, and the full backend suite passes.
 
-- [ ] **T17.4 `[B]` Supplier services** — Refs: §4.20.3, §4.20.5, §4.20.2 · R15
+- [x] **T17.4 `[B]` Supplier services** — Refs: §4.20.3, §4.20.5, §4.20.2 · R15
   - `network/suppliers.py`: `add_supplier` (duplicate name and PIN errors naming the existing one),
     `update_supplier`, `decide_supplier` (`SUPPLIER_PIN_REQUIRED`), `resubmit`, `set_active`,
     `link_history`, `assert_payable`; audit rows.
@@ -1799,7 +1799,7 @@ the supplier quick-create.
 
   *Done when:* the §4.20.12 supplier cases pass, including `link_history` idempotence and tenant bounds.
 
-- [ ] **T17.5 `[B]` Asset services and fuel read** — Refs: §4.20.4 · R14
+- [x] **T17.5 `[B]` Asset services and fuel read** — Refs: §4.20.4 · R14
   - `assets/services.py`: create (writes the first handover), `handover` under `select_for_update`,
     `close` (final handover to the yard), `fuel_position(asset, from, to)` and the ranking query.
   - `custody.services.assert_can_deactivate` counts held assets (`HolderStillHasMaterial` with `assets`).
@@ -1807,7 +1807,7 @@ the supplier quick-create.
   *Done when:* the asset cases of §4.20.12 pass (holder, manager, stranger, concurrent, frozen after close,
   deactivation) and fuel matches `expense_cost` for APPROVED and PAID, with pending shown apart.
 
-- [ ] **T17.6 `[B]` Fuel by vehicle and gate-in supplier on the API** — Refs: §4.20.4, §4.20.5 · R14, R15
+- [x] **T17.6 `[B]` Fuel by vehicle and gate-in supplier on the API** — Refs: §4.20.4, §4.20.5 · R14, R15
   - `commercials/finance.record_expense`: a FUEL expense needs an open VEHICLE or GENERATOR `vehicle`,
     fills `vehicle_reg`; a `vehicle_reg`-only payload is accepted as "not on the register";
     `FUEL_VEHICLE_REQUIRED`, `FUEL_VEHICLE_MISMATCH`, `ASSET_CLOSED`.
@@ -1817,7 +1817,7 @@ the supplier quick-create.
   *Done when:* legacy payloads, mismatch, closed vehicle, text-only gate-in and the supplier filter are
   tested and the full backend suite passes.
 
-- [ ] **T17.7 `[B]` Supplier endpoints and attachments** — Refs: §4.20.6, §4.20.7 · R15
+- [x] **T17.7 `[B]` Supplier endpoints and attachments** — Refs: §4.20.6, §4.20.7 · R15
   - `/suppliers` (list filters, `payable=true`, PATCH rules, decide, resubmit, deactivate, reactivate,
     `link-history`) in `network/views.py`; payment details and PIN field-gated.
   - `core/attachment_api.py`: targets `network.Supplier` and `assets.Asset` with their caption lists and
@@ -1826,7 +1826,7 @@ the supplier quick-create.
   *Done when:* each endpoint, permission and attachment rule is tested, no payment data leaks to a member,
   and isolation holds.
 
-- [ ] **T17.8 `[B]` Asset endpoints** — Refs: §4.20.6, §4.20.7 · R14
+- [x] **T17.8 `[B]` Asset endpoints** — Refs: §4.20.6, §4.20.7 · R14
   - `/assets` register, PATCH, `handover`, `close`, `handovers`, `fuel`, `fuel-summary` in `assets/views.py`.
   - `core/field_permissions.py`: `cost` and `purchase_terms` gated to `asset.manage`, `finance.approve`,
     `project.view_cost`.
@@ -1834,7 +1834,7 @@ the supplier quick-create.
   *Done when:* each endpoint and permission is tested, the list omits gated fields for others, and
   isolation holds.
 
-- [ ] **T17.9 `[B]` Notifications and expiry sweep** — Refs: §4.20.4, §4.20.9 · R14, R15
+- [x] **T17.9 `[B]` Notifications and expiry sweep** — Refs: §4.20.4, §4.20.9 · R14, R15
   - `asset.expiry_due` (`Recipient.OWNER`, in-app and email); `_sweep_asset_expiries` in
     `core/sweeps.py`, guarded separately, with `*_alerted_for` catch-up and re-arm.
   - Supplier approval events reuse `finance.*` with `payload.kind = "supplier"`; the sensitive-edit notice.
@@ -1842,7 +1842,7 @@ the supplier quick-create.
   *Done when:* the 30-day edge, catch-up, renewal re-arm, one alert only, closed assets skipped, and a
   failing step not stopping the other sweeps are tested.
 
-- [ ] **T17.10 `[B]` Offline sync and bundle** — Refs: §4.20.8 · R6, R15
+- [x] **T17.10 `[B]` Offline sync and bundle** — Refs: §4.20.8 · R6, R15
   - `SyncOperation.SUPPLIER` via `add_supplier`; gate-in `supplier_client_uuid` resolved within a batch;
     supersede on refusal.
   - Bundle `suppliers` (active, no PIN or payment) and `vehicles` (ACTIVE VEHICLE and GENERATOR).
@@ -1850,14 +1850,14 @@ the supplier quick-create.
   *Done when:* supplier then gate-in in one batch, duplicate refusal and supersede, a closed vehicle
   refused with `ASSET_CLOSED` at replay, and the bundle contents (no PIN, no payment) are tested.
 
-- [ ] **T17.11 `[F]` Schema regeneration and foundation** — Refs: §4.20.10 · R14, R15
+- [x] **T17.11 `[F]` Schema regeneration and foundation** — Refs: §4.20.10 · R14, R15
   - Regenerate `backend/api-schema.yml` and `frontend/src/api/schema.d.ts` once, after T17.7 to T17.10.
   - Types, hooks, `asset.manage` in `auth/permissions.ts`; `rules.ts` vehicle-picker rules and the
     supplier-duplicate resolution helper, with Vitest.
 
   *Done when:* the helper tests pass, the schema check passes and the typecheck is clean.
 
-- [ ] **T17.12 `[F]` Settings → Network: Suppliers** — Refs: §4.20.10, §4.20.5 · R15
+- [x] **T17.12 `[F]` Settings → Network: Suppliers** — Refs: §4.20.10, §4.20.5 · R15
   - Suppliers tab with status chips and search; `SupplierSheet` (details, payment, documents with kind
     chooser), Deactivate, "Link past deliveries"; duplicate PIN offers "Use existing".
   - Registered in `features/quickCreate.tsx`.
@@ -1865,26 +1865,26 @@ the supplier quick-create.
   *Done when:* a supplier can be added, edited and its documents attached against a local backend;
   typecheck, Vitest and build pass.
 
-- [ ] **T17.13 `[F]` Approvals: Suppliers tab** — Refs: §4.20.10, §4.20.3 · R15
+- [x] **T17.13 `[F]` Approvals: Suppliers tab** — Refs: §4.20.10, §4.20.3 · R15
   Sheet with PIN, payment route, documents and who added it; Approve and Reject with reason.
 
   *Done when:* Finance can approve a supplier from the Approvals screen and the registrar cannot;
   typecheck, Vitest and build pass.
 
-- [ ] **T17.14 `[F]` Assets** — Refs: §4.20.10, §4.20.4 · R14
+- [x] **T17.14 `[F]` Assets** — Refs: §4.20.10, §4.20.4 · R14
   - `features/assets/`: register list, `AssetDetailPage` (details, documents, handover history, Hand over,
     Close), Fuel panel with month selector, amber and red expiry chips, nav entry.
 
   *Done when:* create, hand over, close and the fuel panel work against a local backend; typecheck,
   Vitest and build pass.
 
-- [ ] **T17.15 `[F]` Record expense vehicle picker and gate-in supplier** — Refs: §4.20.10, §4.20.5 · R14, R15
+- [x] **T17.15 `[F]` Record expense vehicle picker and gate-in supplier** — Refs: §4.20.10, §4.20.5 · R14, R15
   - `RecordExpensePage.tsx`: vehicle picker from the bundle and "Not ours" (typed registration).
   - `GateInCapturePage.tsx`: supplier `ReferenceSelect` with "Add new supplier"; supplier chip on detail.
 
   *Done when:* a fuel expense and a gate-in work with the new pickers; typecheck, Vitest and build pass.
 
-- [ ] **T17.16 `[F]` Offline capture for suppliers and vehicles** — Refs: §4.20.8 · R6
+- [x] **T17.16 `[F]` Offline capture for suppliers and vehicles** — Refs: §4.20.8 · R6
   - Queue `SUPPLIER`; gate-in payload and `types.ts` gain `supplier` and `supplier_client_uuid`; bundle
     caches for suppliers and vehicles.
   - "Waiting to send" and "Fix and resend" for a refused supplier, dependent gate-in waiting behind it.
@@ -1892,7 +1892,7 @@ the supplier quick-create.
   *Done when:* a Vitest test covers queue ordering with the dependency, and a supplier added offline lands
   with its gate-in.
 
-- [ ] **T17.17 `[E2E]` Phone run** — Refs: §4.20.12 · R14, R15
+- [x] **T17.17 `[E2E]` Phone run** — Refs: §4.20.12 · R14, R15
   *Done when:* the five §4.20.12 scenarios pass and the phone suite stays green. Then push once and check
   on Silvertech.
 
@@ -1912,7 +1912,7 @@ notifications (T18.13) and sync (T18.14) run in parallel. T18.15 regenerates the
 frontend tasks run in parallel (T18.16, T18.18, T18.19, T18.20, T18.21), with T18.17 after T18.16 and
 T18.20 and T18.21 after T18.19, which creates the project tab shell.
 
-- [ ] **T18.1 `[B]` Project sites through model and PO columns** — Refs: §4.19.2, §4.19.6, §4.19.14 · R10, R12
+- [x] **T18.1 `[B]` Project sites through model and PO columns** — Refs: §4.19.2, §4.19.6, §4.19.14 · R10, R12
   - `ProjectSite` as the through model of `Project.sites` (`SeparateDatabaseAndState`, `db_table =
     "network_project_sites"`; `organization` backfilled then NOT NULL; `mobilised_on`, `accepted_on`);
     `enable_rls` and isolation fixture.
@@ -1924,7 +1924,7 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* migrations apply to production-shaped data keeping every link and org, `project.sites`
   callers and `ProjectFilter.site` still work, and the full backend suite passes.
 
-- [ ] **T18.2 `[B]` Site purchase models and over-budget columns** — Refs: §4.19.2, §4.19.14 · R7, R9
+- [x] **T18.2 `[B]` Site purchase models and over-budget columns** — Refs: §4.19.2, §4.19.14 · R7, R9
   - `SitePurchase` and `SitePurchaseLine` (CHECKs, unique number and `client_uuid`, `StatusGuardMixin`,
     line freeze); `DocumentType.SITE_PURCHASE` (series `SP`).
   - `over_budget_by` and `over_budget_reason` on `ProjectExpense`, `AllowanceRequest`, `SitePurchase`.
@@ -1932,7 +1932,7 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
 
   *Done when:* constraint, save-guard, RLS and isolation tests pass and the full backend suite passes.
 
-- [ ] **T18.3 `[B]` Subcontract models and job link** — Refs: §4.19.2, §4.19.4 · R8
+- [x] **T18.3 `[B]` Subcontract models and job link** — Refs: §4.19.2, §4.19.4 · R8
   - `Subcontract` (series `SC`, sites M2M), `SubcontractPayment` (own transition table, `reverses`);
     `Job.subcontract` and `over_contract_reason` (CHECK on SUBCONTRACTED, joins `_DELIVERY_FIELDS`).
   - RLS and isolation fixtures.
@@ -1940,13 +1940,13 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* constraint, freeze-on-close, RLS and isolation tests pass; old subcontracted jobs keep
   `subcontract = NULL`; the full backend suite passes.
 
-- [ ] **T18.4 `[B]` Milestone models** — Refs: §4.19.2, §4.19.7 · R11
+- [x] **T18.4 `[B]` Milestone models** — Refs: §4.19.2, §4.19.7 · R11
   - `ProjectMilestone` (unique sequence, condition CHECK), `MilestoneInvoice` and `MilestoneReceipt`
     (append-only with void columns); RLS and isolation fixtures.
 
   *Done when:* constraint, append-only and isolation tests pass and the full backend suite passes.
 
-- [ ] **T18.5 `[B]` Approval engine: purchases and subcontract payments** — Refs: §4.19.3, §4.19.4, §4.19.10 · R7, R8
+- [x] **T18.5 `[B]` Approval engine: purchases and subcontract payments** — Refs: §4.19.3, §4.19.4, §4.19.10 · R7, R8
   - `SitePurchase` in `FINANCE_DOCUMENT_TYPES`; a sibling set for `SubcontractPayment` with one PM level
     (`PROJECT_HAS_NO_ACTIVE_MANAGER`), recorder refused.
   - `can_approve`, `approvals/pending`, `get_document` for both; `_visible_to` for purchases;
@@ -1955,7 +1955,7 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* each routing case (PM-recorded, Director-recorded, recorder-PM refused, inactive PM) is
   tested, existing routing is unchanged, and the full backend suite passes.
 
-- [ ] **T18.6 `[B]` Budget position and purchase cost** — Refs: §4.19.5, §4.19.3, §4.19.14 · R9
+- [x] **T18.6 `[B]` Budget position and purchase cost** — Refs: §4.19.5, §4.19.3, §4.19.14 · R9
   - `commercials/budget.py` (`position`, `check`) with the §4.19.5 table; `costing.purchase_cost`
     (USED_AT_SITE only, signed) and `ProjectCost.purchases`, with `from_snapshot` defaulting to 0.
   - `budget_position` on `ProjectViewSet.performance` and the project serializer, gated by
@@ -1964,7 +1964,7 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* the table-driven budget test (no double count, float, yard purchase before and after
   posting, advance, no-PO project, closed snapshot, concurrent pending) passes.
 
-- [ ] **T18.7 `[B]` Site purchase services and draft delivery** — Refs: §4.19.3, §4.19.5, §4.19.8 · R7, R9
+- [x] **T18.7 `[B]` Site purchase services and draft delivery** — Refs: §4.19.3, §4.19.5, §4.19.8 · R7, R9
   - `finance.record_site_purchase`, `decide`, `resubmit`, `mark_paid` (`assert_payable`), `reverse_purchase`;
     over-budget wiring into `record_expense` and `request_allowance` too.
   - `receiving.services.draft_gate_in_for_purchase` under `select_for_update`; `YARD_DELIVERY_FAILED`;
@@ -1973,7 +1973,7 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* the §4.19.16 purchase cases pass (cost once, one draft gate-in even when repeated or
   concurrent, reversal rules, unpayable unapproved supplier, idempotency).
 
-- [ ] **T18.8 `[B]` Subcontract services, job link and spend report** — Refs: §4.19.4 · R8
+- [x] **T18.8 `[B]` Subcontract services, job link and spend report** — Refs: §4.19.4 · R8
   - `commercials/contracts.py`: create, value change audited, `record_subcontract_payment`, decide, resubmit,
     reverse, `position`; job auto-link, `SUBCONTRACT_AMBIGUOUS`, `SUBCONTRACT_OVER_VALUE`, `SUBCONTRACT_MISMATCH`.
   - `SubcontractorSpendReport` gains `paid`, `owed` and a `subcontract` filter.
@@ -1981,7 +1981,7 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* the §4.19.16 subcontract worked example, routing and report columns pass against
   hand-computed figures.
 
-- [ ] **T18.9 `[B]` Milestones, receipts and PO payments report** — Refs: §4.19.7 · R11
+- [x] **T18.9 `[B]` Milestones, receipts and PO payments report** — Refs: §4.19.7 · R11
   - `commercials/milestones.py`: `milestone_state`, invoice and receipt services (`RECEIPT_EXCEEDS_INVOICED`,
     void with reason, `MILESTONE_LOCKED`), default seeding.
   - `po-payments` report registered in `commercials/reports_finance.py`.
@@ -1989,7 +1989,7 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* every state with date edges, partial receipts, void, no terms days, and the report totals
   pass.
 
-- [ ] **T18.10 `[B]` PO attached late, site dates and attachment rules** — Refs: §4.19.6, §4.19.8, §4.19.9 · R10, R12
+- [x] **T18.10 `[B]` PO attached late, site dates and attachment rules** — Refs: §4.19.6, §4.19.8, §4.19.9 · R10, R12
   - `attach_po` service (same row, `PROJECT_ALREADY_HAS_PO`, not OPEN, no manager, taken number, seeds
     milestones, audit); `has_po` filter on `ProjectFilter` and `days_without_po`.
   - Derived collection and dispatch dates in one grouped query using the `engine.project_of` resolution;
@@ -1999,14 +1999,14 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* the PO-later and site cases pass (history intact, one query count) and each attachment rule
   is tested.
 
-- [ ] **T18.11 `[B]` Purchase and subcontract endpoints** — Refs: §4.19.10 · R7, R8
+- [x] **T18.11 `[B]` Purchase and subcontract endpoints** — Refs: §4.19.10 · R7, R8
   - `/site-purchases` (PATCH, decide, resubmit, mark-paid, reverse, `mine`, `payable`), `/subcontracts`,
     `/subcontract-payments` in `commercials/views_purchases.py` and `views_contracts.py`.
   - `JobSerializer` gains `subcontract` and `over_contract_reason`.
 
   *Done when:* each endpoint and permission is tested and isolation holds.
 
-- [ ] **T18.12 `[B]` Project endpoints** — Refs: §4.19.10, §4.19.8, §4.19.6, §4.19.7 · R9–R12
+- [x] **T18.12 `[B]` Project endpoints** — Refs: §4.19.10, §4.19.8, §4.19.6, §4.19.7 · R9–R12
   - `attach-po`, `budget`, `budget-check`, `/project-sites`, milestones CRUD and `defaults`, invoice and
     receipt POST and void, `GET /projects?po=none`, in `commercials/views_milestones.py` and the project
     views.
@@ -2015,7 +2015,7 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* each endpoint and permission is tested, amounts are hidden from a PM without the
   permission, and isolation holds.
 
-- [ ] **T18.13 `[B]` Notifications and milestone sweep** — Refs: §4.19.7, §4.19.12 · R7, R9, R11, R12
+- [x] **T18.13 `[B]` Notifications and milestone sweep** — Refs: §4.19.7, §4.19.12 · R7, R9, R11, R12
   - `Recipient.FINANCE`; `po.milestone_due`, `po.milestone_overdue`, `po.attached`,
     `purchase.yard_delivery_expected`; `_FINANCE_TARGETS` and `_finance_payload` additions.
   - `_sweep_milestones` in `core/sweeps.py` (due once, overdue every 7 days, PM copied in app).
@@ -2023,19 +2023,19 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* sweep idempotence and the 7-day repeat are tested and each event reaches the recipients the
   matrix says.
 
-- [ ] **T18.14 `[B]` Offline sync and bundle** — Refs: §4.19.11, §4.19.5 · R6, R7
+- [x] **T18.14 `[B]` Offline sync and bundle** — Refs: §4.19.11, §4.19.5 · R6, R7
   - `SyncOperation.SITE_PURCHASE` and `_apply_site_purchase`; over-budget never refuses a replay.
   - Bundle `suppliers` and per-project `budget_headroom` only for users who may see that cost.
 
   *Done when:* replay, refusal, supersede, photos, flagged over-budget replay, and bundle gating are tested.
 
-- [ ] **T18.15 `[F]` Schema regeneration and money foundation** — Refs: §4.19.13 · R7–R12
+- [x] **T18.15 `[F]` Schema regeneration and money foundation** — Refs: §4.19.13 · R7–R12
   - Regenerate `backend/api-schema.yml` and `frontend/src/api/schema.d.ts` once, after T18.11 to T18.14.
   - Types and hooks for the new endpoints; `rules.ts` `lineTotal`, `purchaseTotal`, `overBudget`, with Vitest.
 
   *Done when:* the helper tests pass, the schema check passes and the typecheck is clean.
 
-- [ ] **T18.16 `[F]` Record purchase and Purchases list** — Refs: §4.19.13 · R7, R9
+- [x] **T18.16 `[F]` Record purchase and Purchases list** — Refs: §4.19.13 · R7, R9
   - `RecordPurchasePage.tsx`: site first, supplier picker, destination toggle, lines editor, `receive_into`,
     receipt `PhotoCapture`, over-budget reason asked before sending.
   - Purchases list in My expenses.
@@ -2043,14 +2043,14 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* a USED_AT_SITE and an INTO_YARD purchase record against a local backend; typecheck, Vitest
   and build pass.
 
-- [ ] **T18.17 `[F]` Offline capture for purchases** — Refs: §4.19.11, §4.19.13 · R6
+- [x] **T18.17 `[F]` Offline capture for purchases** — Refs: §4.19.11, §4.19.13 · R6
   `queued.ts`, `bundle.ts`, `offline.ts`: queue `SITE_PURCHASE` with photos; "Waiting to send" and "Fix and
   resend".
 
   *Done when:* a Vitest test covers queue and photo steps and a purchase saved offline lands with its
   photos.
 
-- [ ] **T18.18 `[F]` Approvals, To pay and receiving badge** — Refs: §4.19.13 · R7, R8
+- [x] **T18.18 `[F]` Approvals, To pay and receiving badge** — Refs: §4.19.13 · R7, R8
   - `FinanceApprovals.tsx`: Purchases tab, PM Subcontract payments tab, over-budget banner, "will create a
     delivery".
   - `ToPayPage.tsx` blocks Mark paid with the supplier's status; the receiving draft list badges "from
@@ -2059,27 +2059,27 @@ T18.20 and T18.21 after T18.19, which creates the project tab shell.
   *Done when:* a PM then Finance approve a purchase and a PM approves a payment; typecheck, Vitest and
   build pass.
 
-- [ ] **T18.19 `[F]` Project tabs, Budget and Sites panels** — Refs: §4.19.13, §4.19.5, §4.19.6 · R9, R10
+- [x] **T18.19 `[F]` Project tabs, Budget and Sites panels** — Refs: §4.19.13, §4.19.5, §4.19.6 · R9, R10
   - A tab shell for `ProjectsPage.tsx` with lazy placeholders for all five panels (so later tasks only add
     their own files); `BudgetPanel` and `SitesPanel` (dates, derived dates, certificate, accepted badge,
     earmarks link).
 
   *Done when:* the budget and site dates work against a local backend; typecheck, Vitest and build pass.
 
-- [ ] **T18.20 `[F]` Subcontracts panel and JobSheet** — Refs: §4.19.13, §4.19.4 · R8
+- [x] **T18.20 `[F]` Subcontracts panel and JobSheet** — Refs: §4.19.13, §4.19.4 · R8
   `SubcontractsPanel.tsx` (value, work done, paid, owed, payments, contract document); `JobSheet.tsx`
   subcontract picker and over-contract reason.
 
   *Done when:* a contract, a payment and a linked job work against a local backend; typecheck, Vitest and
   build pass.
 
-- [ ] **T18.21 `[F]` Milestones panel, Attach PO and Dashboard card** — Refs: §4.19.13, §4.19.7, §4.19.8 · R11, R12
+- [x] **T18.21 `[F]` Milestones panel, Attach PO and Dashboard card** — Refs: §4.19.13, §4.19.7, §4.19.8 · R11, R12
   `MilestonesPanel.tsx`, `AttachPoSheet.tsx`, and the "working without a PO" card on `DashboardPage.tsx`.
 
   *Done when:* a PO can be attached late, milestones seeded, invoices and receipts recorded; typecheck,
   Vitest and build pass.
 
-- [ ] **T18.22 `[E2E]` Phone run** — Refs: §4.19.16 · R7–R12
+- [x] **T18.22 `[E2E]` Phone run** — Refs: §4.19.16 · R7–R12
   *Done when:* the five §4.19.16 scenarios pass and the phone suite stays green. Then push once and check
   on Silvertech.
 
