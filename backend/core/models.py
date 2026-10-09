@@ -270,6 +270,10 @@ class AuditAction(models.TextChoices):
     ATTACHMENT_ADDED = "ATTACHMENT_ADDED", "Attachment added"
     ATTACHMENT_REMOVED = "ATTACHMENT_REMOVED", "Attachment removed"
 
+    # E9: a serial saved as a whole ISO 15434 label was renamed to the serial inside it.
+    # The identifier is what people look units up by, so the old text must stay on record.
+    SERIAL_CORRECTED = "SERIAL_CORRECTED", "Serial corrected"
+
 
 class AuthMethod(models.TextChoices):
     """How the actor proved who they were.
