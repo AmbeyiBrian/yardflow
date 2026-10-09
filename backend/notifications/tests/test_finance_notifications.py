@@ -68,7 +68,10 @@ def fiona(tenant, finance_role):
 def site(tenant, pm):
     project = ProjectFactory(reference="WO-1", manager=pm)
     site = SiteFactory(name="Ruiru")
-    project.sites.add(site)
+    project.sites.add(
+        site,
+        through_defaults={"organization_id": project.organization_id},
+    )
     return site
 
 

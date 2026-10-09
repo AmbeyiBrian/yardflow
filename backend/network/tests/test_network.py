@@ -169,8 +169,10 @@ class TestProjects:
     def test_a_project_groups_sites_under_a_client(self, tenant):
         client = ClientFactory()
         project = ProjectFactory(client=client, reference="WO-2001")
-        project.sites.add(SiteFactory(client=client), SiteFactory(client=client))
-
+        project.sites.add(
+            SiteFactory(client=client), SiteFactory(client=client),
+            through_defaults={"organization_id": project.organization_id},
+        )
         assert project.sites.count() == 2
 
     def test_a_project_may_have_no_sites(self, tenant):

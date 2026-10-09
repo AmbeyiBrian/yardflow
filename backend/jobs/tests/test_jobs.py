@@ -601,8 +601,10 @@ class TestReconciliation:
         project = ProjectFactory(client=client, reference="WO-2001")
         first = SiteFactory(client=client, internal_ref="SLV-1")
         second = SiteFactory(client=client, internal_ref="SLV-2")
-        project.sites.add(first, second)
-
+        project.sites.add(
+            first, second,
+            through_defaults={"organization_id": project.organization_id},
+        )
         item = ItemTypeFactory(name="Antenna")
         stock_in(tenant, yard.node, item, 50)
         issue_to(tenant, yard, item, 6, storekeeper, technician, first)
@@ -622,8 +624,10 @@ class TestReconciliation:
         client = ClientFactory()
         project = ProjectFactory(client=client)
         site = SiteFactory(client=client)
-        project.sites.add(site)
-
+        project.sites.add(
+            site,
+            through_defaults={"organization_id": project.organization_id},
+        )
         item = ItemTypeFactory()
         stock_in(tenant, yard.node, item, 20)
         issue_to(tenant, yard, item, 5, storekeeper, technician, site)

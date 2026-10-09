@@ -102,6 +102,12 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
         max_digits=14, decimal_places=2, read_only=True
     )
     site_count = serializers.SerializerMethodField()
+    # DRF makes a many-to-many with a through model read-only. It is declared
+    # here so the form keeps writing it; `ProjectSite` rows carry the tenant.
+    # The manager itself, not `.all()`: evaluated per request, when a tenant exists.
+    sites = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Site.objects, required=False
+    )
 
     class Meta:
         model = Project
@@ -137,6 +143,25 @@ class ProjectSerializer(PermissionGatedFieldsMixin, serializers.ModelSerializer)
             "opened_at",
             "closed_at",
             "closed_with_unreconciled",
+        )
+
+    def create(self, validated_data: dict) -> Project:
+        sites = validated_data.pop("sites", [])
+        project = super().create(validated_data)
+        self._link_sites(project, sites)
+        return project
+
+    def update(self, instance: Project, validated_data: dict) -> Project:
+        sites = validated_data.pop("sites", None)
+        project = super().update(instance, validated_data)
+        if sites is not None:
+            self._link_sites(project, sites)
+        return project
+
+    @staticmethod
+    def _link_sites(project: Project, sites: list) -> None:
+        project.sites.set(
+            sites, through_defaults={"organization_id": project.organization_id}
         )
 
     def get_site_count(self, project: Project) -> int:

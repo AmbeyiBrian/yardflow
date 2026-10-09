@@ -72,7 +72,10 @@ def expense(tenant, tech, pm, fin):
         cost_budget=D("1.00"),
     )
     site = SiteFactory(name="Ruiru")
-    project.sites.add(site)
+    project.sites.add(
+        site,
+        through_defaults={"organization_id": project.organization_id},
+    )
     category = ExpenseCategory.objects.create(organization=tenant, name="Misc")
     return finance.record_expense(
         actor=tech,

@@ -259,7 +259,11 @@ class Project(TenantModel, TimeStampedModel):
     #: work already has a field — `po_number`.
     reference = models.CharField(max_length=100)
     description = models.CharField(max_length=500, blank=True)
-    sites = models.ManyToManyField(Site, related_name="projects", blank=True)
+    #: R10: through a real model so each link can carry dates. The join table is
+    #: the one the plain many-to-many created, so every old link survives.
+    sites = models.ManyToManyField(
+        Site, through="ProjectSite", related_name="projects", blank=True
+    )
 
     # O1: the commercial layer. All of it optional, because a project without a
     # PO number is the work order this model used to be (D20) and must keep
@@ -303,6 +307,14 @@ class Project(TenantModel, TimeStampedModel):
         validators=[MinValueValidator(Decimal("0"))],
         help_text="What the manager may spend to deliver it, excluding VAT.",
     )
+
+    # R12 (§4.19.2): what the PO says about when and how it is paid. The issue
+    # date is required by the service rather than a CHECK, so POs recorded
+    # before these columns existed stay valid.
+    po_issue_date = models.DateField(null=True, blank=True)
+    payment_terms = models.CharField(max_length=500, blank=True)
+    payment_terms_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    po_recorded_at = models.DateTimeField(null=True, blank=True)
 
     starts_on = models.DateField(null=True, blank=True)
     target_completion_on = models.DateField(null=True, blank=True)
@@ -704,3 +716,31 @@ class Supplier(TenantModel, TimeStampedModel):  # type: ignore[django-manager-mi
             "Suppliers are deactivated, never deleted — gate-ins and purchases "
             "still name them (R15)."
         )
+
+class ProjectSite(TenantModel, TimeStampedModel):
+    """One site of one project, with its dates (R10, §4.19.6).
+
+    The through model of ``Project.sites``. ``add()`` and ``set()`` use a bulk
+    insert that never calls ``save()``, so callers pass
+    ``through_defaults={"organization": ...}``; the column is NOT NULL.
+    """
+
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="project_sites"
+    )
+    site = models.ForeignKey(
+        Site, on_delete=models.CASCADE, related_name="site_projects"
+    )
+    mobilised_on = models.DateField(null=True, blank=True)
+    accepted_on = models.DateField(null=True, blank=True)
+
+    class Meta:
+        db_table = "network_project_sites"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "site"], name="uniq_project_site"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.project_id} @ {self.site_id}"

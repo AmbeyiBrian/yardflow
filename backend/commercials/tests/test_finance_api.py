@@ -74,7 +74,10 @@ def project(tenant, pm):
 @pytest.fixture
 def site(tenant, project):
     site = SiteFactory(name="Ruiru")
-    project.sites.add(site)
+    project.sites.add(
+        site,
+        through_defaults={"organization_id": project.organization_id},
+    )
     return site
 
 
@@ -241,8 +244,10 @@ class TestRecordingAnExpense:
             contract_value=D("1.00"),
             cost_budget=D("1.00"),
         )
-        other.sites.add(site)
-
+        other.sites.add(
+            site,
+            through_defaults={"organization_id": other.organization_id},
+        )
         response = api(client, tech).post("project-expenses", expense_body(category, site))
 
         assert response.status_code == 400
@@ -997,7 +1002,10 @@ class TestProjectFilters:
             closed_at=timezone.now(),
             **money,
         )
-        closed.sites.add(site)
+        closed.sites.add(
+            site,
+            through_defaults={"organization_id": closed.organization_id},
+        )
         http = api(client, tech)
 
         on_site = {row["id"] for row in results(http.get("projects", site=site.pk))}

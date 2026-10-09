@@ -61,7 +61,10 @@ def project(tenant, pm):
 @pytest.fixture
 def site(tenant, project):
     site = SiteFactory(name="Ruiru")
-    project.sites.add(site)
+    project.sites.add(
+        site,
+        through_defaults={"organization_id": project.organization_id},
+    )
     return site
 
 
@@ -357,7 +360,10 @@ class TestBundle:
         approve_through(float_request, pm=pm, finance_user=finance_user)
         finance.mark_paid(float_request, actor=finance_user, reference="MPESA-1")
         closed_project = ProjectFactory(reference="WO-7002", manager=pm)
-        closed_project.sites.add(site)
+        closed_project.sites.add(
+            site,
+            through_defaults={"organization_id": closed_project.organization_id},
+        )
         type(closed_project).objects.filter(pk=closed_project.pk).update(
             status="CLOSED", closed_at=timezone.now()
         )

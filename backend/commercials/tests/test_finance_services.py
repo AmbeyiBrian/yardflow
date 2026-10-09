@@ -82,7 +82,10 @@ def project(tenant, pm):
 @pytest.fixture
 def site(tenant, project):
     site = SiteFactory(name="Ruiru")
-    project.sites.add(site)
+    project.sites.add(
+        site,
+        through_defaults={"organization_id": project.organization_id},
+    )
     return site
 
 
@@ -174,8 +177,10 @@ class TestResolveProject:
 
     def test_two_open_projects_need_a_choice_and_are_listed(self, tenant, project, site, pm):
         other = ProjectFactory(reference="WO-9902", manager=pm)
-        other.sites.add(site)
-
+        other.sites.add(
+            site,
+            through_defaults={"organization_id": other.organization_id},
+        )
         with pytest.raises(ProjectAmbiguous) as caught:
             finance.resolve_project(site)
 
@@ -186,7 +191,10 @@ class TestResolveProject:
 
     def test_a_closed_project_does_not_count_as_a_candidate(self, tenant, project, site, pm):
         closed = ProjectFactory(reference="WO-9903", manager=pm)
-        closed.sites.add(site)
+        closed.sites.add(
+            site,
+            through_defaults={"organization_id": closed.organization_id},
+        )
         type(closed).objects.filter(pk=closed.pk).update(
             status=ProjectStatus.CLOSED, closed_at=timezone.now()
         )
@@ -370,8 +378,10 @@ class TestRecordExpense:
         self, tenant, project, site, tech, pm, category, finance_user
     ):
         other = ProjectFactory(reference="WO-9905", manager=pm)
-        other.sites.add(site)
-
+        other.sites.add(
+            site,
+            through_defaults={"organization_id": other.organization_id},
+        )
         with pytest.raises(ProjectAmbiguous):
             spend(tech, category, site)
         assert spend(tech, category, site, project=other).project == other
@@ -995,7 +1005,10 @@ class TestOverlapIsRaceProof:
             UserRoleFactory(user=approver, role=role)
             project = ProjectFactory(reference="WO-RACE", manager=pm)
             site = SiteFactory(name="Race")
-            project.sites.add(site)
+            project.sites.add(
+                site,
+                through_defaults={"organization_id": project.organization_id},
+            )
             # Build the objects the threads use now, so they only race on the rule.
             tech_id = tech.pk
 
