@@ -74,6 +74,8 @@ export interface ProjectExpense {
   payment_reference: string;
   evidence_state: EvidenceState;
   casual_lines: ExpenseCasualLine[];
+  /** The recorder was the PM or the Director, so only Finance decides (R4). */
+  pm_level_skipped?: boolean;
 }
 
 /** R3. The ID number arrives masked; the full value is never sent back. */
@@ -128,6 +130,7 @@ export interface AllowanceRequest {
   client_uuid: string | null;
   /** R2: another PAID, unclosed float of the same person. Never blocks. */
   open_float_warning: { number: string; balance: string } | null;
+  pm_level_skipped?: boolean;
   /** Floats only. */
   spent?: string;
   balance?: string;

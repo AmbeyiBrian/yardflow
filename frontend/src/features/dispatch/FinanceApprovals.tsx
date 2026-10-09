@@ -125,9 +125,13 @@ function ToPayLink() {
   );
 }
 
-/** A PM's or Director's own entry skips the PM level; say so (R4). */
-function wentStraightToFinance(item: { status: string; decided_by: number | null }) {
-  return item.status === 'PENDING_FINANCE' && item.decided_by === null;
+/**
+ * A PM's or Director's own entry skips the PM level; say so (R4). The server
+ * says which: the status alone cannot, since a PM-approved entry waits for
+ * Finance too, and `decided_by` is stamped only on the final decision.
+ */
+function wentStraightToFinance(item: { pm_level_skipped?: boolean }) {
+  return item.pm_level_skipped === true;
 }
 
 const TYPE_LABELS: Record<AllowanceRequest['type'], string> = {

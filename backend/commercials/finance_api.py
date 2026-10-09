@@ -19,6 +19,7 @@ from django.db.models import (
     DecimalField,
     Exists,
     OuterRef,
+    Q,
     Subquery,
     Sum,
     Value,
@@ -100,6 +101,20 @@ def _pm_level_skipped(entry) -> bool:  # type: ignore[no-untyped-def]
         routed = requests.exists()
         pm = requests.filter(level=engine.FINANCE_PM_LEVEL).exists()
     return bool(routed and not pm)
+
+
+def _visible_to(queryset, user):  # type: ignore[no-untyped-def]
+    """Money entries are not for every member to browse (R4).
+
+    Somebody sees what they recorded, and the entries on projects they manage
+    (the PM decides them). Finance, and those who see project cost (O14), see
+    all of them. Without this, any storekeeper could read every colleague's
+    allowances.
+    """
+    held = resolve_permissions(user)
+    if held.has(PERM.FINANCE_APPROVE) or held.has(PERM.PROJECT_VIEW_COST):
+        return queryset
+    return queryset.filter(Q(recorded_by=user) | Q(project__manager=user))
 
 
 def _require_finance(request) -> None:  # type: ignore[no-untyped-def]
@@ -208,8 +223,18 @@ class CasualViewSet(TenantScopedViewSet):
 
     serializer_class = CasualSerializer
     model = Casual
-    # ``id_number_key`` so "12 345-678" finds "12345678" (§4.17.2).
-    search_fields = ["name", "phone", "id_number_key"]
+    @property
+    def search_fields(self) -> list[str]:  # type: ignore[override]
+        """Name and phone for everyone; the ID number only for Finance.
+
+        ``id_number_key`` so "12 345-678" finds "12345678" (§4.17.2) — but a
+        search that matches is itself an answer, so a member who sees only the
+        last three digits must not be able to confirm the rest by searching.
+        """
+        request = getattr(self, "request", None)
+        if request is not None and _holds(request.user, PERM.FINANCE_APPROVE):
+            return ["name", "phone", "id_number_key"]
+        return ["name", "phone"]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     def partial_update(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
@@ -496,7 +521,7 @@ class ProjectExpenseViewSet(_EntryActions, TenantScopedViewSet):
         )
 
     def filter_queryset(self, queryset):  # type: ignore[no-untyped-def]
-        queryset = super().filter_queryset(queryset)
+        queryset = _visible_to(super().filter_queryset(queryset), self.request.user)
         params = self.request.query_params
         if _truthy(params.get("mine")):
             queryset = queryset.filter(recorded_by=self.request.user)
@@ -778,7 +803,7 @@ class AllowanceRequestViewSet(_EntryActions, TenantScopedViewSet):
         )
 
     def filter_queryset(self, queryset):  # type: ignore[no-untyped-def]
-        queryset = super().filter_queryset(queryset)
+        queryset = _visible_to(super().filter_queryset(queryset), self.request.user)
         params = self.request.query_params
         if _truthy(params.get("mine")):
             queryset = queryset.filter(recorded_by=self.request.user)

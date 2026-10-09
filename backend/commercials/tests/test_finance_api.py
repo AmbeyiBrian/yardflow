@@ -269,11 +269,18 @@ class TestListingExpenses:
 
         assert [row["id"] for row in rows] == [entries[0].pk]
 
-    def test_everyone_is_listed_without_it(self, client, tech, entries):
-        assert len(results(api(client, tech).get("project-expenses"))) == 2
+    def test_a_member_sees_only_their_own(self, client, tech, entries):
+        """Colleagues' money is not for browsing (R4)."""
+        rows = results(api(client, tech).get("project-expenses"))
 
-    def test_filters_by_status_project_and_float(self, client, tech, entries, project):
-        http = api(client, tech)
+        assert [row["id"] for row in rows] == [entries[0].pk]
+
+    def test_finance_and_the_projects_pm_see_everyone(self, client, pm, fin, entries):
+        assert len(results(api(client, fin).get("project-expenses"))) == 2
+        assert len(results(api(client, pm).get("project-expenses"))) == 2
+
+    def test_filters_by_status_project_and_float(self, client, tech, fin, entries, project):
+        http = api(client, fin)
 
         assert len(results(http.get("project-expenses", status="PENDING_FINANCE"))) == 1
         assert len(results(http.get("project-expenses", project=project.pk))) == 2
@@ -596,12 +603,15 @@ class TestAllowanceFiltersAndQueues:
         team = ask(pm, site, type="TEAM_ALLOWANCE")
         return night, team
 
-    def test_mine_type_and_status(self, client, tech, requests):
-        http = api(client, tech)
-
-        assert [r["id"] for r in results(http.get("allowance-requests", mine="true"))] == [
+    def test_mine_type_and_status(self, client, tech, fin, requests):
+        assert [
+            r["id"] for r in results(api(client, tech).get("allowance-requests", mine="true"))
+        ] == [requests[0].pk]
+        # Another person's request is Finance's to see, not a colleague's (R4).
+        assert [r["id"] for r in results(api(client, tech).get("allowance-requests"))] == [
             requests[0].pk
         ]
+        http = api(client, fin)
         assert [
             r["id"] for r in results(http.get("allowance-requests", type="TEAM_ALLOWANCE"))
         ] == [requests[1].pk]
@@ -804,7 +814,7 @@ class TestCasuals:
         assert api(client, fin).get(f"casuals/{pk}").json()["id_number"] == "AB12345678"
         assert results(api(client, fin).get("casuals"))[0]["id_number"] == "AB12345678"
 
-    def test_search_by_name_phone_or_id(self, client, tech):
+    def test_search_by_name_phone_or_id(self, client, tech, fin):
         http = api(client, tech)
         http.post(
             "casuals", {"name": "Juma Otieno", "id_number": "11111111", "phone": "0722000111"}
@@ -818,7 +828,11 @@ class TestCasuals:
 
         assert found("juma") == ["Juma Otieno"]
         assert found("0733") == ["Wanjiru Kamau"]
-        assert found("2222") == ["Wanjiru Kamau"]
+        # A match would confirm digits the mask hides, so only Finance searches by ID.
+        assert found("2222") == []
+        assert [
+            row["name"] for row in results(api(client, fin).get("casuals", search="2222"))
+        ] == ["Wanjiru Kamau"]
         assert len(results(http.get("casuals"))) == 2
 
     def test_only_name_and_phone_can_change(self, client, tech):

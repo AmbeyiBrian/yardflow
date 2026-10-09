@@ -75,12 +75,13 @@ export function photosReadyToUpload(
 
 /**
  * A refusal of the file itself, which no number of retries will fix (too large,
- * wrong type). Anything else — a dropped connection, a 5xx, an expired token —
+ * wrong type), or of attaching at all: 403 is not the recorder's entry, 409 is
+ * an entry already approved, whose photos are fixed (§4.17.7). Anything else — a dropped connection, a 5xx, an expired token —
  * stays queued, because losing a receipt photo to a bad minute is worse than
  * retrying one.
  */
 export function isPermanentUploadFailure(status: number): boolean {
-  return status === 400 || status === 413 || status === 415 || status === 422;
+  return [400, 403, 409, 413, 415, 422].includes(status);
 }
 
 /* -------------------------------------------------------------------------- */

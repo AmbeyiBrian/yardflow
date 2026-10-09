@@ -5966,14 +5966,29 @@ export interface components {
             releasable_gate_outs: {
                 [key: string]: unknown;
             }[];
+            expense_categories: {
+                [key: string]: unknown;
+            }[];
+            casuals: {
+                [key: string]: unknown;
+            }[];
+            my_floats: {
+                [key: string]: unknown;
+            }[];
+            finance_limits: {
+                [key: string]: unknown;
+            };
         };
         /**
          * @description * `GATE_IN` - Receive a delivery
          *     * `GATE_OUT_REQUEST` - Request material
          *     * `GATE_OUT_RELEASE` - Release an already-approved pass
+         *     * `EXPENSE` - Record an expense
+         *     * `ALLOWANCE_REQUEST` - Request an allowance or float
+         *     * `CASUAL` - Register a casual
          * @enum {string}
          */
-        OperationEnum: "GATE_IN" | "GATE_OUT_REQUEST" | "GATE_OUT_RELEASE";
+        OperationEnum: "GATE_IN" | "GATE_OUT_REQUEST" | "GATE_OUT_RELEASE" | "EXPENSE" | "ALLOWANCE_REQUEST" | "CASUAL";
         /** @description A tenant as the console sees it. */
         Organization: {
             /** Format: uuid */
@@ -15272,8 +15287,11 @@ export interface operations {
                  * @description * `GATE_IN` - Receive a delivery
                  *     * `GATE_OUT_REQUEST` - Request material
                  *     * `GATE_OUT_RELEASE` - Release an already-approved pass
+                 *     * `EXPENSE` - Record an expense
+                 *     * `ALLOWANCE_REQUEST` - Request an allowance or float
+                 *     * `CASUAL` - Register a casual
                  */
-                operation?: "GATE_IN" | "GATE_OUT_RELEASE" | "GATE_OUT_REQUEST";
+                operation?: "ALLOWANCE_REQUEST" | "CASUAL" | "EXPENSE" | "GATE_IN" | "GATE_OUT_RELEASE" | "GATE_OUT_REQUEST";
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
