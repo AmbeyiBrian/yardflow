@@ -300,7 +300,7 @@ export function BarcodeScanner({
           </>
         ) : (
           <Button variant="secondary" onClick={() => void start()}>
-            Use the camera
+            Scan QR code
           </Button>
         )}
       </div>

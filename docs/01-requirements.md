@@ -401,6 +401,57 @@ matches physical reality.
 **E6.** As an admin with minimum stock enabled, I want alerts when an item falls below its
 reorder level, so that we do not run out mid-job.
 
+**E7.** As anyone working on a phone, I want Stock in the bottom bar, so that I do not have to know
+it is hidden under More. *(Proposed 2026-10-09, from Elias's feedback.)*
+- Stock is one of the four bar tabs for every role that has it (everyone does today).
+- The bar holds four tabs and More, so **Approvals moves into More** (decided 2026-10-09). Home's
+  "Waiting on you" tile still leads to it, and More shows a count while anything waits on the user.
+
+**E8.** As anyone opening the app, I want to find stock from Home and see the yard at a glance, so
+that the first screen answers "do we have it, and where?". *(Proposed 2026-10-09.)*
+- At the top of Home: a **Find stock** box with a **Scan QR code** button.
+  - Typing an item's name, code or description lists matching items, each with its quantity on hand.
+    Tapping one opens Stock filtered to that item.
+  - A scanned or typed serial, asset tag, drum number or box code goes straight to that unit, drum or
+    box, as the lookup on Stock does (E2).
+  - If nothing matches, it says so plainly, as Stock does.
+- Below that, an **In the yard** summary, each figure a link:
+  - the number of items in stock;
+  - deliveries received in the last 7 days;
+  - material earmarked for sites, by site (the five largest sites, then "and N more").
+- **Edge cases:**
+  - An empty yard says "Nothing in stock yet" and links to receiving a delivery.
+  - Offline, the box says that a search needs a connection; the summary shows the last figures it
+    loaded, if any.
+  - A user with no role still sees "Nothing is assigned to you yet", and no stock.
+- Huawei's 2D labels are read as serials by E9.
+
+**E9.** As a storekeeper, I want a vendor's ISO 15434 label (the `[)>06…` 2D code on Huawei
+equipment) read as its serial number, so that scanning a rectifier finds or receives that rectifier
+and not a long string of label text. *(Proposed 2026-10-09.)*
+- The label reader takes the serial (data identifier `S`) and ignores the part number, quantity, date
+  and the rest; this works wherever a label is read (receiving, gate-out, the gate, Stock and Home).
+- Units already saved under the raw label text are corrected to their serial, with a reviewable dry
+  run first and a history entry on each unit.
+- **Edge cases:**
+  - A label with several `S` fields gives several serials.
+  - A label whose separators were lost in scanning, leaving the fields run together, is kept whole,
+    as today, because guessing where the serial ends could produce a wrong serial. Phone scans keep
+    the separators.
+  - A correction that would collide with an existing serial is reported, not applied.
+
+**E10.** As a storekeeper scanning a palm-sized label that carries several codes, I want the camera
+to read only the code I point it at, so that I do not have to cover the others with my hand.
+*(Proposed 2026-10-09.)*
+- The viewfinder shows a small aiming box with a centre mark, and **only a code inside that box is
+  read**. Codes elsewhere in the picture are ignored.
+- If two codes fall inside the box, the one nearest the centre is read.
+- On phones that allow camera zoom, a zoom button (1× / 2× / 3×) is offered. On phones that do not
+  (iPhone browsers), the aiming box is still enlarged before decoding, so a small code reads from
+  closer up.
+- This applies to every camera scanner in the app (receiving, gate-out, the gate, Stock, Home).
+- Typed entry and handheld scanner guns are unchanged.
+
 ---
 
 ### Epic F — Gate-out request and approval

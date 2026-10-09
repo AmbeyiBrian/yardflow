@@ -1268,6 +1268,96 @@ honest, in `post_movement` beside the box rules (§4.15.3):
 - Gate-in: "Not on a drum" sets the line's tracking to BULK. Gate-out: "Loose length" does the
   same, and the existing lot choice applies.
 
+### 7.3d Stock within reach, vendor labels and aiming the camera (E7–E10)
+
+> **Status: proposed 2026-10-09, awaiting approval.**
+
+**Phone bar (E7).** `NAV_ITEMS` puts Stock before Approvals, so `PhoneTabBar` shows Home, Gate-in,
+Gate-out and Stock, with Approvals under More. The sidebar uses the same list and gets the same
+order. More, and the Approvals row inside it, show a count badge from `approvals/pending` (its
+`count`, loaded with `page_size=1`, refetched on focus) for users who can approve. A zero shows no
+badge.
+
+**Find stock on Home (E8).** This is a new `FindStock` card at the top of `DashboardPage`, above the
+role panels, shown to anyone with a role.
+- One text field and the existing `BarcodeScanner` (whose button reads "Scan QR code").
+- **Typing** (debounced 250 ms, from 2 characters) calls `GET /stock/find?q=` and lists up to 8
+  items. Tapping one goes to `/stock?item={id}`.
+- **A scan, or Enter,** first calls `/stock/lookup` (the value has already been through `readLabel`).
+  A hit navigates to its `resource`. On a 404, Enter keeps the item list showing, and a scan says
+  "Nothing here matches …".
+- Offline (`navigator.onLine` false), the field shows "Searching needs a connection."
+
+The Stock page reads `?item=` into its item filter on load, so the link above lands filtered.
+
+**`GET /stock/find?q=`** (new, in `stock/views.py`):
+- Item types ranked with the C9 search (name, code, description), each with `on_hand`, the sum of
+  balances at nodes inside the perimeter, in the item's unit.
+- Items with nothing in stock are listed after those with stock, so a search for something we hold
+  none of still answers "no".
+- Limit 8, and one query: the balance sum is a subquery, not a per-row query.
+
+**`GET /stock/summary`** (new) returns:
+
+| Field | Meaning |
+|---|---|
+| `items_in_stock` | Distinct item types with a positive balance inside the perimeter. |
+| `deliveries_7d` | Gate-ins posted in the last 7 days (not voided). |
+| `earmarks` | `[{site, name, items}]`: per site, the number of distinct items earmarked (units, drums and bulk earmarks together), the 5 largest first. |
+| `earmark_sites_more` | How many other sites have earmarks. |
+
+On Home, under Find stock, an **In the yard** panel shows three tiles: items in stock (→ `/stock`),
+deliveries this week (→ `/gate-in`), and earmarks by site (each → `/stock?earmarked_for={site}`,
+which the Stock page passes through as a filter). An empty yard shows "Nothing in stock yet" with a
+link to `/gate-in/new`. The panel uses `useResource`, so the last figures loaded remain on screen
+while offline. Both endpoints need only authentication plus a role, as `GET /stock` does.
+
+**ISO 15434 labels (E9).** This is a new rule in `read_label` and `readLabel`, run after the
+gate-pass token and before JSON:
+- It matches text starting with `[)>`, then RS (``), then `06`, then GS (``).
+- Fields are split on GS. RS, and the trailing EOT (``), end the envelope.
+- Each field is an ANSI MH10.8.2 data identifier (`\d{0,3}[A-Z]`) followed by data. A field whose
+  identifier is exactly `S` gives a serial. All other identifiers (`1P`, `P`, `Q`, `1T`, `10D`,
+  `V`, …) are ignored.
+- If no `S` field is found, the rule falls through, as other rules do.
+- A body with no separators, run together, does not match, so the existing fallback keeps it whole
+  (E9 edge case).
+- New vectors cover: one serial, two serials, no `S` field, run together, and a trailing EOT.
+
+**Correcting saved serials (E9).** This is a management command,
+`correct_label_serials [--org slug] [--apply]`:
+- For every `SerialUnit` whose `serial_number` starts with `[)>`, it runs `read_label`.
+- A reading with exactly one serial renames the unit, and any `GateInSerial` rows with the same old
+  text, in one transaction per unit. Each rename writes an `AuditLog` row (new action
+  `SERIAL_CORRECTED`, before and after).
+- Without `--apply` it prints old → new and changes nothing.
+- It skips and reports: a collision with an existing serial in the organization (`uniq_serial_per_organization`), no serial found, or more than one serial.
+- The ledger is untouched, because movements point at the unit, not at its text.
+
+**Aiming the camera (E10).** All of this is in `BarcodeScanner.tsx`:
+- **One decode path for both decoders.** Every ~120 ms, the centre square of the video (40% of the
+  shorter side, matching what `object-cover` shows) is drawn onto an offscreen canvas at 2×, and
+  only that canvas is decoded: `BarcodeDetector.detect(canvas)` on Android, and ZXing's
+  `decodeFromCanvas` (replacing `decodeFromVideoElement`) elsewhere. Codes outside the square are
+  never seen by a decoder.
+- When the native detector finds several codes, the one whose `boundingBox` centre is nearest the
+  canvas centre wins.
+- **Overlay:** the drawn box shrinks from 72% to the same 40%, with a centre cross. The rest of the
+  picture is dimmed, so the user aims with the box.
+- **Zoom:** if `track.getCapabilities().zoom` exists, a button cycles 1×/2×/3× (clamped to the
+  range) through `applyConstraints({advanced:[{zoom}]})`. Otherwise no button is shown.
+- The crop maths (video size → source rectangle) is a pure helper, `aimRegion(videoW, videoH,
+  fraction)`, tested with Vitest. `continuous` mode and repeat suppression are unchanged.
+
+**Testing.**
+- Backend: `stock/find` ranking, `on_hand` inside the perimeter only, and tenant isolation;
+  `stock/summary` figures on a scenario with earmarks for 6 sites; the shared label vectors; the
+  command's dry run, apply, collision and audit row.
+- Frontend: Vitest on the vectors (existing harness), and a small pure helper that decides what
+  Enter versus a scan does.
+- E2E (phone): the bar shows Stock; Home → type a seeded item → Stock filtered; Home → type a seeded
+  serial and press Enter → the unit's page; More shows Approvals.
+
 ### 7.3a The product mark
 
 The name is set as a wordmark — Archivo Semi-Condensed Bold, converted to outlines — and lives in
