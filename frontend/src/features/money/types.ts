@@ -63,6 +63,8 @@ export interface ProjectExpense {
   site_name?: string;
   scope_of_work: string;
   /** Required by the server when the category is FUEL. */
+  vehicle?: number | null;
+  vehicle_name?: string;
   vehicle_reg: string;
   litres: string | null;
   /** The float this was spent from; such an expense is never paid separately. */

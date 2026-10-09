@@ -13,7 +13,7 @@
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { chooseFirst, open, PASSWORD, PEOPLE, pickItem, signIn, unique } from './fixtures';
+import { chooseFirst, chooseSupplier, open, PASSWORD, PEOPLE, pickItem, signIn, unique } from './fixtures';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -49,7 +49,7 @@ test.describe('A box from the gate to the truck', () => {
     await signIn(page, PEOPLE.storekeeper);
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill('Huawei Kenya');
+    await chooseSupplier(page, 'Huawei Kenya');
     await page.getByLabel('Received into').selectOption({ label: 'Main yard' });
 
     await page.getByRole('button', { name: 'Add a line' }).click();

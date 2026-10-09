@@ -182,7 +182,14 @@ export function GateInDetailPage() {
         <Detail label="Received at" value={document.received_at?.slice(0, 16).replace('T', ' ')} />
         <Detail
           label="From"
-          value={document.supplier_name || document.client_name || document.origin_site_ref}
+          value={
+            // R15 (§4.20.5): a supplier still awaiting approval is said so.
+            document.supplier_name
+              ? document.supplier_status === 'PENDING'
+                ? `${document.supplier_name} (awaiting approval)`
+                : document.supplier_name
+              : document.client_name || document.origin_site_ref
+          }
         />
         <Detail label="Their delivery note" value={document.client_delivery_note_ref} />
         {document.returned_by_name ? (

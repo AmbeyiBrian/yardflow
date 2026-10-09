@@ -51,6 +51,8 @@ export interface ExpenseInput {
   incurred_on: string;
   description: string;
   scope_of_work?: string;
+  /** An asset (VEHICLE/GENERATOR); "Not ours" sends `vehicle_reg` instead (4.20.10). */
+  vehicle?: number | null;
   vehicle_reg?: string;
   litres?: string | null;
   float_request?: number | null;

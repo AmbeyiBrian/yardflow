@@ -53,7 +53,8 @@ import {
   type QueuedExpenseBody,
 } from './offline';
 import { useQueuedEntry } from './queued';
-import { useMoneyCasuals, useMoneyCategories, useMoneyFloats } from './reference';
+import { fuelVehicleBody, fuelVehicleError, vehicleLabel } from './fuelVehicle';
+import { useVehicles, useMoneyCasuals, useMoneyCategories, useMoneyFloats } from './reference';
 import { fromCents, toCents } from './rules';
 import { SiteProjectFields, useSiteProject } from './SiteProject';
 
@@ -71,6 +72,9 @@ interface Values {
   incurred_on: string;
   description: string;
   scope_of_work: string;
+  vehicle: string;
+  /** "Not ours": the fill is for a vehicle outside the register (4.20.10). */
+  not_ours: boolean;
   vehicle_reg: string;
   litres: string;
   float_request: string;
@@ -158,12 +162,17 @@ function ExpenseForm({
       incurred_on: today(),
       description: '',
       scope_of_work: '',
+      vehicle: '',
+      not_ours: false,
       vehicle_reg: '',
       litres: '',
       float_request: '',
     },
   });
 
+  // R14 (4.20.10). Offline the register is unavailable, so a typed registration is the answer.
+  const vehicles = useVehicles();
+  const typedReg = !vehicles.available;
   const category = categories.find((c) => String(c.id) === form.watch('category'));
   const kind = category?.kind ?? 'GENERAL';
 
@@ -199,8 +208,14 @@ function ExpenseForm({
     const errors: Record<string, string> = {};
     if (!place.project && !place.blocked) errors.project = 'Which project is this for?';
     if (!place.fixed && !place.direct && !place.site) errors.site = 'Which site was it?';
-    if (kind === 'FUEL' && !values.vehicle_reg.trim()) {
-      errors.vehicle_reg = 'Fuel needs the vehicle registration.';
+    const fuelInput = {
+      notOurs: typedReg || values.not_ours,
+      vehicle: values.vehicle,
+      reg: values.vehicle_reg,
+    };
+    if (kind === 'FUEL') {
+      const problem = fuelVehicleError(fuelInput);
+      if (problem) errors.vehicle_reg = problem;
     }
     const usable = lines.filter((l) => l.casual);
     if (kind === 'CASUAL_LABOUR') {
@@ -221,7 +236,7 @@ function ExpenseForm({
       incurred_on: values.incurred_on,
       description: values.description,
       scope_of_work: values.scope_of_work,
-      vehicle_reg: kind === 'FUEL' ? values.vehicle_reg.trim() : '',
+      ...(kind === 'FUEL' ? fuelVehicleBody(fuelInput) : { vehicle: null, vehicle_reg: '' }),
       litres: kind === 'FUEL' && values.litres ? values.litres : null,
       float_request: values.float_request ? Number(values.float_request) : null,
       // What was taken here is what the approver is told to expect (R1);
@@ -350,9 +365,32 @@ function ExpenseForm({
 
           {kind === 'FUEL' ? (
             <>
-              <Field label="Vehicle registration" htmlFor="ex-reg" error={localErrors.vehicle_reg}>
-                <Input id="ex-reg" autoCapitalize="characters" {...form.register('vehicle_reg')} />
-              </Field>
+              {typedReg || form.watch('not_ours') ? (
+                <Field label="Vehicle registration" htmlFor="ex-reg" error={localErrors.vehicle_reg}>
+                  <Input id="ex-reg" autoCapitalize="characters" {...form.register('vehicle_reg')} />
+                </Field>
+              ) : (
+                <Field label="Vehicle" htmlFor="ex-vehicle" error={localErrors.vehicle_reg}>
+                  <Select id="ex-vehicle" {...form.register('vehicle')}>
+                    <option value="">Choose…</option>
+                    {vehicles.vehicles.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {vehicleLabel(a)}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              )}
+              {vehicles.available ? (
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" {...form.register('not_ours')} />
+                  Not ours (a vehicle outside our register)
+                </label>
+              ) : (
+                <p className="text-sm text-slate-600">
+                  Offline: type the registration; the register list is not on this phone yet.
+                </p>
+              )}
               <Field label="Litres" htmlFor="ex-litres" hint="Optional.">
                 <Input
                   id="ex-litres"

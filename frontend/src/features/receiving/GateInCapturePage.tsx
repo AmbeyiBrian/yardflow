@@ -46,6 +46,8 @@ import {
   Spinner,
   Textarea,
 } from '../../components/ui';
+import type { Supplier as RegisterSupplier } from '../settings/suppliersApi';
+import { selectableSuppliers, supplierNameFor, supplierOptionLabel } from './supplierPick';
 import { ControlledReferenceSelect } from '../../components/ui/ReferenceSelect';
 import { EmptyState, PageHeader, Sheet } from '../../components/ui/data';
 import type { Client, Location, Site } from '../settings/types';
@@ -114,6 +116,8 @@ const CONDITIONS: { value: Condition; label: string; quarantines: boolean }[] = 
 
 interface DraftHeader {
   source_type: SourceType;
+  /** R15 (4.20.5): the register entry, as an id string; absent in older drafts. */
+  supplier?: string;
   supplier_name: string;
   client: string;
   returned_by: string;
@@ -162,6 +166,7 @@ function emptyDraft(): Draft {
   return {
     header: {
       source_type: 'PURCHASE',
+      supplier: '',
       supplier_name: '',
       client: '',
       returned_by: '',
@@ -257,6 +262,7 @@ export default function GateInCapturePage() {
     setDraft({
       header: {
         source_type: document.source_type,
+        supplier: document.supplier ? String(document.supplier) : '',
         supplier_name: document.supplier_name ?? '',
         client: document.client ? String(document.client) : '',
         returned_by: document.returned_by ? String(document.returned_by) : '',
@@ -276,6 +282,15 @@ export default function GateInCapturePage() {
   }, [editingId, loaded, existing.data]);
 
   const { online, refresh } = useOffline();
+  // R15 (4.20.5): receive from a register supplier (PENDING allowed, REJECTED
+  // and inactive not). Offline the picker gives way to a typed name.
+  const suppliers = useList<RegisterSupplier>(
+    'suppliers',
+    { page_size: 300, is_active: true },
+    { enabled: online },
+  );
+  const supplierRegister = online;
+  const pickableSuppliers = selectableSuppliers(suppliers.data?.results ?? []);
   const create = useAction<Record<string, unknown>, { id: number }>({
     resource: 'gate-ins',
   });
@@ -385,6 +400,7 @@ export default function GateInCapturePage() {
     const header = draft.header;
     return {
       source_type: header.source_type,
+      supplier: header.supplier ? Number(header.supplier) : null,
       supplier_name: header.supplier_name,
       client: header.client ? Number(header.client) : null,
       returned_by: header.returned_by ? Number(header.returned_by) : null,
@@ -567,11 +583,42 @@ export default function GateInCapturePage() {
           </Field>
         ) : (
           <Field label="Supplier" htmlFor="gi-supplier">
-            <Input
-              id="gi-supplier"
-              value={draft.header.supplier_name}
-              onChange={(event) => setHeader({ supplier_name: event.target.value })}
-            />
+            {supplierRegister ? (
+              <ControlledReferenceSelect
+                resource="suppliers"
+                id="gi-supplier"
+                value={draft.header.supplier ?? ''}
+                onChange={(event) =>
+                  // The name rides along for display and back-compat (4.20.5).
+                  setHeader({
+                    supplier: event.target.value,
+                    supplier_name: supplierNameFor(
+                      pickableSuppliers,
+                      event.target.value,
+                      '',
+                    ),
+                  })
+                }
+              >
+                <option value="">Choose…</option>
+                {pickableSuppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplierOptionLabel(supplier)}
+                  </option>
+                ))}
+              </ControlledReferenceSelect>
+            ) : (
+              // Offline there is no register to read: T17.16 adds the bundle's
+              // suppliers here (the seam). Until then the name is typed, as
+              // before, and the draft still queues (R6).
+              <Input
+                id="gi-supplier"
+                value={draft.header.supplier_name}
+                onChange={(event) =>
+                  setHeader({ supplier: '', supplier_name: event.target.value })
+                }
+              />
+            )}
           </Field>
         )}
 

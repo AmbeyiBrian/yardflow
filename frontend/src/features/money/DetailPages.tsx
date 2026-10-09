@@ -182,7 +182,7 @@ export function ExpenseDetailPage() {
                 ['Project', e.project_reference],
                 ['Scope of work', e.scope_of_work],
                 ['What for', e.description],
-                ['Vehicle', e.vehicle_reg],
+                ['Vehicle', e.vehicle_name || e.vehicle_reg],
                 ['Litres', e.litres],
                 ['Recorded by', e.recorded_by_name],
                 [

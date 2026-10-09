@@ -205,3 +205,26 @@ export async function chooseFirst(select: import('@playwright/test').Locator): P
   await select.selectOption(value);
   return value;
 }
+
+/**
+ * Pick a supplier on gate-in (R15; design 4.20.5): the register entry if the
+ * name is already there, otherwise "Add new supplier" from inside the form.
+ * Free-text supplier names are gone, so tests that used to type one call this.
+ */
+export async function chooseSupplier(page: Page, name: string): Promise<void> {
+  const select = page.getByLabel('Supplier', { exact: true });
+  // Until the list loads there are only the placeholder and "Add new".
+  await select.locator('option[data-add-new]').waitFor({ state: 'attached', timeout: 20_000 });
+  const existing = select.locator('option', { hasText: name });
+  if ((await existing.count()) > 0) {
+    await select.selectOption({ label: (await existing.first().textContent())?.trim() ?? name });
+    return;
+  }
+  await select.selectOption('__add_new__');
+  const sheet = page.getByRole('dialog').last();
+  await sheet.getByLabel('Name', { exact: true }).fill(name);
+  await sheet.getByRole('button', { name: 'Add supplier' }).click();
+  await expect(select.locator('option:checked')).toHaveText(new RegExp(name), {
+    timeout: 20_000,
+  });
+}

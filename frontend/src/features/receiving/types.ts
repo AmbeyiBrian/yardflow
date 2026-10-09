@@ -81,7 +81,10 @@ export interface GateIn {
   number: string;
   status: 'DRAFT' | 'POSTED' | 'VOID';
   source_type: SourceType;
+  /** R15: the register entry; `supplier_name` stays for display (4.20.5). */
+  supplier?: number | null;
   supplier_name: string;
+  supplier_status?: string;
   client: number | null;
   client_name?: string;
   returned_by: number | null;

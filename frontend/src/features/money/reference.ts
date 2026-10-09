@@ -18,6 +18,8 @@ import { readReference } from '../../offline/db';
 import { useOffline } from '../../offline/OfflineProvider';
 import type { Project } from '../projects/types';
 import type { Site } from '../settings/types';
+import { useAssets, type Asset } from '../assets/api';
+import { fuelAssets } from './fuelVehicle';
 import { useAllowanceRequests, useCasuals, useFinanceSettings } from './api';
 import {
   bundleCategories,
@@ -167,4 +169,26 @@ export function useMoneyLimits(): AllowanceLimits | undefined {
   const network = useFinanceSettings(online);
   const stored = useBundleRows<Record<string, unknown>>('finance_limits', !online);
   return online ? network.data?.allowance_limits : bundleLimits(stored.data ?? []);
+}
+
+/**
+ * Vehicles and generators for the fuel picker (R14; design 4.20.10). Online
+ * reads the register. Offline there is no list yet: T17.16 adds a `vehicles`
+ * table to the bundle and this hook will read it there (the seam); until then
+ * the form falls back to the typed registration, so offline fuel still queues.
+ */
+export function useVehicles(): {
+  vehicles: Asset[];
+  loading: boolean;
+  /** False when this side has no list to offer. */
+  available: boolean;
+} {
+  const { online } = useOffline();
+  const network = useAssets({ status: 'ACTIVE', page_size: 300 });
+  if (!online) return { vehicles: [], loading: false, available: false };
+  return {
+    vehicles: fuelAssets(network.data?.results ?? []),
+    loading: network.isLoading,
+    available: true,
+  };
 }

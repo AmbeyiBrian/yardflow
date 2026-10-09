@@ -14,6 +14,7 @@ import { type APIRequestContext, type Locator, expect, test } from '@playwright/
 
 import {
   chooseFirst,
+  chooseSupplier,
   itemOptions,
   open,
   PASSWORD,
@@ -75,7 +76,7 @@ test.describe('Receiving a delivery', () => {
 
     // The header: where it came from and where it is going (D1).
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill('Huawei Kenya');
+    await chooseSupplier(page, 'Huawei Kenya');
     await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
@@ -105,7 +106,7 @@ test.describe('Receiving a delivery', () => {
     const supplier = unique('Earmark Supplies');
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill(supplier);
+    await chooseSupplier(page, supplier);
     await chooseFirst(page.getByLabel('Received into'));
     const siteId = await chooseFirst(page.getByLabel('For site'));
 
@@ -277,7 +278,7 @@ test.describe('Receiving a delivery', () => {
 
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill(supplier);
+    await chooseSupplier(page, supplier);
     await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
@@ -393,7 +394,7 @@ test.describe('Correcting a draft', () => {
 
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill(supplier);
+    await chooseSupplier(page, supplier);
     await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
@@ -410,7 +411,7 @@ test.describe('Correcting a draft', () => {
     // The quantity was wrong. Correcting it is ordinary work.
     await page.getByRole('link', { name: 'Edit' }).click();
     await expect(page.getByRole('heading', { name: 'Correct this delivery' })).toBeVisible();
-    await expect(page.getByLabel('Supplier')).toHaveValue(supplier);
+    await expect(page.getByLabel('Supplier').locator('option:checked')).toHaveText(new RegExp(supplier));
 
     // Removing takes two taps (D9): the first asks, the second removes.
     await page.getByRole('button', { name: /^Remove the .* line$/ }).first().click();
@@ -442,7 +443,7 @@ test.describe('Correcting a draft', () => {
   test('a line is changed in place before it is received (D9)', async ({ page }) => {
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill('Huawei Kenya');
+    await chooseSupplier(page, 'Huawei Kenya');
     await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
@@ -476,7 +477,7 @@ test.describe('Correcting a draft', () => {
     const serials = [unique('MV1'), unique('MV2')];
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill('Huawei Kenya');
+    await chooseSupplier(page, 'Huawei Kenya');
     await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
@@ -519,7 +520,7 @@ test.describe('A refused delivery does not haunt the next one', () => {
     await signIn(page, PEOPLE.storekeeper);
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill(unique('Refused supplier'));
+    await chooseSupplier(page, unique('Refused supplier'));
     await chooseFirst(page.getByLabel('Received into'));
 
     await page.getByRole('button', { name: 'Add a line' }).click();
@@ -555,7 +556,7 @@ test.describe('Photos on a delivery', () => {
     await signIn(page, PEOPLE.storekeeper);
     await open(page, '/gate-in/new');
     await page.getByLabel('Source').selectOption('PURCHASE');
-    await page.getByLabel('Supplier').fill(unique('Photo supplier'));
+    await chooseSupplier(page, unique('Photo supplier'));
     await chooseFirst(page.getByLabel('Received into'));
     await page.getByRole('button', { name: 'Add a line' }).click();
     const sheet = page.getByRole('dialog');

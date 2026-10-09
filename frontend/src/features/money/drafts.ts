@@ -162,6 +162,8 @@ export interface ExpensePrefill {
     incurred_on: string;
     description: string;
     scope_of_work: string;
+    vehicle: string;
+    not_ours: boolean;
     vehicle_reg: string;
     litres: string;
     float_request: string;
@@ -184,6 +186,8 @@ export function expensePrefill(payload: Record<string, unknown>): ExpensePrefill
       incurred_on: text(payload.incurred_on),
       description: text(payload.description),
       scope_of_work: text(payload.scope_of_work),
+      vehicle: text(payload.vehicle),
+      not_ours: !payload.vehicle && Boolean(text(payload.vehicle_reg)),
       vehicle_reg: text(payload.vehicle_reg),
       litres: text(payload.litres),
       float_request: text(payload.float_request),
