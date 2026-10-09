@@ -509,7 +509,7 @@ def find_stock(text: str, *, limit: int = 8) -> list[dict]:
     if len(text) < 2:
         return []
 
-    quantity = DecimalField(max_digits=14, decimal_places=3)
+    quantity: DecimalField = DecimalField(max_digits=14, decimal_places=3)
     on_hand = (
         _inside_perimeter_balances()
         .filter(item_type=OuterRef("pk"))
