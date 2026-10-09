@@ -30,8 +30,54 @@
 
 import Dexie, { type Table } from 'dexie';
 
-/** What the queue can hold. §8 keeps offline capture to these three. */
-export type QueuedOperation = 'GATE_IN' | 'GATE_OUT_REQUEST' | 'GATE_OUT_RELEASE';
+/**
+ * What the queue can hold. §8 keeps offline capture to a short list, and
+ * §4.17.8 widens it by exactly three finance entries. Approving, paying and
+ * closing a float are never queued (§8.3).
+ */
+export type QueuedOperation =
+  | 'GATE_IN'
+  | 'GATE_OUT_REQUEST'
+  | 'GATE_OUT_RELEASE'
+  | 'EXPENSE'
+  | 'ALLOWANCE_REQUEST'
+  | 'CASUAL';
+
+/** The operations that carry photos, and so have a second step after they land. */
+export const FINANCE_OPERATIONS: readonly QueuedOperation[] = [
+  'EXPENSE',
+  'ALLOWANCE_REQUEST',
+  'CASUAL',
+];
+
+export type PhotoStatus =
+  /** Waiting on its entry to be applied, or on a connection. */
+  | 'QUEUED'
+  | 'UPLOADED'
+  /** The server refused the file itself; retrying would fail forever. */
+  | 'FAILED';
+
+/**
+ * A photo taken offline for a queued entry (§4.17.8, R6).
+ *
+ * Held in its own table, not inside the queue row, because the blob is large
+ * and the queue is read every few seconds for its count. Its own `client_uuid`
+ * is minted at capture and reused on every retry, so a lost response replays to
+ * the same attachment instead of a second one.
+ */
+export interface QueuedPhoto {
+  id?: number;
+  /** The queue entry this belongs to. */
+  queue_client_uuid: string;
+  /** Receipt / Fuel pump / Work done / ID / Other. */
+  caption: string;
+  blob: Blob;
+  filename: string;
+  client_uuid: string;
+  status: PhotoStatus;
+  attempts: number;
+  last_error?: string;
+}
 
 export type QueueStatus =
   /** Captured, not yet sent. */
@@ -81,6 +127,7 @@ class YardFlowDatabase extends Dexie {
   queue!: Table<QueuedMutation, number>;
   reference!: Table<ReferenceRow, string>;
   releasable!: Table<ReleasablePass, number>;
+  photos!: Table<QueuedPhoto, number>;
 
   constructor() {
     super('yardflow');
@@ -90,6 +137,15 @@ class YardFlowDatabase extends Dexie {
       queue: '++id, &client_uuid, status, operation, captured_at',
       reference: 'key',
       releasable: 'id, number',
+    });
+    // §4.17.8: version 2 adds only the photos table. Every v1 table is restated
+    // unchanged and there is no upgrade callback, so rows already queued on a
+    // phone — a delivery captured yesterday and not yet sent — survive it.
+    this.version(2).stores({
+      queue: '++id, &client_uuid, status, operation, captured_at',
+      reference: 'key',
+      releasable: 'id, number',
+      photos: '++id, queue_client_uuid, &client_uuid, status',
     });
   }
 }
@@ -173,11 +229,16 @@ export async function referenceAge(): Promise<string | null> {
 export async function enqueue(
   operation: QueuedOperation,
   payload: unknown,
+  /**
+   * Finance entries carry their uuid inside the payload as well (the entity has
+   * its own unique `client_uuid`, §4.17.8), so the caller mints it first and
+   * passes the same one here. Never regenerated on retry (N2).
+   */
+  client_uuid: string = newUuid(),
 ): Promise<string | null> {
   const store = db();
   if (!store) return null;
 
-  const client_uuid = newUuid();
   await store.queue.add({
     client_uuid,
     operation,
@@ -253,15 +314,77 @@ export async function markAttempted(client_uuid: string, error: string): Promise
   });
 }
 
-/** Clear what has landed. Rejected rows stay until somebody has seen them. */
+/**
+ * Clear what has landed. Rejected rows stay until somebody has seen them.
+ *
+ * An applied entry whose photos are still queued stays too: the photos are
+ * addressed through its `document_id`, so clearing it would strand them on the
+ * phone with nowhere to go (§4.17.8).
+ */
 export async function clearApplied(): Promise<void> {
   const store = db();
   if (!store) return;
   try {
-    await store.queue.where('status').equals('APPLIED').delete();
+    const applied = await store.queue.where('status').equals('APPLIED').toArray();
+    const waiting = new Set(
+      (await store.photos.where('status').equals('QUEUED').toArray()).map(
+        (photo) => photo.queue_client_uuid,
+      ),
+    );
+    const clear = applied.filter((row) => !waiting.has(row.client_uuid));
+    const uuids = clear.map((row) => row.client_uuid);
+    await store.queue.where('client_uuid').anyOf(uuids).delete();
+    // Uploaded blobs are dead weight once their entry is gone.
+    await store.photos.where('queue_client_uuid').anyOf(uuids).delete();
   } catch {
     /* nothing to clear */
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Photos for queued entries (§4.17.8)                                         */
+/* -------------------------------------------------------------------------- */
+
+export async function addPhotos(
+  queue_client_uuid: string,
+  photos: { caption: string; blob: Blob; filename: string }[],
+): Promise<void> {
+  const store = db();
+  if (!store || photos.length === 0) return;
+  await store.photos.bulkAdd(
+    photos.map((photo) => ({
+      ...photo,
+      queue_client_uuid,
+      client_uuid: newUuid(),
+      status: 'QUEUED' as const,
+      attempts: 0,
+    })),
+  );
+}
+
+export async function queuedPhotos(): Promise<QueuedPhoto[]> {
+  const store = db();
+  if (!store) return [];
+  try {
+    return await store.photos.where('status').equals('QUEUED').toArray();
+  } catch {
+    return [];
+  }
+}
+
+export async function markPhoto(
+  client_uuid: string,
+  change: { status?: PhotoStatus; error?: string },
+): Promise<void> {
+  const store = db();
+  if (!store) return;
+  await store.photos.where('client_uuid').equals(client_uuid).modify((row) => {
+    if (change.status) row.status = change.status;
+    if (change.error !== undefined) {
+      row.last_error = change.error;
+      row.attempts += 1;
+    }
+  });
 }
 
 /* -------------------------------------------------------------------------- */

@@ -20,6 +20,8 @@
 
 import { ApiError, api } from '../api/client';
 import {
+  FINANCE_OPERATIONS,
+  type QueuedOperation,
   clearApplied,
   markApplied,
   markAttempted,
@@ -28,6 +30,8 @@ import {
   saveReference,
   saveReleasable,
 } from './db';
+import { inCaptureOrder } from './financeQueue';
+import { drainPhotos } from './photos';
 
 export interface SyncOutcome {
   applied: number;
@@ -36,6 +40,8 @@ export interface SyncOutcome {
   /** Nothing was sent because there was nothing to send. */
   idle: boolean;
   error?: string;
+  /** Finance photos (§4.17.8) still waiting on a connection or on their entry. */
+  photosWaiting?: number;
 }
 
 interface SubmissionResult {
@@ -49,9 +55,25 @@ interface SubmissionResult {
   exception?: { code: string; reason: string } | null;
 }
 
-/** Drain the queue. Safe to call often — it returns `idle` when empty. */
+/**
+ * Drain the queue, then the photos that hang off what landed (§4.17.8).
+ *
+ * Photos run even when no entry was pending: an earlier cycle may have applied
+ * an entry and then lost the connection before its photos went up. They are
+ * skipped only when the entries themselves just failed to reach the server,
+ * since a second request would only wait out the same timeout.
+ */
 export async function drainQueue(): Promise<SyncOutcome> {
-  const rows = await pending();
+  const outcome = await drainEntries();
+  if (outcome.error) return outcome;
+  const photos = await drainPhotos();
+  return photos.waiting > 0 ? { ...outcome, photosWaiting: photos.waiting } : outcome;
+}
+
+async function drainEntries(): Promise<SyncOutcome> {
+  // §4.17.8: capture order, so a casual registered offline reaches the server
+  // before the expense that names it.
+  const rows = inCaptureOrder(await pending());
   if (rows.length === 0) {
     await clearApplied();
     return { applied: 0, rejected: 0, replayed: 0, idle: true };
@@ -78,7 +100,18 @@ export async function drainQueue(): Promise<SyncOutcome> {
         // §8.4: kept, with the reason, until somebody has dealt with it. The
         // conflict itself lives on the server as a SyncException; this is the
         // device's copy of "your capture did not land, and here is why".
-        await markRejected(result.client_uuid, refusal.reason || refusal.code);
+        // R6: a refused finance entry stays on the phone with the server's code
+        // and reason, so "ALLOWANCE_OVERLAP: overlaps AR-000012" is what the
+        // clerk reads when deciding how to fix it.
+        const isFinance = FINANCE_OPERATIONS.includes(
+          rows.find((row) => row.client_uuid === result.client_uuid)?.operation as QueuedOperation,
+        );
+        await markRejected(
+          result.client_uuid,
+          isFinance && refusal.code && refusal.reason
+            ? `${refusal.code}: ${refusal.reason}`
+            : refusal.reason || refusal.code,
+        );
       } else {
         await markApplied(result.client_uuid, {
           id: result.document_id,
@@ -203,7 +236,7 @@ export function startOnlineWatch(): () => void {
 
 /** Queue a mutation, or send it now if there is a connection (N1). */
 export async function submitOrQueue<T>(
-  operation: 'GATE_IN' | 'GATE_OUT_REQUEST' | 'GATE_OUT_RELEASE',
+  operation: QueuedOperation,
   payload: unknown,
   online_path: () => Promise<T>,
 ): Promise<{ queued: boolean; result?: T; client_uuid?: string }> {

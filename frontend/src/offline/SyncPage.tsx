@@ -25,6 +25,7 @@ import { Banner, Button, Card, Field, Spinner, Textarea } from '../components/ui
 import { Checkbox } from '../components/ui';
 import { EmptyState, PageHeader, Sheet, Stat, StatusBadge } from '../components/ui/data';
 import { type QueuedMutation, allQueued, clearApplied } from './db';
+import { describeEntry } from './financeQueue';
 import { useOffline } from './OfflineProvider';
 
 interface SyncExceptionRow {
@@ -49,7 +50,26 @@ const OPERATION_LABELS: Record<string, string> = {
   GATE_IN: 'Delivery received',
   GATE_OUT_REQUEST: 'Material requested',
   GATE_OUT_RELEASE: 'Pass released',
+  // §4.17.8: finance entries read as what they are; `describeEntry` adds the figure.
+  EXPENSE: 'Expense',
+  ALLOWANCE_REQUEST: 'Allowance request',
+  CASUAL: 'Casual registered',
 };
+
+const FINANCE_KINDS = new Set(['EXPENSE', 'ALLOWANCE_REQUEST', 'CASUAL']);
+
+/** The line a row opens with: "Expense KES 1,200 — waiting to send" (R6). */
+function rowTitle(row: QueuedMutation): string {
+  if (!FINANCE_KINDS.has(row.operation)) {
+    return `${OPERATION_LABELS[row.operation] ?? row.operation}${
+      row.document_number ? ` · ${row.document_number}` : ''
+    }`;
+  }
+  const what = describeEntry(row.operation, row.payload);
+  if (row.status === 'REJECTED') return `${what} — refused`;
+  if (row.status === 'APPLIED') return `${what} — sent${row.document_number ? ` · ${row.document_number}` : ''}`;
+  return `${what} — waiting to send`;
+}
 
 export default function SyncPage() {
   const { online, pending, syncing, syncNow, lastOutcome, referenceFetchedAt } =
@@ -121,15 +141,17 @@ export default function SyncPage() {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-900">
-                    {OPERATION_LABELS[row.operation] ?? row.operation}
-                    {row.document_number ? ` · ${row.document_number}` : ''}
+                    {rowTitle(row)}
                   </p>
                   <p className="text-xs text-slate-500">
                     captured {row.captured_at.slice(0, 16).replace('T', ' ')}
                     {row.attempts > 0 ? ` · ${row.attempts} attempt(s)` : ''}
                   </p>
                   {row.exception_reason ? (
-                    <p className="text-sm text-red-700">{row.exception_reason}</p>
+                    <p className="text-sm text-red-700">
+                      {FINANCE_KINDS.has(row.operation) ? 'Refused: ' : ''}
+                      {row.exception_reason}
+                    </p>
                   ) : null}
                   {row.last_error && row.status === 'PENDING' ? (
                     <p className="text-xs text-slate-500">{row.last_error}</p>
