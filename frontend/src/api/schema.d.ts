@@ -488,6 +488,137 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/boxes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/boxes`` (P4, P7, P8).
+         *
+         *     Addressed by **code**, case-insensitively: the code is what is printed on
+         *     the carton in the storekeeper's hands. ``lookup_value_regex`` accepts
+         *     anything but ``/`` (a supplier code or a GS1 SSCC is letters, digits and
+         *     punctuation, and may contain ``.``); a code containing ``/`` cannot be put in
+         *     a path, so it is found through ``/stock/lookup?q=`` instead. A trailing
+         *     ``.json`` is therefore part of the code, not a format suffix.
+         *
+         *     Reads need only a signed-in user, as ``/stock`` does. Changing a box needs
+         *     ``stock.adjust`` or ``gate_in.post``.
+         */
+        get: operations["boxes_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/boxes/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/boxes`` (P4, P7, P8).
+         *
+         *     Addressed by **code**, case-insensitively: the code is what is printed on
+         *     the carton in the storekeeper's hands. ``lookup_value_regex`` accepts
+         *     anything but ``/`` (a supplier code or a GS1 SSCC is letters, digits and
+         *     punctuation, and may contain ``.``); a code containing ``/`` cannot be put in
+         *     a path, so it is found through ``/stock/lookup?q=`` instead. A trailing
+         *     ``.json`` is therefore part of the code, not a format suffix.
+         *
+         *     Reads need only a signed-in user, as ``/stock`` does. Changing a box needs
+         *     ``stock.adjust`` or ``gate_in.post``.
+         */
+        get: operations["boxes_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/boxes/{code}/empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description P7: everything out, which closes the box. */
+        post: operations["boxes_empty_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/boxes/{code}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Events of this box **and every box inside it**, newest first (P8).
+         *
+         *     A pallet's history includes its cartons' events; each row says which box
+         *     it happened to (``box_code``).
+         */
+        get: operations["boxes_history_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/boxes/{code}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description P7, E4: the box and everything in it to another place in the yard. */
+        post: operations["boxes_move_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/boxes/{code}/take-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description P7: contents leave the box and stay where they are. */
+        post: operations["boxes_take_out_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/category-custom-fields": {
         parameters: {
             query?: never;
@@ -3100,6 +3231,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stock/boxes/{code}/issuable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``/api/v1/stock/boxes/{code}/issuable?from_location=`` (P6, P9, P10).
+         *
+         *     What a gate-out for this box would carry from that place, and what could not
+         *     go and why.
+         */
+        get: operations["stock_boxes_issuable_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stock/client-position": {
         parameters: {
             query?: never;
@@ -3152,6 +3305,79 @@ export interface paths {
         };
         /** @description ``/api/v1/stock/drums/{drum_number}/history`` (E3, T3.14). */
         get: operations["stock_drums_history_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stock/earmarked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``GET /api/v1/stock/earmarked?site=&from_location=`` (Q6, §4.16.8a).
+         *
+         *     What is earmarked for the site at that place, as proposed gate-out lines,
+         *     what could not go and why, and the site's open jobs.
+         */
+        get: operations["stock_earmarked_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stock/earmarks/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ``POST /api/v1/stock/earmarks/change`` (Q4, §4.16.6). */
+        post: operations["stock_earmarks_change_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stock/earmarks/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``GET /api/v1/stock/earmarks/history?serial_unit=|reel=|site=`` (Q4, Q2). */
+        get: operations["stock_earmarks_history_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stock/find": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/stock/find?q=`` (E8, §7.3d): item types with what is in the yard. */
+        get: operations["stock_find_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3232,6 +3458,23 @@ export interface paths {
          *     auditor has the number printed on the unit in front of them.
          */
         get: operations["stock_serials_history_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stock/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ``/api/v1/stock/summary`` (E8, §7.3d): the "In the yard" panel on Home. */
+        get: operations["stock_summary_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3710,14 +3953,6 @@ export interface components {
             accepted: boolean;
             reason?: string;
         };
-        /**
-         * @description * `INSTALLED` - Installed at the site
-         *     * `CONSUMED` - Consumed on site
-         *     * `RETURNING` - Coming back to the yard
-         *     * `RECOVERED` - Recovered from the site
-         * @enum {string}
-         */
-        ActionEnum: "INSTALLED" | "CONSUMED" | "RETURNING" | "RECOVERED";
         ApprovalAction: {
             readonly id: number;
             readonly decision: components["schemas"]["ApprovalActionDecisionEnum"];
@@ -3852,6 +4087,100 @@ export interface components {
         AuthMethodEnum: "PASSWORD" | "WEBAUTHN" | "SYSTEM";
         /** @enum {unknown} */
         BlankEnum: "";
+        BoxBulkTakeRequest: {
+            item_type: number;
+            owner_client?: number | null;
+            condition: components["schemas"]["ConditionEnum"];
+            /** Format: decimal */
+            quantity: string;
+        };
+        BoxDetail: {
+            id: number;
+            code: string;
+            status: string;
+            source: string;
+            depth: number;
+            parent_code: string | null;
+            path: string[];
+            node_id: number;
+            node_label: string;
+            gate_in: number | null;
+            gate_in_number: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            closed_at: string | null;
+            units: {
+                [key: string]: unknown;
+            }[];
+            bulk: {
+                [key: string]: unknown;
+            }[];
+            children: {
+                [key: string]: unknown;
+            }[];
+            counts: {
+                [key: string]: unknown;
+            };
+        };
+        BoxEvent: {
+            readonly id: number;
+            /** Format: date-time */
+            readonly occurred_at: string;
+            readonly action: string;
+            readonly action_label: string;
+            readonly box_code: string;
+            /** @default  */
+            readonly actor: string;
+            /** @default  */
+            readonly serial_number: string;
+            /** @default  */
+            readonly child_box_code: string;
+            /** @default  */
+            readonly item_name: string;
+            /** @default  */
+            readonly owner_client: string;
+            readonly condition: components["schemas"]["ConditionEnum"];
+            /** Format: decimal */
+            readonly quantity: string | null;
+            readonly document_type: string;
+            readonly document_id: string;
+            readonly document_number: string;
+            readonly note: string;
+        };
+        BoxIssuable: {
+            lines: {
+                [key: string]: unknown;
+            }[];
+            excluded: {
+                [key: string]: unknown;
+            }[];
+        };
+        BoxMoveRequest: {
+            to_location: number;
+        };
+        /** @description A box in a list: counts are annotated by ``annotated_boxes``, not per row. */
+        BoxRow: {
+            readonly id: number;
+            readonly code: string;
+            readonly status: string;
+            readonly source: string;
+            readonly depth: number;
+            readonly parent_code: string;
+            readonly node: number;
+            readonly node_label: string;
+            readonly units_now: number;
+            readonly bulk_lines_now: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+        };
+        BoxTakeOutRequest: {
+            units?: number[];
+            bulk?: components["schemas"]["BoxBulkTakeRequest"][];
+            boxes?: string[];
+        };
         CategoryCustomField: {
             readonly id: number;
             category: number;
@@ -4306,6 +4635,88 @@ export interface components {
          * @enum {string}
          */
         DispositionStatusEnum: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "POSTED" | "CANCELLED";
+        /** @description Exactly one subject: ``serial_unit``, ``reel`` or a bulk lot (``node`` + item). */
+        EarmarkChangeRequest: {
+            serial_unit?: number | null;
+            reel?: number | null;
+            node?: number | null;
+            item_type?: number | null;
+            owner_client?: number | null;
+            condition?: components["schemas"]["ConditionEnum"];
+            from_site?: number | null;
+            /** Format: decimal */
+            quantity?: string;
+            to_site: number | null;
+            reason: string;
+        };
+        EarmarkChanged: {
+            kind: string;
+            unit?: components["schemas"]["SerialUnit"];
+            drum?: components["schemas"]["Reel"];
+            bulk?: {
+                [key: string]: unknown;
+            };
+        };
+        EarmarkEvent: {
+            readonly id: number;
+            /** Format: date-time */
+            readonly occurred_at: string;
+            readonly action: components["schemas"]["EarmarkEventActionEnum"];
+            readonly action_label: string;
+            readonly site: number | null;
+            /** @default  */
+            readonly site_name: string;
+            readonly to_site: number | null;
+            /** @default  */
+            readonly to_site_name: string;
+            readonly serial_unit: number | null;
+            /** @default  */
+            readonly serial_number: string;
+            readonly reel: number | null;
+            /** @default  */
+            readonly drum_number: string;
+            readonly node: number | null;
+            /** @default  */
+            readonly node_label: string;
+            readonly item_type: number | null;
+            /** @default  */
+            readonly item_name: string;
+            readonly owner_client: number | null;
+            /** @default  */
+            readonly owner_client_name: string;
+            readonly condition: components["schemas"]["ConditionEnum"];
+            /** Format: decimal */
+            readonly quantity: string | null;
+            readonly document_type: string;
+            readonly document_id: string;
+            readonly document_number: string;
+            readonly actor: number | null;
+            /** @default  */
+            readonly actor_name: string;
+            readonly reason: string;
+        };
+        /**
+         * @description * `EARMARKED` - Earmarked
+         *     * `CHANGED` - Earmark changed
+         *     * `CLEARED` - Earmark cleared
+         *     * `DELIVERED` - Delivered to its site
+         *     * `DIVERTED` - Diverted to another site
+         *     * `MOVED` - Moved inside the yard
+         *     * `REDUCED` - Reduced by a correction
+         * @enum {string}
+         */
+        EarmarkEventActionEnum: "EARMARKED" | "CHANGED" | "CLEARED" | "DELIVERED" | "DIVERTED" | "MOVED" | "REDUCED";
+        EarmarkedForSite: {
+            lines: {
+                [key: string]: unknown;
+            }[];
+            excluded: {
+                [key: string]: unknown;
+            }[];
+            jobs: {
+                [key: string]: unknown;
+            }[];
+        };
         EnrolledCredential: {
             id: number;
             device_label: string;
@@ -4365,6 +4776,9 @@ export interface components {
             origin_site?: number | null;
             /** @default  */
             readonly origin_site_ref: string;
+            for_site?: number | null;
+            /** @default  */
+            readonly for_site_name: string;
             to_location: number;
             readonly to_location_name: string;
             /** Format: date-time */
@@ -4380,8 +4794,29 @@ export interface components {
             readonly voided_at: string | null;
             notes?: string;
             lines?: components["schemas"]["GateInLine"][];
+            boxes?: components["schemas"]["GateInBox"][];
             /** Format: date-time */
             readonly created_at: string;
+        };
+        /**
+         * @description A box on the draft (P1, P10). ``key`` is the client's own, stable across edits;
+         *     lines and serials refer to it by ``box_key`` and a child by ``parent_key``.
+         */
+        GateInBox: {
+            key: string;
+            code?: string;
+            parent_key?: string;
+            label_text?: string;
+        };
+        /**
+         * @description A box on the draft (P1, P10). ``key`` is the client's own, stable across edits;
+         *     lines and serials refer to it by ``box_key`` and a child by ``parent_key``.
+         */
+        GateInBoxRequest: {
+            key: string;
+            code?: string;
+            parent_key?: string;
+            label_text?: string;
         };
         GateInLine: {
             readonly id: number;
@@ -4398,6 +4833,12 @@ export interface components {
             owner_client?: number | null;
             /** @default  */
             readonly owner_client_name: string;
+            for_site?: number | null;
+            /** @default  */
+            readonly for_site_name: string;
+            readonly earmarked_now: {
+                [key: string]: unknown;
+            }[];
             custom_field_values?: unknown;
             no_serial_reason?: string;
             /**
@@ -4405,6 +4846,7 @@ export interface components {
              * @description The client's stated value per unit, excluding VAT. Client-owned lines only — leave it empty when the issue note gives no figure.
              */
             declared_unit_value?: string | null;
+            box_key?: string;
             notes?: string;
             serials?: components["schemas"]["GateInSerial"][];
             reels?: components["schemas"]["GateInReel"][];
@@ -4419,6 +4861,7 @@ export interface components {
             condition?: components["schemas"]["ConditionEnum"];
             owner_type?: components["schemas"]["OwnerTypeEnum"];
             owner_client?: number | null;
+            for_site?: number | null;
             custom_field_values?: unknown;
             no_serial_reason?: string;
             /**
@@ -4426,6 +4869,7 @@ export interface components {
              * @description The client's stated value per unit, excluding VAT. Client-owned lines only — leave it empty when the issue note gives no figure.
              */
             declared_unit_value?: string | null;
+            box_key?: string;
             notes?: string;
             serials?: components["schemas"]["GateInSerialRequest"][];
             reels?: components["schemas"]["GateInReelRequest"][];
@@ -4449,6 +4893,7 @@ export interface components {
             returned_by?: number | null;
             /** @description Where the material came off. Required for a recovery (D5); worth recording on a return so the site's reconciliation can see it (H4). */
             origin_site?: number | null;
+            for_site?: number | null;
             to_location: number;
             /** Format: date-time */
             received_at: string;
@@ -4457,17 +4902,20 @@ export interface components {
             client_uuid?: string | null;
             notes?: string;
             lines?: components["schemas"]["GateInLineRequest"][];
+            boxes?: components["schemas"]["GateInBoxRequest"][];
         };
         GateInSerial: {
             readonly id: number;
             serial_number: string;
             asset_tag?: string;
             source?: components["schemas"]["SourceEnum"];
+            box_key?: string;
         };
         GateInSerialRequest: {
             serial_number: string;
             asset_tag?: string;
             source?: components["schemas"]["SourceEnum"];
+            box_key?: string;
         };
         /**
          * @description * `DRAFT` - Draft
@@ -4540,6 +4988,13 @@ export interface components {
             expected_return_date?: string | null;
             notes?: string;
             no_serial_reason?: string;
+            divert_reason?: string;
+            readonly diversions: {
+                [key: string]: unknown;
+            }[];
+            box?: number | null;
+            readonly box_code: string;
+            readonly box_path: string[];
             serials?: components["schemas"]["GateOutLineSerial"][];
             reels?: components["schemas"]["GateOutLineReel"][];
         };
@@ -4572,6 +5027,8 @@ export interface components {
             expected_return_date?: string | null;
             notes?: string;
             no_serial_reason?: string;
+            divert_reason?: string;
+            box?: number | null;
             serials?: components["schemas"]["GateOutLineSerialRequest"][];
             reels?: components["schemas"]["GateOutLineReelRequest"][];
         };
@@ -4579,7 +5036,9 @@ export interface components {
             readonly id: number;
             serial_unit: number;
             readonly serial_number: string;
+            readonly asset_tag: string;
             readonly released: boolean;
+            readonly box_path: string[];
         };
         GateOutLineSerialRequest: {
             serial_unit: number;
@@ -4674,6 +5133,7 @@ export interface components {
             is_archived?: boolean;
             readonly criticality: string;
             attributes?: unknown;
+            readonly tracking_locked: boolean;
         };
         ItemTypeRequest: {
             category: number;
@@ -4753,7 +5213,7 @@ export interface components {
         };
         JobCloseoutLine: {
             readonly id: number;
-            action: components["schemas"]["ActionEnum"];
+            action: components["schemas"]["JobCloseoutLineActionEnum"];
             item_type: number;
             readonly item_name: string;
             serial_unit?: number | null;
@@ -4768,8 +5228,16 @@ export interface components {
             condition?: string;
             notes?: string;
         };
+        /**
+         * @description * `INSTALLED` - Installed at the site
+         *     * `CONSUMED` - Consumed on site
+         *     * `RETURNING` - Coming back to the yard
+         *     * `RECOVERED` - Recovered from the site
+         * @enum {string}
+         */
+        JobCloseoutLineActionEnum: "INSTALLED" | "CONSUMED" | "RETURNING" | "RECOVERED";
         JobCloseoutLineRequest: {
-            action: components["schemas"]["ActionEnum"];
+            action: components["schemas"]["JobCloseoutLineActionEnum"];
             item_type: number;
             serial_unit?: number | null;
             reel?: number | null;
@@ -5134,6 +5602,7 @@ export interface components {
             attachments_required_gate_in?: boolean;
             attachments_required_gate_out?: boolean;
             signature_required_on_release?: boolean;
+            release_scan_required?: boolean;
             gate_pass_expiry_hours?: number;
             allow_self_approval?: boolean;
             approval_escalation_hours?: number;
@@ -5203,6 +5672,32 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Attachment"][];
+        };
+        PaginatedBoxEventList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["BoxEvent"][];
+        };
+        PaginatedBoxRowList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["BoxRow"][];
         };
         PaginatedCategoryCustomFieldList: {
             /**
@@ -5760,6 +6255,7 @@ export interface components {
             returned_by?: number | null;
             /** @description Where the material came off. Required for a recovery (D5); worth recording on a return so the site's reconciliation can see it (H4). */
             origin_site?: number | null;
+            for_site?: number | null;
             to_location?: number;
             /** Format: date-time */
             received_at?: string;
@@ -5768,6 +6264,7 @@ export interface components {
             client_uuid?: string | null;
             notes?: string;
             lines?: components["schemas"]["GateInLineRequest"][];
+            boxes?: components["schemas"]["GateInBoxRequest"][];
         };
         PatchedGateOutRequest: {
             purpose_type?: components["schemas"]["PurposeTypeEnum"];
@@ -5888,6 +6385,7 @@ export interface components {
             attachments_required_gate_in?: boolean;
             attachments_required_gate_out?: boolean;
             signature_required_on_release?: boolean;
+            release_scan_required?: boolean;
             gate_pass_expiry_hours?: number;
             allow_self_approval?: boolean;
             approval_escalation_hours?: number;
@@ -6160,12 +6658,14 @@ export interface components {
             description?: string;
         };
         /**
-         * @description * `SUBMITTED` - Waiting on the project manager
+         * @description * `PENDING_PM` - Waiting on the project manager
+         *     * `PENDING_FINANCE` - Waiting on Finance
          *     * `APPROVED` - Approved — counts against the project
+         *     * `PAID` - Paid
          *     * `REJECTED` - Rejected
          * @enum {string}
          */
-        ProjectExpenseStatusEnum: "SUBMITTED" | "APPROVED" | "REJECTED";
+        ProjectExpenseStatusEnum: "PENDING_PM" | "PENDING_FINANCE" | "APPROVED" | "PAID" | "REJECTED";
         /**
          * @description Drop fields the requesting user is not permitted to see.
          *
@@ -6324,6 +6824,8 @@ export interface components {
             owner_client?: number | null;
             /** @default  */
             readonly owner_client_name: string;
+            earmark_site?: number | null;
+            readonly earmark_site_name: string;
         };
         /**
          * @description * `OPEN` - Open
@@ -6337,6 +6839,9 @@ export interface components {
             driver_name?: string;
             released_lines?: {
                 [key: string]: string;
+            };
+            released_serials?: {
+                [key: string]: number[];
             };
             variance_reasons?: {
                 [key: string]: string;
@@ -6489,6 +6994,11 @@ export interface components {
             origin_site?: number | null;
             /** @default  */
             readonly origin_site_ref: string;
+            readonly box_code: string;
+            /** @description Codes outermost to the unit's own box; empty when loose (P4, P5). */
+            readonly box_path: string[];
+            earmark_site?: number | null;
+            readonly earmark_site_name: string;
         };
         /**
          * @description * `IN_STOCK` - In stock
@@ -6598,6 +7108,14 @@ export interface components {
             /** Format: decimal */
             quantity?: string;
             uom?: string;
+            /** Format: decimal */
+            readonly on_drums: string | null;
+            /** Format: decimal */
+            readonly loose: string | null;
+            readonly earmarked: {
+                [key: string]: unknown;
+            }[];
+            readonly free: string;
         };
         StockCount: {
             readonly id: number;
@@ -6650,6 +7168,16 @@ export interface components {
          * @enum {string}
          */
         StockCountStatusEnum: "DRAFT" | "PENDING_APPROVAL" | "POSTED" | "CANCELLED";
+        StockFind: {
+            results: components["schemas"]["StockFindItem"][];
+        };
+        StockFindItem: {
+            id: number;
+            code: string;
+            name: string;
+            unit: string;
+            on_hand: string;
+        };
         StockLookup: {
             kind: string;
             resource: string;
@@ -6678,6 +7206,17 @@ export interface components {
          * @enum {string}
          */
         StockNodeTypeEnum: "LOCATION" | "PERSON" | "SITE" | "CLIENT" | "EXTERNAL" | "CONSUMED" | "SCRAP";
+        StockSummary: {
+            items_in_stock: number;
+            deliveries_7d: number;
+            earmarks: components["schemas"]["StockSummaryEarmark"][];
+            earmark_sites_more: number;
+        };
+        StockSummaryEarmark: {
+            site: number;
+            name: string;
+            items: number;
+        };
         Subcontractor: {
             readonly id: number;
             name: string;
@@ -7787,6 +8326,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrolledCredential"];
+                };
+            };
+        };
+    };
+    boxes_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                gate_in?: number;
+                location?: number;
+                node?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `OPEN` - Open
+                 *     * `CLOSED` - Closed
+                 */
+                status?: "CLOSED" | "OPEN";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedBoxRowList"];
+                };
+            };
+        };
+    };
+    boxes_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoxDetail"];
+                };
+            };
+        };
+    };
+    boxes_empty_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoxDetail"];
+                };
+            };
+        };
+    };
+    boxes_history_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                gate_in?: number;
+                location?: number;
+                node?: number;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `OPEN` - Open
+                 *     * `CLOSED` - Closed
+                 */
+                status?: "CLOSED" | "OPEN";
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedBoxEventList"];
+                };
+            };
+        };
+    };
+    boxes_move_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoxMoveRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BoxMoveRequest"];
+                "multipart/form-data": components["schemas"]["BoxMoveRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoxDetail"];
+                };
+            };
+        };
+    };
+    boxes_take_out_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["BoxTakeOutRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BoxTakeOutRequest"];
+                "multipart/form-data": components["schemas"]["BoxTakeOutRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoxDetail"];
                 };
             };
         };
@@ -10077,6 +10786,7 @@ export interface operations {
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 include_archived?: boolean;
+                is_archived?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
@@ -11209,11 +11919,13 @@ export interface operations {
                 /** @description A search term. */
                 search?: string;
                 /**
-                 * @description * `SUBMITTED` - Waiting on the project manager
+                 * @description * `PENDING_PM` - Waiting on the project manager
+                 *     * `PENDING_FINANCE` - Waiting on Finance
                  *     * `APPROVED` - Approved — counts against the project
+                 *     * `PAID` - Paid
                  *     * `REJECTED` - Rejected
                  */
-                status?: "APPROVED" | "REJECTED" | "SUBMITTED";
+                status?: "APPROVED" | "PAID" | "PENDING_FINANCE" | "PENDING_PM" | "REJECTED";
             };
             header?: never;
             path?: never;
@@ -13026,6 +13738,29 @@ export interface operations {
             };
         };
     };
+    stock_boxes_issuable_retrieve: {
+        parameters: {
+            query: {
+                from_location: number;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoxIssuable"];
+                };
+            };
+        };
+    };
     stock_client_position_list: {
         parameters: {
             query?: {
@@ -13085,6 +13820,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Movement"][];
+                };
+            };
+        };
+    };
+    stock_earmarked_retrieve: {
+        parameters: {
+            query: {
+                from_location: number;
+                site: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EarmarkedForSite"];
+                };
+            };
+        };
+    };
+    stock_earmarks_change_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EarmarkChangeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EarmarkChangeRequest"];
+                "multipart/form-data": components["schemas"]["EarmarkChangeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EarmarkChanged"];
+                };
+            };
+        };
+    };
+    stock_earmarks_history_list: {
+        parameters: {
+            query?: {
+                reel?: number;
+                serial_unit?: number;
+                site?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EarmarkEvent"][];
+                };
+            };
+        };
+    };
+    stock_find_retrieve: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockFind"];
                 };
             };
         };
@@ -13168,6 +13994,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Movement"][];
+                };
+            };
+        };
+    };
+    stock_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSummary"];
                 };
             };
         };

@@ -114,7 +114,7 @@ export interface ProjectExpense {
   description: string;
   recorded_by: number;
   recorded_by_name?: string;
-  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING_PM' | 'PENDING_FINANCE' | 'APPROVED' | 'PAID' | 'REJECTED';
   decided_by: number | null;
   decided_at: string | null;
   decision_reason: string;

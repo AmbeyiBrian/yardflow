@@ -5565,11 +5565,15 @@ paths:
           type: string
           enum:
           - APPROVED
+          - PAID
+          - PENDING_FINANCE
+          - PENDING_PM
           - REJECTED
-          - SUBMITTED
         description: |-
-          * `SUBMITTED` - Waiting on the project manager
+          * `PENDING_PM` - Waiting on the project manager
+          * `PENDING_FINANCE` - Waiting on Finance
           * `APPROVED` - Approved — counts against the project
+          * `PAID` - Paid
           * `REJECTED` - Rejected
       tags:
       - project-expenses
@@ -15211,13 +15215,17 @@ components:
       - project
     ProjectExpenseStatusEnum:
       enum:
-      - SUBMITTED
+      - PENDING_PM
+      - PENDING_FINANCE
       - APPROVED
+      - PAID
       - REJECTED
       type: string
       description: |-
-        * `SUBMITTED` - Waiting on the project manager
+        * `PENDING_PM` - Waiting on the project manager
+        * `PENDING_FINANCE` - Waiting on Finance
         * `APPROVED` - Approved — counts against the project
+        * `PAID` - Paid
         * `REJECTED` - Rejected
     ProjectRequest:
       type: object

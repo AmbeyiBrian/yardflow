@@ -123,6 +123,11 @@ class ApprovalRequest(TenantModel, TimeStampedModel):
         related_name="approval_requests_addressed",
     )
 
+    # R4: a third way to address a level — "whoever holds this permission" —
+    # used for `finance.approve`. A role would do if every tenant's Finance role
+    # were the seeded one, but a tenant may rename or replace it (B4).
+    required_permission = models.CharField(max_length=60, blank=True)
+
     status = models.CharField(
         max_length=20,
         choices=ApprovalRequestStatus.choices,
@@ -152,13 +157,16 @@ class ApprovalRequest(TenantModel, TimeStampedModel):
             models.Index(fields=["organization", "required_user", "status"]),
         ]
         constraints = [
-            # At most one, never both. *Neither* stays legal, because §5.2's
-            # auto-approval row is exactly that: a request nobody was asked to
-            # answer, kept so the trail has no gap.
+            # At most one of role, person, permission. *None* stays legal,
+            # because §5.2's auto-approval row is exactly that: a request nobody
+            # was asked to answer, kept so the trail has no gap.
             models.CheckConstraint(
-                condition=Q(required_role__isnull=True)
-                | Q(required_user__isnull=True),
-                name="a_request_is_addressed_to_a_role_or_a_person_not_both",
+                condition=(
+                    Q(required_role__isnull=True, required_user__isnull=True)
+                    | Q(required_role__isnull=True, required_permission="")
+                    | Q(required_user__isnull=True, required_permission="")
+                ),
+                name="a_request_has_at_most_one_addressee",
             ),
         ]
 

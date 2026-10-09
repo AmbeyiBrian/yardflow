@@ -34,6 +34,9 @@ export const PERM = {
   PROJECT_VIEW_MARGIN: 'project.view_margin',
   PROJECT_VIEW_RATES: 'project.view_rates',
 
+  // Epic R. Second approval, payment and float settlement.
+  FINANCE_APPROVE: 'finance.approve',
+
   CATALOGUE_MANAGE: 'catalogue.manage',
   SETTINGS_MANAGE: 'settings.manage',
   USERS_MANAGE: 'users.manage',

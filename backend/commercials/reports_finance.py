@@ -44,13 +44,19 @@ from reporting.framework import (
 
 ZERO = Decimal("0")
 
+#: Statuses the total counts — the codes of ``commercials.models.COSTED_STATUSES``,
+#: spelled out so the total never depends on a display label (§4.17.11).
+COSTED_STATUS_CODES = ("APPROVED", "PAID")
+
 EXPENSE_STATUS_FILTER = Filter(
     "status",
     "Status",
     kind="choice",
     choices=(
-        ("SUBMITTED", "Awaiting decision"),
+        ("PENDING_PM", "Waiting on the project manager"),
+        ("PENDING_FINANCE", "Waiting on Finance"),
         ("APPROVED", "Approved"),
+        ("PAID", "Paid"),
         ("REJECTED", "Rejected"),
     ),
 )
@@ -142,7 +148,8 @@ class ExpensesLedgerReport(Report):
         # figure on the page that the performance report contradicts.
         return {
             "amount": sum(
-                (row["amount"] for row in rows if row["status_code"] == "APPROVED"), ZERO
+                (row["amount"] for row in rows if row["status_code"] in COSTED_STATUS_CODES),
+                ZERO,
             )
         }
 
@@ -270,7 +277,7 @@ class BudgetVarianceByMonthReport(Report):
         from django.db.models.functions import TruncMonth
 
         from commercials.costing import _closeout_ids, _valued_sum
-        from commercials.models import ExpenseStatus, ProjectExpense
+        from commercials.models import COSTED_STATUSES, ProjectExpense
         from jobs.models import DeliveryMode, Job, JobLabour, JobStatus, RateSource
         from stock.models import MovementType, OwnerType, StockMovement
 
@@ -289,7 +296,9 @@ class BudgetVarianceByMonthReport(Report):
 
             # Expenses land in the month they were incurred (O16).
             for row in (
-                ProjectExpense.objects.filter(project=project, status=ExpenseStatus.APPROVED)
+                ProjectExpense.objects.filter(
+                    project=project, status__in=COSTED_STATUSES
+                )
                 .annotate(month=TruncMonth("incurred_on"))
                 .values("month")
                 .annotate(total=Sum("amount"))

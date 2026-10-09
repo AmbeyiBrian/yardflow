@@ -75,6 +75,9 @@ class OrganizationSettingsInline(admin.StackedInline):
     model = OrganizationSettings
     can_delete = False
     extra = 0
+    # A role belongs to the tenant, and this page runs with no tenant in context,
+    # so the choice cannot even be listed. The tenant sets it in Settings (R4).
+    exclude = ("finance_director_role",)
 
 
 @admin.register(Organization)

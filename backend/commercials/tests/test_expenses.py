@@ -76,7 +76,7 @@ class TestRecording:
         """A technician at a fuel station is closer to the fact than the yard."""
         expense = record_expense(tenant, po_project, category, technician)
 
-        assert expense.status == ExpenseStatus.SUBMITTED
+        assert expense.status == ExpenseStatus.PENDING_PM
         assert expense.recorded_by == technician
 
     def test_it_counts_for_nothing_until_approved(
@@ -125,10 +125,13 @@ class TestDeciding:
 
     def test_a_decision_must_record_when(self, tenant, po_project, category, technician):
         expense = record_expense(tenant, po_project, category, technician)
-        expense.status = ExpenseStatus.APPROVED
 
+        # Around the save guard (which would refuse the move first): this is the
+        # database's own check on a row that claims a decision with no time.
         with pytest.raises(IntegrityError), transaction.atomic():
-            expense.save()
+            ProjectExpense.objects.filter(pk=expense.pk).update(
+                status=ExpenseStatus.APPROVED
+            )
 
 
 @pytest.mark.django_db

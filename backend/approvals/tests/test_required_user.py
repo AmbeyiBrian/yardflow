@@ -59,3 +59,40 @@ class TestARequestIsAddressedOnce:
                 required_role=RoleFactory(),
                 required_user=UserFactory(),
             )
+
+
+@pytest.mark.django_db
+class TestAtMostOneOfThree:
+    """R4: a level may also be addressed to whoever holds a permission."""
+
+    def make(self, number, **fields):
+        return ApprovalRequest.objects.create(
+            organization=fields.pop("organization"),
+            document_type="commercials.ProjectExpense",
+            document_id=str(number),
+            **fields,
+        )
+
+    def test_a_permission_alone_is_accepted(self, tenant):
+        request = self.make(1, organization=tenant, required_permission="finance.approve")
+
+        assert request.required_role is None
+        assert request.required_user is None
+
+    def test_a_permission_and_a_person_is_refused(self, tenant):
+        with pytest.raises(IntegrityError), transaction.atomic():
+            self.make(
+                2,
+                organization=tenant,
+                required_permission="finance.approve",
+                required_user=UserFactory(),
+            )
+
+    def test_a_permission_and_a_role_is_refused(self, tenant):
+        with pytest.raises(IntegrityError), transaction.atomic():
+            self.make(
+                3,
+                organization=tenant,
+                required_permission="finance.approve",
+                required_role=RoleFactory(),
+            )

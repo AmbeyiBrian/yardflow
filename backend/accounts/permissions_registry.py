@@ -71,6 +71,11 @@ class PERM:
     #: Day rates, which are pay-adjacent data (O15).
     PROJECT_VIEW_RATES = "project.view_rates"
 
+    # Finance (Epic R, §4.17.7)
+    #: Approving at the Finance level, marking paid, closing floats and setting
+    #: allowance limits. One switch for now; paying can be split out later.
+    FINANCE_APPROVE = "finance.approve"
+
     # Configuration
     CATALOGUE_MANAGE = "catalogue.manage"
     SETTINGS_MANAGE = "settings.manage"
@@ -172,6 +177,14 @@ ALL_PERMISSIONS: tuple[PermissionSpec, ...] = (
         "shared yard phone (O15).",
     ),
     PermissionSpec(
+        PERM.FINANCE_APPROVE,
+        "Approve, pay and settle money out",
+        "Finance",
+        "The second approval on expenses and allowance requests, and the act of "
+        "marking them paid. Kept apart from project.view_cost so a PM can see "
+        "what a project cost without being able to pay anyone (R4).",
+    ),
+    PermissionSpec(
         PERM.CATALOGUE_MANAGE,
         "Manage the catalogue and master data",
         "Configuration",
@@ -261,6 +274,12 @@ DEFAULT_ROLES: dict[str, tuple[str, ...]] = {
         PERM.REPORT_VIEW_ALL,
         # A manager allocating a PO across sites is raising jobs (O3).
         PERM.JOB_MANAGE,
+    ),
+    # R4: the second approver on expenses and allowance requests (§4.17.7).
+    "Finance": (
+        PERM.FINANCE_APPROVE,
+        PERM.PROJECT_VIEW_COST,
+        PERM.REPORT_VIEW_ALL,
     ),
     "Storekeeper": (
         PERM.GATE_IN_POST,

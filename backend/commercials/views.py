@@ -173,7 +173,7 @@ class ProjectExpenseViewSet(TenantScopedViewSet):
         """What this manager has waiting on them (O16)."""
         queryset = self.filter_queryset(
             self.get_queryset().filter(
-                status=ExpenseStatus.SUBMITTED, project__manager=request.user
+                status=ExpenseStatus.PENDING_PM, project__manager=request.user
             )
         )
         page = self.paginate_queryset(queryset)

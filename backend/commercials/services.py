@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.utils import timezone
 
 from commercials.models import (
+    COSTED_STATUSES,
     DEFAULT_EXPENSE_CATEGORIES,
     ExpenseCategory,
     ExpenseStatus,
@@ -31,9 +32,9 @@ def seed_expense_categories(organization) -> list[ExpenseCategory]:
     record an expense should not have to invent a taxonomy first.
     """
     created = []
-    for name, code in DEFAULT_EXPENSE_CATEGORIES:
+    for name, code, kind in DEFAULT_EXPENSE_CATEGORIES:
         category, was_created = ExpenseCategory.objects.get_or_create(
-            organization=organization, name=name, defaults={"code": code}
+            organization=organization, name=name, defaults={"code": code, "kind": kind}
         )
         if was_created:
             created.append(category)
@@ -54,7 +55,9 @@ def decide_expense(
     with no ledger movement and no contract behind it, so it is also the only
     one where a second person looks at the figure before it counts.
     """
-    if expense.status != ExpenseStatus.SUBMITTED:
+    # T15.1 keeps the single-level behaviour; T15.3 replaces this function with
+    # the two-level flow through the approval engine (§4.17.3).
+    if expense.status != ExpenseStatus.PENDING_PM:
         raise ExpenseNotDecidable(
             f"This expense was already {expense.get_status_display().lower()}."
         )
@@ -68,6 +71,11 @@ def decide_expense(
     if not approved and not reason:
         raise ExpenseNotDecidable("Rejecting an expense needs a reason.")
 
+    if approved:
+        # The guard allows only the §4.17.3 moves, so this goes via the Finance
+        # level in two saves rather than jumping PENDING_PM to APPROVED.
+        expense.status = ExpenseStatus.PENDING_FINANCE
+        expense.save()
     expense.status = ExpenseStatus.APPROVED if approved else ExpenseStatus.REJECTED
     expense.decided_by = actor
     expense.decided_at = timezone.now()
@@ -96,7 +104,7 @@ def reverse_expense(
     is approved on creation — it is the manager's own act, and asking them to
     approve their own correction would be theatre.
     """
-    if expense.status != ExpenseStatus.APPROVED:
+    if expense.status not in COSTED_STATUSES:
         raise ExpenseNotDecidable("Only an approved expense needs reversing.")
     if expense.reverses_id:
         raise ExpenseNotDecidable("A reversal cannot itself be reversed.")

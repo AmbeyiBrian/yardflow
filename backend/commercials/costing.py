@@ -14,7 +14,7 @@ Material            ``INSTALL`` and ``CONSUME`` movements on the project's jobs
 Material loss       expectations still open on **closed** jobs
 Subcontractor       the agreed price on closed subcontracted jobs
 Labour              days recorded at closeout, at the rate captured then
-Expenses            approved expenses, net of reversals
+Expenses            approved or paid expenses, net of reversals
 ==================  ==========================================================
 
 And one figure that is deliberately **not** cost: **exposure**, the material
@@ -249,11 +249,15 @@ def labour_cost(project) -> tuple[Decimal, int, int]:
 
 
 def expense_cost(project) -> Decimal:
-    """Approved expenses, net of reversals (O16)."""
-    from commercials.models import ExpenseStatus, ProjectExpense
+    """Approved and paid expenses, net of reversals (O16, §4.17.11).
+
+    ``PAID`` stays in: payment does not make a cost any less of one, and
+    leaving it out would make a project's figure drop the day Finance pays.
+    """
+    from commercials.models import COSTED_STATUSES, ProjectExpense
 
     approved = ProjectExpense.objects.filter(
-        project=project, status=ExpenseStatus.APPROVED
+        project=project, status__in=COSTED_STATUSES
     )
     total = sum((expense.signed_amount for expense in approved), ZERO)
     return _money(total)

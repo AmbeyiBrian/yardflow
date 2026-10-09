@@ -126,6 +126,20 @@ class Organization(TimeStampedModel):  # type: ignore[django-manager-missing]
         return self.status == self.Status.SUSPENDED
 
 
+def default_allowance_limits() -> dict:
+    """Per-day bounds on an allowance request, by key (R5, §4.17.2).
+
+    ``None`` is "no bound". FLOAT and OTHER are not keyed: they are unlimited.
+    A callable so each row gets its own dict.
+    """
+    return {
+        "TRANSPORT_WITHIN_NAIROBI": {"min": None, "max": "500"},
+        "TRANSPORT_OUTSIDE_NAIROBI": {"min": None, "max": None},
+        "NIGHT_OUT": {"min": "1500", "max": "10000"},
+        "TEAM_ALLOWANCE": {"min": "1500", "max": "10000"},
+    }
+
+
 class OrganizationSettings(models.Model):
     """Per-tenant configuration. Covers all of requirement C8 (design §4.1).
 
@@ -190,6 +204,19 @@ class OrganizationSettings(models.Model):
             "excluding VAT. Empty means never."
         ),
     )
+
+    # --- Finance (Epic R, §4.17) -----------------------------------------
+    # R4: a recorder holding this role skips the project-manager level. Null
+    # means nobody skips it.
+    finance_director_role = models.ForeignKey(
+        "accounts.Role",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # R5: daily min/max by allowance type; a null bound is no bound.
+    allowance_limits = models.JSONField(default=default_allowance_limits, blank=True)
 
     # --- Documents and retention -----------------------------------------
     # M4: posted documents are immutable. Corrections are reversals, not edits.
@@ -420,10 +447,22 @@ class Attachment(TenantModel, TimeStampedModel):
     uploaded_by = models.ForeignKey(
         "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
+    # R6: what the photo shows (Receipt / Fuel pump / Work done / ID / Other),
+    # chosen on the phone.
+    caption = models.CharField(max_length=60, blank=True)
+    # R6: lets an offline upload replay to the same row after a lost response.
+    client_uuid = models.UUIDField(null=True, blank=True)
 
     class Meta:
         indexes = [models.Index(fields=["organization", "target_type", "target_id"])]
         ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "client_uuid"],
+                condition=models.Q(client_uuid__isnull=False),
+                name="uniq_attachment_client_uuid_per_org",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.filename
