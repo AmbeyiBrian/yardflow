@@ -97,13 +97,19 @@ export default function JobCloseoutPage() {
     { enabled: Boolean(id) },
   );
 
-  // What this technician holds. Three reads because the ledger tracks the three
-  // kinds differently (§3.1) — merged into one picker below, because to the
-  // person holding them they are just "my stuff".
-  const bulk = useList<CustodyBalance>('stock/custody', { holder: user?.id });
+  // What the job's assignee holds — the submit posts from their custody, so a
+  // supervisor closing out for them sees their items, not their own. Three
+  // reads because the ledger tracks the three kinds differently (§3.1) —
+  // merged into one picker below, because to the person holding them they are
+  // just "my stuff".
+  const holderId = job.data ? (job.data.assignee ?? user?.id) : undefined;
+  const forSomeoneElse = holderId !== undefined && holderId !== user?.id;
+  const holderName = forSomeoneElse ? job.data?.assignee_name || 'The assignee' : '';
+  const loaded = { enabled: holderId !== undefined };
+  const bulk = useList<CustodyBalance>('stock/custody', { holder: holderId }, loaded);
   const people = useList<{ id: number; full_name: string }>('users', { page_size: 200 });
-  const serials = useList<SerialUnit>('serials', { holder: 'me', page_size: 100 });
-  const drums = useList<Reel>('drums', { holder: 'me', page_size: 100 });
+  const serials = useList<SerialUnit>('serials', { holder: holderId, page_size: 100 }, loaded);
+  const drums = useList<Reel>('drums', { holder: holderId, page_size: 100 }, loaded);
 
   const [lines, setLines] = useState<CloseoutLineInput[]>([]);
   // O15: days worked, per person, on the form that already has to be filled in.
@@ -286,7 +292,9 @@ export default function JobCloseoutPage() {
             <div>
               <h2 className="text-sm font-semibold text-slate-900">What did you do with it?</h2>
               <p className="text-sm text-slate-600">
-                Tap something you are carrying, then say what happened to it.
+                {forSomeoneElse
+                  ? `Closing out for ${holderName}. Tap something they are carrying, then say what happened to it.`
+                  : 'Tap something you are carrying, then say what happened to it.'}
               </p>
             </div>
 
@@ -294,8 +302,16 @@ export default function JobCloseoutPage() {
               <Spinner className="text-slate-400" />
             ) : carried.length === 0 ? (
               <EmptyState
-                title="You are not holding anything."
-                hint="Material appears here once a gate pass is released to you."
+                title={
+                  forSomeoneElse
+                    ? `${holderName} is not holding anything.`
+                    : 'You are not holding anything.'
+                }
+                hint={
+                  forSomeoneElse
+                    ? 'Material appears here once a gate pass is released to them.'
+                    : 'Material appears here once a gate pass is released to you.'
+                }
               />
             ) : (
               <ul className="flex flex-col gap-2">
@@ -406,7 +422,7 @@ export default function JobCloseoutPage() {
                       setLabour((current) => [
                         ...current,
                         {
-                          person: String(user?.id ?? ''),
+                          person: String(holderId ?? user?.id ?? ''),
                           work_date: today(),
                           days: '1.0',
                         },

@@ -691,8 +691,7 @@ class RecoveriesReport(Report):
         summed = super().totals(rows)
         if summed:
             # A count of receipts summed across sites is meaningful; a quantity
-            # across mixed units is not, but the report is normally read filtered
-            # to one site, so both are kept and the UoM column stays visible.
+            # is kept only when every row shares a unit (see Report.totals).
             return summed
         return None
 

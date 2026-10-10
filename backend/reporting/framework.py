@@ -189,6 +189,11 @@ class Report:
     def totals(self, rows: Sequence[dict]) -> dict | None:
         """A footer, or ``None``. Summing every numeric column is the default."""
         numeric = [column for column in self.columns if column.numeric]
+        # Metres plus pieces is not a number of anything: when the rows carry
+        # more than one unit, quantities are left out of the footer. Money and
+        # counts still add up.
+        if len({row.get("uom") for row in rows if row.get("uom")}) > 1:
+            numeric = [column for column in numeric if column.kind != "quantity"]
         if not numeric:
             return None
 

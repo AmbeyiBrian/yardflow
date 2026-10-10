@@ -255,7 +255,7 @@ export default function StockPage() {
                     {canChange && canChangeBulk(row) ? (
                       <button
                         type="button"
-                        className="mt-1 min-h-[44px] text-xs text-slate-700 underline"
+                        className="mt-1 block min-h-[44px] text-xs text-slate-700 underline"
                         onClick={() => setEarmarkRow(row)}
                       >
                         Change earmark

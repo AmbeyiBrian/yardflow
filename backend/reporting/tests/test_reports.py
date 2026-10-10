@@ -169,6 +169,15 @@ class TestStockReports:
         assert by_item["Report RRU"]["owner"] == "Safaricom"
         assert rendered["totals"]["quantity"] == "124.000"
 
+    def test_quantities_in_different_units_are_not_totalled(self):
+        """Metres plus pieces is not a number of anything (2026-10-10)."""
+        report = get_report("client-position")
+        mixed = [{"quantity": "4000", "uom": "Meters"}, {"quantity": "2", "uom": "ea"}]
+        same = [{"quantity": "4000", "uom": "Meters"}, {"quantity": "500", "uom": "Meters"}]
+
+        assert report.totals(mixed) is None
+        assert report.totals(same) == {"quantity": Decimal("4500")}
+
     def test_stock_as_at_before_the_delivery_is_empty(self, tenant, stocked):
         """M1: "as at any past date" — and the past really is the past."""
         yesterday = timezone.now() - timedelta(days=1)
