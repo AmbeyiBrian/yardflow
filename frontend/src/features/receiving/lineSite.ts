@@ -34,3 +34,22 @@ export function deliverySiteText(
   }
   return 'Several sites — see each line';
 }
+
+type SiteNamed = { for_site_name?: string; for_site_ref?: string };
+
+function siteLabel(site: SiteNamed): string {
+  const name = site.for_site_name ?? '';
+  const ref = site.for_site_ref ?? '';
+  return ref && name ? `${ref} — ${name}` : ref || name;
+}
+
+/**
+ * The Gate-in list's "Site" cell (Elias, 2026-10-10): "ID — name" of the
+ * delivery's site, else of the sites its lines name, else a dash.
+ */
+export function listSiteText(delivery: SiteNamed, lines: SiteNamed[]): string {
+  const own = siteLabel(delivery);
+  if (own) return own;
+  const sites = [...new Set(lines.map(siteLabel).filter(Boolean))];
+  return sites.length > 0 ? sites.join(', ') : '—';
+}

@@ -15818,6 +15818,10 @@ components:
           type: string
           readOnly: true
           default: ''
+        for_site_ref:
+          type: string
+          readOnly: true
+          default: ''
         to_location:
           type: integer
         to_location_name:
@@ -15868,6 +15872,7 @@ components:
       - client_name
       - created_at
       - for_site_name
+      - for_site_ref
       - id
       - number
       - origin_site_ref
@@ -15967,6 +15972,10 @@ components:
           type: string
           readOnly: true
           default: ''
+        for_site_ref:
+          type: string
+          readOnly: true
+          default: ''
         earmarked_now:
           type: array
           items:
@@ -16001,6 +16010,7 @@ components:
       required:
       - earmarked_now
       - for_site_name
+      - for_site_ref
       - id
       - is_unserviceable
       - item_name

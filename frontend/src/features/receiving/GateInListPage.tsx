@@ -16,7 +16,7 @@ import { Banner, Button, Card, Field, Input, Spinner } from '../../components/ui
 import { DataList, EmptyState, ListState, PageHeader, Sheet, StatusBadge } from '../../components/ui/data';
 import { boxLabel, buildTree, describeCounts, type BoxNode, type DraftBox } from './gateInBoxes';
 import { fromPurchaseNumber } from './fromPurchase';
-import { deliverySiteText, lineSiteText } from './lineSite';
+import { deliverySiteText, lineSiteText, listSiteText } from './lineSite';
 import type { GateIn, GateInLineInput } from './types';
 
 export default function GateInListPage() {
@@ -35,7 +35,7 @@ export default function GateInListPage() {
       <Input
         className="max-w-sm"
         aria-label="Search deliveries"
-        placeholder="Number, supplier or delivery note"
+        placeholder="Number, supplier, site or delivery note"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
@@ -75,6 +75,7 @@ export default function GateInListPage() {
               header: 'From',
               cell: (row) => row.supplier_name || row.client_name || row.origin_site_ref || '—',
             },
+            { header: 'Site', cell: (row) => listSiteText(row, row.lines) },
             { header: 'Into', cell: (row) => row.to_location_name ?? '—', wideOnly: true },
             { header: 'Lines', cell: (row) => row.lines.length },
             {

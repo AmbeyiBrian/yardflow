@@ -13,7 +13,9 @@ the connection dropped between lines is worse than no delivery at all.
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
 from django.http import HttpResponse
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -22,13 +24,14 @@ from drf_spectacular.utils import (
 )
 from rest_framework import serializers
 from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
 from accounts.permissions_registry import PERM
 from core.api import TenantScopedViewSet
 from core.exceptions import DomainError
 from core.idempotency import already_created
-from network.models import SupplierStatus
+from network.models import Site, SupplierStatus
 from receiving.models import (
     DocumentStatus,
     GateIn,
@@ -64,9 +67,7 @@ def _earmarks_by_line(gate_in) -> dict[int, list[dict]]:  # type: ignore[no-unty
     lines = list(gate_in.lines.all())
     found: dict[int, dict[int, str]] = {line.pk: {} for line in lines}
 
-    serial_line = {
-        s.serial_number: line.pk for line in lines for s in line.serials.all()
-    }
+    serial_line = {s.serial_number: line.pk for line in lines for s in line.serials.all()}
     if serial_line:
         for number, site_id, name in SerialUnit.objects.filter(
             serial_number__in=serial_line, earmark_site__isnull=False
@@ -151,6 +152,7 @@ class GateInLineSerializer(serializers.ModelSerializer):
         source="owner_client.name", read_only=True, default=""
     )
     for_site_name = serializers.CharField(source="for_site.name", read_only=True, default="")
+    for_site_ref = serializers.CharField(source="for_site.internal_ref", read_only=True, default="")
     # Q2: where this line's material is earmarked *now* (the delivery's own site is
     # `for_site`). Worked out once per document; the detail view only.
     earmarked_now = serializers.SerializerMethodField()
@@ -187,6 +189,7 @@ class GateInLineSerializer(serializers.ModelSerializer):
             "owner_client_name",
             "for_site",
             "for_site_name",
+            "for_site_ref",
             "earmarked_now",
             "custom_field_values",
             "no_serial_reason",
@@ -228,6 +231,7 @@ class GateInSerializer(serializers.ModelSerializer):
         source="origin_site.internal_ref", read_only=True, default=""
     )
     for_site_name = serializers.CharField(source="for_site.name", read_only=True, default="")
+    for_site_ref = serializers.CharField(source="for_site.internal_ref", read_only=True, default="")
     #: R15: PENDING is said on the document, since it is not yet a checked business.
     supplier_status = serializers.CharField(source="supplier.status", read_only=True, default="")
     # R7: the site purchase that made this draft, when one did (§4.19.3).
@@ -274,6 +278,7 @@ class GateInSerializer(serializers.ModelSerializer):
             "origin_site_ref",
             "for_site",
             "for_site_name",
+            "for_site_ref",
             "to_location",
             "to_location_name",
             "received_at",
@@ -371,6 +376,48 @@ class VoidReasonSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=500)
 
 
+class GateInSearchFilter(SearchFilter):
+    """The plain search, plus a delivery's sites (Elias, 2026-10-10).
+
+    A yard finds a delivery by the site it is for: its name, its internal ID or
+    an operator's code for it. The site can sit on the header, on any line, or
+    on the units and drums earmarked to it after they arrived, so each term is
+    matched against all three. ``Exists`` keeps one row per delivery.
+    """
+
+    def filter_queryset(self, request, queryset, view):
+        from stock.models import Reel, SerialUnit
+
+        terms = self.get_search_terms(request)
+        if not terms:
+            return queryset
+        for term in terms:
+            sites = Site.objects.filter(
+                Q(name__icontains=term)
+                | Q(internal_ref__icontains=term)
+                | Q(references__value__icontains=term)
+            ).values("pk")
+            units = SerialUnit.objects.filter(earmark_site__in=sites).values("serial_number")
+            drums = Reel.objects.filter(earmark_site__in=sites).values("drum_number")
+            queryset = queryset.filter(
+                Q(number__icontains=term)
+                | Q(supplier_name__icontains=term)
+                | Q(client_delivery_note_ref__icontains=term)
+                | Q(notes__icontains=term)
+                | Q(for_site__in=sites)
+                | Exists(GateInLine.objects.filter(gate_in=OuterRef("pk"), for_site__in=sites))
+                | Exists(
+                    GateInSerial.objects.filter(
+                        line__gate_in=OuterRef("pk"), serial_number__in=units
+                    )
+                )
+                | Exists(
+                    GateInReel.objects.filter(line__gate_in=OuterRef("pk"), drum_number__in=drums)
+                )
+            )
+        return queryset
+
+
 class GateInViewSet(TenantScopedViewSet):
     """``/api/v1/gate-ins`` (D1–D8, M4)."""
 
@@ -402,6 +449,12 @@ class GateInViewSet(TenantScopedViewSet):
         "to_location",
         "origin_site",
     ]
+    filter_backends = [
+        DjangoFilterBackend,
+        GateInSearchFilter,
+        OrderingFilter,
+    ]
+    # Matched, with the delivery's sites, by GateInSearchFilter.
     search_fields = [
         "number",
         "supplier_name",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deliverySiteText, lineSiteText } from './lineSite';
+import { deliverySiteText, lineSiteText, listSiteText } from './lineSite';
 
 const a = { site: 1, name: 'Atlantis' };
 const b = { site: 2, name: 'Baobab' };
@@ -48,5 +48,20 @@ describe('deliverySiteText', () => {
   });
   it('says nothing particular when nothing is known', () => {
     expect(deliverySiteText(undefined, [{}])).toBe('Not for a particular site');
+  });
+});
+
+describe('listSiteText', () => {
+  it('says the delivery site as ID and name', () => {
+    expect(listSiteText({ for_site_ref: 'SLV-1', for_site_name: 'Atlantis' }, [])).toBe('SLV-1 — Atlantis');
+  });
+
+  it('falls back to the sites its lines name, once each', () => {
+    const line = { for_site_ref: 'SLV-2', for_site_name: 'Kileleshwa' };
+    expect(listSiteText({}, [line, line, { for_site_name: '' }])).toBe('SLV-2 — Kileleshwa');
+  });
+
+  it('says a dash when no site is named', () => {
+    expect(listSiteText({ for_site_name: '', for_site_ref: '' }, [{}])).toBe('—');
   });
 });

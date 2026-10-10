@@ -6635,6 +6635,8 @@ export interface components {
             for_site?: number | null;
             /** @default  */
             readonly for_site_name: string;
+            /** @default  */
+            readonly for_site_ref: string;
             to_location: number;
             readonly to_location_name: string;
             /** Format: date-time */
@@ -6692,6 +6694,8 @@ export interface components {
             for_site?: number | null;
             /** @default  */
             readonly for_site_name: string;
+            /** @default  */
+            readonly for_site_ref: string;
             readonly earmarked_now: {
                 [key: string]: unknown;
             }[];

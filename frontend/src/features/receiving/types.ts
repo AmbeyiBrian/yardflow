@@ -72,6 +72,7 @@ export interface GateInLineInput {
   /** Earmark this line for a site; null or absent inherits the delivery's (Q1). */
   for_site?: number | null;
   for_site_name?: string;
+  for_site_ref?: string;
   /** Q2: where this line's material is earmarked now (detail only). */
   earmarked_now?: { site: number; name: string }[];
 }
@@ -96,6 +97,7 @@ export interface GateIn {
   /** Material is earmarked for this site at posting (Q1). */
   for_site?: number | null;
   for_site_name?: string;
+  for_site_ref?: string;
   to_location: number;
   to_location_name?: string;
   received_at: string;

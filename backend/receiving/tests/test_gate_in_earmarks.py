@@ -12,7 +12,7 @@ from catalogue.models import TrackingMode
 from core.provisioning import provision_tenant
 from core.tenancy import tenant_context
 from locations.factories import YardFactory
-from network.factories import SiteFactory
+from network.factories import SiteFactory, SiteReferenceFactory
 from network.models import SiteStatus
 from receiving.models import GateInLine, GateInReel, GateInSerial
 from receiving.services import post_gate_in, void_gate_in
@@ -334,3 +334,66 @@ class TestApi:
             claim = BulkEarmark.objects.get()
             assert (claim.site, claim.quantity) == (site, Decimal("10"))
             assert EarmarkEvent.objects.count() == 1
+
+
+class TestSearchBySite:
+    """Elias, 2026-10-10: the Gate-in list is searched by the site it is for."""
+
+    def found(self, signed_in, term):
+        http, token, _org, _owner = signed_in
+        response = http.get(reverse("v1:gate-in-list"), {"search": term}, **auth(token))
+        assert response.status_code == 200, response.content
+        return sorted(row["number"] for row in response.json()["results"])
+
+    def test_the_delivery_site_by_name_id_or_operator_code(self, signed_in, api_world):
+        _http, _token, organization, _owner = signed_in
+        yard, site, _item, _foreign = api_world
+        with tenant_context(organization):
+            SiteReferenceFactory(site=site, label="Safaricom site ID", value="NRB-0425")
+            gate_in = draft(organization, yard, for_site=site)
+            add_bulk_line(gate_in, quantity=2)
+            post_gate_in(gate_in)
+            other = draft(organization, yard)
+            add_bulk_line(other, quantity=2)
+            post_gate_in(other)
+
+        for term in ("site x", "X-1", "nrb-0425"):
+            assert self.found(signed_in, term) == [gate_in.number]
+
+    def test_a_line_site_and_a_later_earmark_are_found(self, signed_in, api_world):
+        _http, _token, organization, _owner = signed_in
+        yard, site, _item, _foreign = api_world
+        with tenant_context(organization):
+            by_line = draft(organization, yard)
+            add_bulk_line(by_line, quantity=1, for_site=site)
+            add_bulk_line(by_line, quantity=1)
+            post_gate_in(by_line)
+            later = draft(organization, yard)
+            add_serialized_line(later, ["LATER-1"])
+            post_gate_in(later)
+            SerialUnit.objects.filter(serial_number="LATER-1").update(earmark_site=site)
+
+        assert self.found(signed_in, "Site X") == sorted([by_line.number, later.number])
+
+    def test_the_plain_fields_still_match(self, signed_in, api_world):
+        _http, _token, organization, _owner = signed_in
+        yard, _site, _item, _foreign = api_world
+        with tenant_context(organization):
+            gate_in = draft(organization, yard, supplier_name="Huawei Kenya")
+            add_bulk_line(gate_in, quantity=1)
+            post_gate_in(gate_in)
+
+        assert self.found(signed_in, "huawei") == [gate_in.number]
+        assert self.found(signed_in, gate_in.number) == [gate_in.number]
+
+    def test_the_list_says_the_site_id(self, signed_in, api_world):
+        http, token, organization, _owner = signed_in
+        yard, site, _item, _foreign = api_world
+        with tenant_context(organization):
+            gate_in = draft(organization, yard, for_site=site)
+            add_bulk_line(gate_in, quantity=1, for_site=site)
+            post_gate_in(gate_in)
+
+        row = http.get(reverse("v1:gate-in-list"), **auth(token)).json()["results"][0]
+        assert (row["for_site_ref"], row["for_site_name"]) == ("X-1", "Site X")
+        assert row["lines"][0]["for_site_ref"] == "X-1"
