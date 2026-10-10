@@ -167,7 +167,10 @@ function MaterialQueue() {
   const [scope, setScope] = useState<'pending' | 'all'>('pending');
   const pending = useList<ApprovalRequest>(
     scope === 'pending' ? 'approvals/pending' : 'approvals',
-    { page_size: 50 },
+    // Only gate-outs: this card approves through `gate-outs/{id}/approve`. Every
+    // other kind (suppliers, money, days, disposals) has its own queue, and a
+    // supplier shown here was approved against a gate-out that is not there.
+    { page_size: 50, document_type: 'dispatch.GateOut' },
   );
 
   return (
